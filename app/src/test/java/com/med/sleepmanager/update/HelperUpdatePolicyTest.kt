@@ -11,7 +11,7 @@ class HelperUpdatePolicyTest {
     ) = HelperUpdateInfo(
         versionName = versionName,
         versionCode = versionCode,
-        releaseUrl = "https://github.com/Baggio94/SleepManager/releases/tag/v0.5.4"
+        releaseUrl = "https://github.com/Darkaxt/SleepManager/releases/tag/v0.5.4"
     )
 
     @Test

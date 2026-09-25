@@ -1,4 +1,14 @@
-# SleepManager 0.6.0
+# SleepManager 0.6.0.1
+
+This fork release adds state-aware **TailDNS** support while retaining official
+Tailscale support. SleepManager disconnects the client that owns the active
+Tailscale VPN before managed Wi-Fi shutdown and reconnects only that same client
+after wake.
+
+The built-in updater now follows the Darkaxt fork and verifies this fork's
+permanent signing certificate. Both the main app and Helper must use the paired
+0.6.0.1 / 1.1.0.1 fork builds because their control permission is
+signature-protected.
 
 SleepManager 0.6 focuses on **smarter syncing, better battery information and improved reliability**.
 
@@ -64,7 +74,7 @@ The optional Helper has been updated to support the temporary Wi-Fi changes need
 - BasicSync **3.18+** for normal state-aware sleep/wake control
 - BasicSync **3.19+** for the new advanced sync modes
 - Syncthing-Fork STOP/FOLLOW sleep/wake control remains supported
-- Helper **1.1.0**
+- Helper **1.1.0.1**
 
 ## Installation
 
@@ -72,7 +82,7 @@ The optional Helper has been updated to support the temporary Wi-Fi changes need
 
 Download and install:
 
-**SleepManager-0.6.0.apk**
+**SleepManager-0.6.0.1.apk**
 
 ### 2. Install the Helper if you use Wi-Fi / Bluetooth control
 
@@ -82,7 +92,7 @@ Inside SleepManager, open:
 
 or install:
 
-**SleepManager-Helper-1.1.0.apk**
+**SleepManager-Helper-1.1.0.1.apk**
 
 ### 3. Configure SleepManager
 

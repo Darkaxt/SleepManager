@@ -2,13 +2,15 @@
 
 Release notes are organized by version and focus on user-visible behavior first.
 
-## Unreleased
+## 0.6.0.1 — 2026-09-26
 
 ### Improved
 
 - Added state-aware TailDNS support alongside official Tailscale. SleepManager
   now disconnects the active supported client, records that exact package, and
   reconnects only the client it changed.
+- Pointed the built-in updater and public project links at the Darkaxt fork and
+  pinned its permanent release certificate for future in-place updates.
 
 ## 0.6.0 — 2026-09-25
 

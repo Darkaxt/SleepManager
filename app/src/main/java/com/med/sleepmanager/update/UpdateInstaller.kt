@@ -30,7 +30,7 @@ object UpdateInstaller {
     private const val EXPECTED_PACKAGE = "com.med.sleepmanager"
     private const val EXPECTED_HELPER_PACKAGE = "com.med.sleepmanager.helper"
     private const val EXPECTED_SIGNER_SHA256 =
-        "503a393d859780f14905ea943e52ce0b0a4b6382a40c1ceabfc9ef5349973b73"
+        "87c2f2f5d5dac021d3ee26bb6b361f722410122e2dedc465a37e5b9e0276ecec"
     private const val CONNECT_TIMEOUT_MS = 10_000
     private const val READ_TIMEOUT_MS = 30_000
     private const val MAX_APK_BYTES = 100L * 1024L * 1024L
@@ -88,9 +88,7 @@ object UpdateInstaller {
             )
 
         if (
-            !apkUrl.startsWith(
-                "https://github.com/Baggio94/SleepManager/releases/download/"
-            )
+            !SleepManagerReleaseOrigin.isExpectedDownloadUrl(apkUrl)
         ) {
             return UpdateDownloadResult.Failure("Unexpected update download URL.")
         }

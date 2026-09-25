@@ -70,12 +70,15 @@ Verification:
 | TD-5 | 2 | satisfied | TailDNS is package-visible; shared selection drives version, diagnostics, and Open. |
 | TD-6 | 1 | satisfied | Legacy official-client tokens are accepted by focused tests. |
 | TD-7 | 2 | satisfied | UI, diagnostics, README, and changelog describe Tailscale / TailDNS support. |
+| TD-8 | 4 | pending | Permanent signer, source pin, and GitHub secrets required. |
+| TD-9 | 4 | pending | Fork updater origin and public release required. |
+| TD-10 | 4 | pending | Transactional Thor main/Helper replacement and live verification required. |
 
 Blockers: none.
 
 Tracked deferrals: none.
 
-## Final reconciliation
+## Stage 3 reconciliation
 
 | Acceptance criterion | State | Evidence |
 | --- | --- | --- |
@@ -87,6 +90,34 @@ Tracked deferrals: none.
 | AC-6 | satisfied | TailDNS appears in the compiled manifest; selected-package logic drives availability, version, diagnostics, and Open. |
 | AC-7 | satisfied | Fresh clean unit tests, release compilation, release lint-vital analysis, APK assembly, and `git diff --check` pass. |
 
-Final blockers: zero.
+Stage 3 blockers: zero.
 
-Final tracked deferrals: zero.
+Stage 3 tracked deferrals: zero.
+
+## Stage 4 — Signed fork release and Thor replacement
+
+Status: **ACTIVE**
+
+Objective: turn the verified source change into a recoverable, updateable Thor
+deployment while retaining all SleepManager state.
+
+Requirements: TD-8, TD-9, TD-10.
+
+Changes and deployment transaction:
+
+- Establish and pin one permanent fork signing identity for both APKs.
+- Point the built-in updater and public links at `Darkaxt/SleepManager`.
+- Publish a fork-subversion release containing both APKs and `update.json`.
+- Capture the currently installed upstream APKs, data, versions, certificate,
+  preferences, admin state, and service state.
+- Remove active admin, uninstall both packages with retained data, install the
+  fork-signed pair, and restore admin/service state.
+- Roll back with the captured official APKs and data if any required check fails.
+
+Verification:
+
+- Tests and clean signed release build pass.
+- Published artifacts independently match package IDs, versions, checksums, and
+  the pinned common signer.
+- Thor preserves preferences and passes package, signer, admin, service,
+  Helper-permission, and TailDNS control-state checks.

@@ -790,7 +790,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun openProjectReleases() {
-        openReleaseUrl("https://github.com/Baggio94/SleepManager/releases")
+        openReleaseUrl("https://github.com/Darkaxt/SleepManager/releases")
     }
 
     private fun requestUpdateNotificationPermission() {
@@ -4091,7 +4091,7 @@ private fun AboutPage(
                 subtitle = "View SleepManager on GitHub",
                 actionLabel = "Open",
                 onClick = {
-                    onOpenExternalUrl("https://github.com/Baggio94/SleepManager")
+                    onOpenExternalUrl("https://github.com/Darkaxt/SleepManager")
                 }
             )
             HorizontalDivider(
@@ -4103,7 +4103,7 @@ private fun AboutPage(
                 subtitle = "Open the GitHub issue tracker",
                 actionLabel = "Open",
                 onClick = {
-                    onOpenExternalUrl("https://github.com/Baggio94/SleepManager/issues")
+                    onOpenExternalUrl("https://github.com/Darkaxt/SleepManager/issues")
                 }
             )
             HorizontalDivider(

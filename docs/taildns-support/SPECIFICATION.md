@@ -34,6 +34,16 @@ restart crash loop.
 - **TD-7 — User-facing truthfulness:** The integration must visibly describe
   support for both Tailscale and TailDNS; diagnostics must identify the selected
   package.
+- **TD-8 — Fork signing identity:** Main and Helper APKs must use one permanent
+  fork signing identity, pinned in source and configured in the fork's GitHub
+  Actions secrets.
+- **TD-9 — Fork updates:** The installed fork must accept update metadata and
+  APKs only from `Darkaxt/SleepManager`, never offer an upstream-signed binary,
+  and publish both matching APKs in its release manifest.
+- **TD-10 — Settings-preserving Thor replacement:** Replace both upstream-signed
+  packages on Thor without losing their existing data, restore the active
+  device-admin and foreground-service state, and retain exact upstream APK/data
+  recovery artifacts until post-install verification passes.
 
 ## Constraints
 
@@ -61,4 +71,10 @@ restart crash loop.
   diagnostics, and Open launches TailDNS.
 - **AC-7:** Focused unit tests, the affected Android build checks, and a clean
   release assembly pass from the committed source.
-
+- **AC-8:** The signed main and Helper APKs have the expected package IDs and the
+  same pinned fork certificate; GitHub holds the matching signing inputs.
+- **AC-9:** A public fork release exposes both signed APKs and `update.json`, and
+  the application accepts that fork origin while rejecting other repositories.
+- **AC-10:** Thor retains the pre-deployment SleepManager preferences, reports
+  the fork versions/certificate, has the device admin and service active again,
+  and the main app can still exchange protected broadcasts with the Helper.

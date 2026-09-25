@@ -128,7 +128,7 @@ On Android 11+, diagnostics can also include the reason Android stopped the prev
 
 ### 1. Install SleepManager
 
-Download the latest stable APK from [GitHub Releases](https://github.com/Baggio94/SleepManager/releases):
+Download the latest stable APK from [GitHub Releases](https://github.com/Darkaxt/SleepManager/releases):
 
 `SleepManager-<version>.apk`
 
@@ -209,6 +209,6 @@ helper/build/outputs/apk/debug/helper-debug.apk
 
 ## More information
 
-- [Latest release](https://github.com/Baggio94/SleepManager/releases/latest)
+- [Latest release](https://github.com/Darkaxt/SleepManager/releases/latest)
 - [RELEASE_NOTES.md](RELEASE_NOTES.md) — what's new in the current release
 - [CHANGELOG.md](CHANGELOG.md) — full version history

@@ -47,10 +47,6 @@ sealed class UpdateCheckResult {
 
 object UpdateChecker {
     private const val HELPER_PACKAGE = "com.med.sleepmanager.helper"
-    private const val RELEASE_API =
-        "https://api.github.com/repos/Baggio94/SleepManager/releases/latest"
-    private const val RELEASE_MANIFEST =
-        "https://github.com/Baggio94/SleepManager/releases/latest/download/update.json"
     private const val CONNECT_TIMEOUT_MS = 8000
     private const val READ_TIMEOUT_MS = 8000
 
@@ -59,11 +55,11 @@ object UpdateChecker {
     fun cachedUpdate(context: Context): UpdateInfo? {
         val version = AppPreferences.latestReleaseVersion(context) ?: return null
         val url = AppPreferences.latestReleaseUrl(context) ?: return null
+        if (!SleepManagerReleaseOrigin.isExpectedReleaseUrl(url)) return null
 
         if (!BuildConfig.VERSION_NAME.contains("-dev")) {
             val developerTestCache =
-                url == "https://github.com/Baggio94/SleepManager/releases" ||
-                    version.contains("updater-test", ignoreCase = true)
+                version.contains("updater-test", ignoreCase = true)
             if (developerTestCache) return null
         }
 
@@ -101,7 +97,7 @@ object UpdateChecker {
         val appContext = context.applicationContext
         val update = UpdateInfo(
             versionName = versionName,
-            releaseUrl = "https://github.com/Baggio94/SleepManager/releases"
+            releaseUrl = SleepManagerReleaseOrigin.RELEASES_URL
         )
         cacheRelease(appContext, update)
         UpdateNotifier.notifyIfNeeded(appContext, update)
@@ -285,7 +281,7 @@ object UpdateChecker {
     }
 
     private fun fetchLatestStableRelease(): UpdateInfo =
-        runCatching { fetchReleaseManifest(RELEASE_MANIFEST) }
+        runCatching { fetchReleaseManifest(SleepManagerReleaseOrigin.RELEASE_MANIFEST) }
             .map { manifest ->
                 if (manifest.helper != null) {
                     manifest
@@ -374,7 +370,7 @@ object UpdateChecker {
     }
 
     private fun fetchLatestStableReleaseFromApi(): UpdateInfo {
-        val connection = openJsonConnection(RELEASE_API)
+        val connection = openJsonConnection(SleepManagerReleaseOrigin.RELEASE_API)
         try {
             val status = connection.responseCode
             if (status !in 200..299) {
@@ -478,19 +474,15 @@ object UpdateChecker {
         }
 
     private fun validateReleaseUrl(url: String) {
-        require(
-            url.startsWith(
-                "https://github.com/Baggio94/SleepManager/releases/"
-            )
-        ) { "Unexpected release URL" }
+        require(SleepManagerReleaseOrigin.isExpectedReleaseUrl(url)) {
+            "Unexpected release URL"
+        }
     }
 
     private fun validateApkUrl(url: String) {
-        require(
-            url.startsWith(
-                "https://github.com/Baggio94/SleepManager/releases/download/"
-            )
-        ) { "Unexpected APK URL" }
+        require(SleepManagerReleaseOrigin.isExpectedDownloadUrl(url)) {
+            "Unexpected APK URL"
+        }
     }
 
     private fun normalizeSha256(value: String): String =
