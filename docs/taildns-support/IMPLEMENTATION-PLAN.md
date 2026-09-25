@@ -70,9 +70,9 @@ Verification:
 | TD-5 | 2 | satisfied | TailDNS is package-visible; shared selection drives version, diagnostics, and Open. |
 | TD-6 | 1 | satisfied | Legacy official-client tokens are accepted by focused tests. |
 | TD-7 | 2 | satisfied | UI, diagnostics, README, and changelog describe Tailscale / TailDNS support. |
-| TD-8 | 4 | pending | Permanent signer, source pin, and GitHub secrets required. |
-| TD-9 | 4 | pending | Fork updater origin and public release required. |
-| TD-10 | 4 | pending | Transactional Thor main/Helper replacement and live verification required. |
+| TD-8 | 4 | satisfied | Main and Helper share the pinned permanent fork certificate; the four signing inputs are configured as GitHub secrets. |
+| TD-9 | 4 | satisfied | The updater accepts only `Darkaxt/SleepManager`; release `v0.6.0.1` publishes both signed APKs and a hash-matching `update.json`. |
+| TD-10 | 4 | satisfied | Thor retained its preferences across the signer transition; admin, foreground service, Helper permission, and TailDNS controls were verified live. |
 
 Blockers: none.
 
@@ -96,7 +96,7 @@ Stage 3 tracked deferrals: zero.
 
 ## Stage 4 — Signed fork release and Thor replacement
 
-Status: **ACTIVE**
+Status: **COMPLETE**
 
 Objective: turn the verified source change into a recoverable, updateable Thor
 deployment while retaining all SleepManager state.
@@ -121,3 +121,15 @@ Verification:
   the pinned common signer.
 - Thor preserves preferences and passes package, signer, admin, service,
   Helper-permission, and TailDNS control-state checks.
+
+## Stage 4 reconciliation
+
+| Acceptance criterion | State | Evidence |
+| --- | --- | --- |
+| AC-8 | satisfied | Clean signed builds and the GitHub release both identify `com.med.sleepmanager` 0.6.0.1 and `com.med.sleepmanager.helper` 1.1.0.1 with certificate SHA-256 `87c2f2f5d5dac021d3ee26bb6b361f722410122e2dedc465a37e5b9e0276ecec`. |
+| AC-9 | satisfied | The live `update.json` points only to `Darkaxt/SleepManager`, its hashes match the published assets, and focused tests reject upstream and lookalike origins. |
+| AC-10 | satisfied | Thor preserved all selected pre-deployment preferences, enabled TailDNS management, reactivated the device admin and foreground service, exchanged a protected Helper broadcast, and kept TailDNS alive through disconnect/connect controls. |
+
+Stage 4 blockers: zero. The initially installed TailDNS 1.103.312+7 cold-start crash was resolved by the same-signer in-place update to the already-published 1.103.312+18 build before repeating the control verification.
+
+Stage 4 tracked deferrals: zero.
