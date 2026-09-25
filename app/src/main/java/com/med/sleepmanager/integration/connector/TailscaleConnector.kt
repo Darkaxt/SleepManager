@@ -2,13 +2,11 @@ package com.med.sleepmanager.integration.connector
 
 import android.content.Context
 import com.med.sleepmanager.integration.TailscaleController
+import com.med.sleepmanager.integration.TailscaleTransactionToken
 
 object TailscaleConnector : AppConnector {
     override val id: String = "tailscale"
     override val wakeRequiresNetwork: Boolean = true
-
-    const val TOKEN_VERIFY_DISCONNECT = "verify_disconnect"
-    const val TOKEN_RESTORE = "restore"
 
     override fun isInstalled(context: Context): Boolean =
         TailscaleController.isInstalled(context)
@@ -39,23 +37,29 @@ object TailscaleConnector : AppConnector {
             )
         }
 
-        if (!TailscaleController.isConnected(context)) {
+        val targetPackage = TailscaleController.activePackage(context)
+        if (targetPackage == null) {
             return ConnectorSleepResult(
                 attempted = false,
                 changed = false,
-                detail = "No VPN active"
+                detail = "No supported Tailscale VPN active"
             )
         }
 
-        val sent = TailscaleController.sendDisconnect(context)
+        val sent = TailscaleController.sendDisconnect(context, targetPackage)
         return ConnectorSleepResult(
             attempted = sent,
             changed = false,
-            restoreToken = if (sent) TOKEN_VERIFY_DISCONNECT else null,
+            restoreToken =
+                if (sent) {
+                    TailscaleTransactionToken.disconnectVerification(targetPackage)
+                } else {
+                    null
+                },
             detail = if (sent) {
-                "DISCONNECT sent; verification pending"
+                "DISCONNECT sent to $targetPackage; verification pending"
             } else {
-                "DISCONNECT not sent"
+                "DISCONNECT not sent to $targetPackage"
             }
         )
     }
@@ -64,19 +68,25 @@ object TailscaleConnector : AppConnector {
         context: Context,
         restoreToken: String?
     ): ConnectorWakeResult {
-        if (restoreToken != TOKEN_RESTORE) {
+        val targetPackage = TailscaleTransactionToken.restoreTarget(restoreToken)
+        if (targetPackage == null) {
             return ConnectorWakeResult(
                 attempted = false,
                 success = false,
-                detail = "Tailscale disconnect was not verified"
+                detail = "Tailscale disconnect target was not verified"
             )
         }
 
-        val sent = TailscaleController.sendConnect(context)
+        val sent = TailscaleController.sendConnect(context, targetPackage)
         return ConnectorWakeResult(
             attempted = sent,
             success = sent,
-            detail = if (sent) "CONNECT sent" else "CONNECT not sent"
+            detail =
+                if (sent) {
+                    "CONNECT sent to $targetPackage"
+                } else {
+                    "CONNECT not sent to $targetPackage"
+                }
         )
     }
 }

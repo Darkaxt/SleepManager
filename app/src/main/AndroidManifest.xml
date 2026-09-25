@@ -23,6 +23,7 @@
         <package android:name="com.github.catfriend1.syncthingandroid" />
         <package android:name="com.github.catfriend1.syncthingandroid.debug" />
         <package android:name="com.tailscale.ipn" />
+        <package android:name="io.github.darkaxt.taildns" />
         <package android:name="com.chiller3.basicsync" />
         <package android:name="james.dsp" />
         <package android:name="me.timschneeberger.rootlessjamesdsp" />

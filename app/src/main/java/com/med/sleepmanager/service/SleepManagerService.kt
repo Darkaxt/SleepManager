@@ -32,6 +32,7 @@ import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
+import com.med.sleepmanager.integration.TailscaleTransactionToken
 import com.med.sleepmanager.integration.connector.BasicSyncConnector
 import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
@@ -879,12 +880,12 @@ class SleepManagerService : Service() {
 
         if (
             tailscaleResult?.attempted == true &&
-            tailscaleResult.restoreToken == TailscaleConnector.TOKEN_VERIFY_DISCONNECT
+            TailscaleTransactionToken.disconnectTarget(tailscaleResult.restoreToken) != null
         ) {
             SleepCycleStore.recordConnectorChange(
                 this,
                 TailscaleConnector.id,
-                TailscaleConnector.TOKEN_VERIFY_DISCONNECT
+                tailscaleResult.restoreToken
             )
         }
 
@@ -1285,8 +1286,9 @@ class SleepManagerService : Service() {
     }
 
     private fun isTailscaleSleepVerificationPending(): Boolean =
-        SleepCycleStore.connectorChange(this, TailscaleConnector.id)
-            ?.restoreToken == TailscaleConnector.TOKEN_VERIFY_DISCONNECT
+        TailscaleTransactionToken.disconnectTarget(
+            SleepCycleStore.connectorChange(this, TailscaleConnector.id)?.restoreToken
+        ) != null
 
     private fun prepareTailscaleVerificationForWake() {
         if (!isTailscaleSleepVerificationPending()) return
@@ -1317,7 +1319,9 @@ class SleepManagerService : Service() {
             SleepCycleStore.connectorChange(this, TailscaleConnector.id)
                 ?: return releaseSleepTransitionWakeLock()
 
-        if (change.restoreToken != TailscaleConnector.TOKEN_VERIFY_DISCONNECT) {
+        val targetPackage =
+            TailscaleTransactionToken.disconnectTarget(change.restoreToken)
+        if (targetPackage == null) {
             releaseSleepTransitionWakeLock()
             return
         }
@@ -1326,7 +1330,7 @@ class SleepManagerService : Service() {
             SleepCycleStore.recordConnectorChange(
                 this,
                 TailscaleConnector.id,
-                TailscaleConnector.TOKEN_RESTORE
+                TailscaleTransactionToken.restore(targetPackage)
             )
             Log.i(TAG, "Tailscale disconnect verified")
             AppPreferences.recordEvent(
@@ -1484,8 +1488,9 @@ class SleepManagerService : Service() {
         val syncthingPending =
             SleepCycleStore.hasConnectorChange(this, SyncthingConnector.id)
         val tailscalePending =
-            SleepCycleStore.connectorChange(this, TailscaleConnector.id)
-                ?.restoreToken == TailscaleConnector.TOKEN_RESTORE
+            TailscaleTransactionToken.restoreTarget(
+                SleepCycleStore.connectorChange(this, TailscaleConnector.id)?.restoreToken
+            ) != null
         return syncthingPending || tailscalePending
     }
 
@@ -1503,11 +1508,12 @@ class SleepManagerService : Service() {
             SleepCycleStore.connectorChange(this, TailscaleConnector.id)
                 ?: return
 
-        if (change.restoreToken != TailscaleConnector.TOKEN_RESTORE) {
+        val targetPackage = TailscaleTransactionToken.restoreTarget(change.restoreToken)
+        if (targetPackage == null) {
             return
         }
 
-        if (TailscaleController.isConnected(this)) {
+        if (TailscaleController.isConnected(this, targetPackage)) {
             SleepCycleStore.clearConnectorChange(this, TailscaleConnector.id)
             Log.i(TAG, "Tailscale reconnect verified")
 
@@ -1533,7 +1539,7 @@ class SleepManagerService : Service() {
             tailscaleWakeVerifyAttempts ==
             TAILSCALE_WAKE_RETRY_AT_ATTEMPT
         ) {
-            val retrySent = TailscaleController.sendConnect(this)
+            val retrySent = TailscaleController.sendConnect(this, targetPackage)
             Log.i(
                 TAG,
                 "Tailscale reconnect still pending -> CONNECT retry sent=$retrySent"
@@ -2093,14 +2099,16 @@ class SleepManagerService : Service() {
                         this,
                         TailscaleConnector.id
                     )
+                val tailscaleRestoreToken = tailscaleChange?.restoreToken
                 if (
-                    tailscaleChange?.restoreToken ==
-                    TailscaleConnector.TOKEN_RESTORE
+                    TailscaleTransactionToken.restoreTarget(
+                        tailscaleRestoreToken
+                    ) != null
                 ) {
                     val wakeResult =
                         TailscaleConnector.wake(
                             this,
-                            tailscaleChange.restoreToken
+                            tailscaleRestoreToken
                         )
 
                     if (wakeResult.success) {

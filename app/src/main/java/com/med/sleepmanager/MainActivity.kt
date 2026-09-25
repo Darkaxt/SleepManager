@@ -1538,7 +1538,7 @@ class MainActivity : ComponentActivity() {
 
                         CompactIntegrationRow(
                             icon = R.drawable.ic_tailscale,
-                            title = "Tailscale",
+                            title = "Tailscale / TailDNS",
                             version = if (tailscaleInstalled) {
                                 tailscaleVersion?.substringBefore("-") ?: "Installed"
                             } else {

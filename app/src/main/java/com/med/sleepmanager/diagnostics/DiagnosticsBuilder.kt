@@ -51,6 +51,7 @@ object DiagnosticsBuilder {
             SleepCycleStore.hasConnectorChange(context, SyncthingConnector.id)
         val tailscalePending =
             SleepCycleStore.connectorChange(context, TailscaleConnector.id)
+        val tailscalePackage = TailscaleController.selectedPackage(context)
         val tailscaleVersion = TailscaleController.versionName(context)
         val jamesDsp = JamesDspController.selectedTarget(context)
         val jamesDspPending =
@@ -165,12 +166,13 @@ object DiagnosticsBuilder {
                     (syncthingState?.name ?: "unknown")
             )
             appendLine(
-                "- Tailscale: " +
+                "- Tailscale / TailDNS: " +
                     if (tailscaleVersion != null) "installed • $tailscaleVersion"
                     else "not installed"
             )
+            appendLine("- Tailscale / TailDNS target: ${tailscalePackage ?: "not detected"}")
             appendLine(
-                "- Tailscale state: " +
+                "- Tailscale / TailDNS state: " +
                     when (tailscaleConnected) {
                         true -> "CONNECTED"
                         false -> "DISCONNECTED"

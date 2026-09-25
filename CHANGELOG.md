@@ -2,6 +2,14 @@
 
 Release notes are organized by version and focus on user-visible behavior first.
 
+## Unreleased
+
+### Improved
+
+- Added state-aware TailDNS support alongside official Tailscale. SleepManager
+  now disconnects the active supported client, records that exact package, and
+  reconnects only the client it changed.
+
 ## 0.6.0 — 2026-09-25
 
 ### New

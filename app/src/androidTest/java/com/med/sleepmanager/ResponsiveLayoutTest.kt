@@ -200,7 +200,7 @@ class ResponsiveLayoutTest {
         composeRule.onNodeWithText("App integrations").assertIsDisplayed()
 
         assertTextIsNotCrushed("integration_title_Syncthing‑Fork")
-        assertTextIsNotCrushed("integration_title_Tailscale")
+        assertTextIsNotCrushed("integration_title_Tailscale / TailDNS")
         assertTextIsNotCrushed("integration_title_JamesDSP")
     }
 

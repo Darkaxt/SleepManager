@@ -10,7 +10,7 @@ It can temporarily turn off Wi-Fi, Bluetooth and supported background services w
 
 - Turn **Wi-Fi** and **Bluetooth** off during sleep and restore them safely on wake.
 - Pause and resume **Syncthing-Fork**.
-- Manage **BasicSync**, **Tailscale** and **JamesDSP**.
+- Manage **BasicSync**, **Tailscale / TailDNS** and **JamesDSP**.
 - Run optional syncs before sleep, after wake or periodically while sleeping with supported providers.
 - Track sleep battery drain, mAh use, deep sleep and standby estimates.
 - Protect the **AYN Thor** from closed-lid false wakes.
@@ -37,7 +37,7 @@ SleepManager can manage:
 - **Bluetooth** — same state-aware behavior as Wi-Fi.
 - **Syncthing-Fork** — paused for sleep and resumed after wake.
 - **BasicSync** — stopped during sleep when appropriate and restored to its previous mode.
-- **Tailscale** — disconnected for sleep and reconnected only when SleepManager performed the disconnect.
+- **Tailscale / TailDNS** — the active client is disconnected for sleep and only that same client is reconnected when SleepManager performed the disconnect.
 - **JamesDSP** — optional OFF during sleep / ON after wake behavior.
 
 You can also add conditions such as a grace period, battery level, charging state, Battery Saver state or a schedule.
@@ -107,9 +107,12 @@ In BasicSync, enable:
 
 Use BasicSync 3.18+ for state-aware sleep/wake control, or **3.19+** for the advanced sync modes.
 
-### Tailscale
+### Tailscale / TailDNS
 
-Install and sign in to the official Tailscale Android app, then enable Tailscale in SleepManager.
+Install and sign in to either the official Tailscale Android app or
+[TailDNS](https://github.com/Darkaxt/TailDNS), then enable Tailscale / TailDNS
+in SleepManager. If both are installed, SleepManager controls the client that
+owns the active Tailscale VPN and restores that same client after wake.
 
 ### JamesDSP
 
@@ -174,9 +177,9 @@ Make sure **Settings → Behaviour → Service Control by Broadcast** is enabled
 
 Make sure **Allow remote control** is enabled in BasicSync.
 
-### Tailscale does not reconnect
+### Tailscale / TailDNS does not reconnect
 
-Open Tailscale and confirm it is signed in and can connect normally.
+Open the selected client and confirm it is signed in and can connect normally.
 
 ### SleepManager unexpectedly stops
 
