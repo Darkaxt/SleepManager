@@ -1,6 +1,7 @@
 name: Publish stable release
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
