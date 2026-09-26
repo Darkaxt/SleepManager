@@ -2,6 +2,14 @@
 
 Release notes are organized by version and focus on user-visible behavior first.
 
+## 0.6.0.2 — 2026-09-26
+
+### Maintenance
+
+- Synchronized the fork with the latest upstream SleepManager issue templates
+  while retaining TailDNS support, fork updates, and the permanent signing
+  identity.
+
 ## 0.6.0.1 — 2026-09-26
 
 ### Improved

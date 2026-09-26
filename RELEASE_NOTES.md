@@ -1,4 +1,8 @@
-# SleepManager 0.6.0.1
+# SleepManager 0.6.0.2
+
+This maintenance release synchronizes the fork with the latest upstream
+SleepManager issue templates. Runtime behavior is unchanged, and the release
+retains the TailDNS integration, fork updater, and permanent signing identity.
 
 This fork release adds state-aware **TailDNS** support while retaining official
 Tailscale support. SleepManager disconnects the client that owns the active
@@ -7,7 +11,7 @@ after wake.
 
 The built-in updater now follows the Darkaxt fork and verifies this fork's
 permanent signing certificate. Both the main app and Helper must use the paired
-0.6.0.1 / 1.1.0.1 fork builds because their control permission is
+0.6.0.2 / 1.1.0.1 fork builds because their control permission is
 signature-protected.
 
 SleepManager 0.6 focuses on **smarter syncing, better battery information and improved reliability**.
@@ -82,7 +86,7 @@ The optional Helper has been updated to support the temporary Wi-Fi changes need
 
 Download and install:
 
-**SleepManager-0.6.0.1.apk**
+**SleepManager-0.6.0.2.apk**
 
 ### 2. Install the Helper if you use Wi-Fi / Bluetooth control
 
