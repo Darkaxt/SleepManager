@@ -7,6 +7,8 @@ object AppPreferences {
     private const val KEY_ENABLED = "enabled"
     private const val KEY_WIFI = "wifi"
     private const val KEY_BLUETOOTH = "bluetooth"
+    private const val KEY_BATTERY_SAVER_ACTION = "battery_saver_action"
+    private const val KEY_CHARGING_SEPARATION_LID = "charging_separation_lid"
     private const val KEY_SYNCTHING = "syncthing"
     private const val KEY_TAILSCALE = "tailscale"
     private const val KEY_JAMES_DSP = "james_dsp"
@@ -79,6 +81,24 @@ object AppPreferences {
     fun manageBluetooth(context: Context) = prefs(context).getBoolean(KEY_BLUETOOTH, false)
     fun setManageBluetooth(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BLUETOOTH, value).apply()
+
+    fun manageBatterySaver(context: Context) =
+        prefs(context).getBoolean(KEY_BATTERY_SAVER_ACTION, false)
+
+    fun setManageBatterySaver(context: Context, value: Boolean) {
+        val editor = prefs(context).edit()
+            .putBoolean(KEY_BATTERY_SAVER_ACTION, value)
+        if (value) {
+            editor.putString(KEY_BATTERY_SAVER_MODE, BATTERY_SAVER_IGNORE)
+        }
+        editor.apply()
+    }
+
+    fun manageChargingSeparationWithLid(context: Context) =
+        prefs(context).getBoolean(KEY_CHARGING_SEPARATION_LID, false)
+
+    fun setManageChargingSeparationWithLid(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_CHARGING_SEPARATION_LID, value).apply()
 
     fun manageSyncthing(context: Context) = prefs(context).getBoolean(KEY_SYNCTHING, false)
     fun setManageSyncthing(context: Context, value: Boolean) =
@@ -198,7 +218,13 @@ object AppPreferences {
 
     fun setBatterySaverMode(context: Context, value: String) {
         val safeValue = if (value in BATTERY_SAVER_MODES) value else BATTERY_SAVER_IGNORE
-        prefs(context).edit().putString(KEY_BATTERY_SAVER_MODE, safeValue).apply()
+        val editor =
+            prefs(context).edit()
+                .putString(KEY_BATTERY_SAVER_MODE, safeValue)
+        if (safeValue != BATTERY_SAVER_IGNORE) {
+            editor.putBoolean(KEY_BATTERY_SAVER_ACTION, false)
+        }
+        editor.apply()
     }
 
     fun scheduleEnabled(context: Context) =

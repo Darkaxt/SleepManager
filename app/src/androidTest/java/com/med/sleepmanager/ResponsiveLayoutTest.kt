@@ -118,7 +118,7 @@ class ResponsiveLayoutTest {
             .performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Advanced sync conditions")
+        composeRule.onNodeWithText("Advanced sync behavior")
             .assertIsDisplayed()
         composeRule.onNodeWithText("Periodic sync while sleeping")
             .assertIsDisplayed()
@@ -136,6 +136,9 @@ class ResponsiveLayoutTest {
             .performScrollToNode(hasText("Advanced sleep conditions"))
         composeRule.onNodeWithText("Advanced sleep conditions")
             .assertIsDisplayed()
+
+        composeRule.onNodeWithTag("main_list")
+            .performScrollToNode(hasText("Use custom delay"))
         composeRule.onNodeWithText("Use custom delay")
             .assertIsDisplayed()
     }

@@ -20,7 +20,7 @@ class ThorLidMonitor(
 
     fun start(): Boolean {
         if (running) return true
-        val devicePath = findHallDevicePath() ?: return false
+        val devicePath = findLidDevice()?.eventPath ?: return false
 
         running = true
         thread = Thread {
@@ -71,7 +71,7 @@ class ThorLidMonitor(
                 running = false
             }
         }.apply {
-            name = "SleepManagerThorLid"
+            name = "SleepManagerLid"
             isDaemon = true
             start()
         }
@@ -89,25 +89,56 @@ class ThorLidMonitor(
         thread = null
     }
 
+    data class LidDevice(
+        val eventPath: String,
+        val name: String,
+        val detection: String
+    )
+
     companion object {
-        fun findHallDevicePath(): String? {
-            return try {
-                File("/sys/class/input")
-                    .listFiles()
-                    ?.asSequence()
-                    ?.filter { eventDir -> eventDir.name.startsWith("event") }
-                    ?.firstOrNull { eventDir ->
-                        runCatching {
-                            File(eventDir, "device/name").readText().trim() == "hall_switch"
-                        }.getOrDefault(false)
-                    }
-                    ?.let { eventDir -> "/dev/input/" + eventDir.name }
-            } catch (_: Throwable) {
-                null
+        private const val SW_LID_MASK = 0x1L
+
+        fun findLidDevice(): LidDevice? {
+            val eventDirs =
+                try {
+                    File("/sys/class/input")
+                        .listFiles()
+                        ?.asSequence()
+                        ?.filter { it.name.startsWith("event") }
+                        ?.toList()
+                        .orEmpty()
+                } catch (_: Throwable) {
+                    emptyList()
+                }
+
+            eventDirs.firstOrNull { eventDir ->
+                readInputName(eventDir) == "hall_switch"
+            }?.let { eventDir ->
+                return LidDevice(
+                    eventPath = "/dev/input/${eventDir.name}",
+                    name = "hall_switch",
+                    detection = "hall_switch"
+                )
             }
+
+            eventDirs.firstOrNull { eventDir ->
+                hasSwLidCapability(eventDir)
+            }?.let { eventDir ->
+                return LidDevice(
+                    eventPath = "/dev/input/${eventDir.name}",
+                    name = readInputName(eventDir) ?: eventDir.name,
+                    detection = "SW_LID"
+                )
+            }
+
+            return null
         }
 
-        fun readCurrentLidClosed(devicePath: String? = findHallDevicePath()): Boolean? {
+        fun findHallDevicePath(): String? = findLidDevice()?.eventPath
+
+        fun readCurrentLidClosed(
+            devicePath: String? = findLidDevice()?.eventPath
+        ): Boolean? {
             val resolvedPath = devicePath ?: return null
             val getevent = File("/system/bin/getevent")
             if (!getevent.canExecute()) return null
@@ -138,10 +169,36 @@ class ThorLidMonitor(
                         ?: return@runCatching null
 
                 val switchMask = token.toLong(16)
-                (switchMask and 0x1L) != 0L
+                (switchMask and SW_LID_MASK) != 0L
             }.getOrNull()
         }
 
-        fun isSupported(): Boolean = findHallDevicePath() != null
+        fun isSupported(): Boolean = findLidDevice() != null
+
+        fun detectionDescription(): String {
+            val device = findLidDevice() ?: return "none"
+            return "${device.detection} • ${device.name} • ${device.eventPath}"
+        }
+
+        private fun readInputName(eventDir: File): String? =
+            runCatching {
+                File(eventDir, "device/name").readText().trim()
+            }.getOrNull()
+
+        private fun hasSwLidCapability(eventDir: File): Boolean =
+            runCatching {
+                val raw =
+                    File(eventDir, "device/capabilities/sw")
+                        .readText()
+                        .trim()
+                if (raw.isEmpty()) return@runCatching false
+
+                val leastSignificantWord =
+                    raw.split(Regex("""\s+"""))
+                        .last()
+                        .toLong(16)
+
+                (leastSignificantWord and SW_LID_MASK) != 0L
+            }.getOrDefault(false)
     }
 }

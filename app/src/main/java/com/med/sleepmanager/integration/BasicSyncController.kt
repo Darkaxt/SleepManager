@@ -1,5 +1,6 @@
 package com.med.sleepmanager.integration
 
+import androidx.core.content.ContextCompat
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -109,16 +110,12 @@ object BasicSyncController {
         }
 
         val filter = IntentFilter(ACTION_STATE_CHANGED)
-        if (Build.VERSION.SDK_INT >= 33) {
-            appContext.registerReceiver(
-                receiver,
-                filter,
-                Context.RECEIVER_EXPORTED
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appContext.registerReceiver(receiver, filter)
-        }
+        ContextCompat.registerReceiver(
+            appContext,
+            receiver,
+            filter,
+            ContextCompat.RECEIVER_EXPORTED
+        )
 
         observerContext = appContext
         observerReceiver = receiver
@@ -288,23 +285,14 @@ object BasicSyncController {
         var registered = false
         return try {
             val filter = IntentFilter(ACTION_STATE_CHANGED)
-            if (Build.VERSION.SDK_INT >= 33) {
-                appContext.registerReceiver(
-                    receiver,
-                    filter,
-                    null,
-                    receiverHandler,
-                    Context.RECEIVER_EXPORTED
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                appContext.registerReceiver(
-                    receiver,
-                    filter,
-                    null,
-                    receiverHandler
-                )
-            }
+            ContextCompat.registerReceiver(
+                appContext,
+                receiver,
+                filter,
+                null,
+                receiverHandler,
+                ContextCompat.RECEIVER_EXPORTED
+            )
             registered = true
 
             if (!sendRemoteControl(appContext, ACTION_REQUEST_STATE)) {

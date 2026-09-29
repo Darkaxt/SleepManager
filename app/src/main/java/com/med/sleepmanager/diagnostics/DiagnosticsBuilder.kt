@@ -6,6 +6,8 @@ import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.EventHistoryStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.integration.BasicSyncController
+import com.med.sleepmanager.device.DeviceControlController
+import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
@@ -62,6 +64,10 @@ object DiagnosticsBuilder {
             SleepCycleStore.connectorChange(context, BasicSyncConnector.id)
         val wifiDiagnostic = AppPreferences.lastWifiToggleDiagnostic(context)
         val processExitHistory = ProcessExitHistoryReader.read(context)
+        val deviceCapabilities = DeviceControlController.capabilities(context)
+        val batterySaverOwned = DeviceControlStore.batterySaver(context)
+        val chargingSeparationOwned =
+            DeviceControlStore.chargingSeparation(context)
 
         val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
@@ -125,16 +131,24 @@ object DiagnosticsBuilder {
             appendLine("Device")
             appendLine("- Model: ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine("- Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("- Thor hall support: ${ThorLidMonitor.isSupported()}")
+            appendLine("- Lid support: ${ThorLidMonitor.isSupported()}")
+            appendLine("- Lid detection: ${ThorLidMonitor.detectionDescription()}")
+            appendLine("- PServer: ${if (deviceCapabilities.pServerAvailable) "available" else "unavailable"}")
+            appendLine("- Battery Saver control: ${deviceCapabilities.batterySaverControl}")
+            appendLine("- Charging Separation control: ${deviceCapabilities.chargingSeparationControl}")
             appendLine()
             appendLine("Selected actions")
             appendLine("- Wi-Fi: ${AppPreferences.manageWifi(context)}")
             appendLine("- Bluetooth: ${AppPreferences.manageBluetooth(context)}")
+            appendLine("- Battery Saver during sleep: ${AppPreferences.manageBatterySaver(context)}")
+            appendLine("- Charging Separation with lid closed: ${AppPreferences.manageChargingSeparationWithLid(context)}")
             appendLine("- Syncthing-Fork: ${AppPreferences.manageSyncthing(context)}")
             appendLine("- Tailscale: ${AppPreferences.manageTailscale(context)}")
             appendLine("- JamesDSP: ${AppPreferences.manageJamesDsp(context)}")
             appendLine("- BasicSync: ${AppPreferences.manageBasicSync(context)}")
-            appendLine("- Thor protection: ${AppPreferences.manageThorProtection(context)}")
+            appendLine("- Closed-lid protection: ${AppPreferences.manageThorProtection(context)}")
+            appendLine("- Sleep when external display disconnects: ${AppPreferences.thorDockDisconnectSleeps(context)}")
+            appendLine("- Power button sleeps with lid closed: ${AppPreferences.thorClosedPowerSleeps(context)}")
             appendLine()
             appendLine("Advanced sync conditions")
             appendLine("- Periodic sync while sleeping: ${AppPreferences.periodicSyncWhileSleeping(context)}")
@@ -155,6 +169,15 @@ object DiagnosticsBuilder {
             appendLine("Current state")
             appendLine("- Wi-Fi: ${formatState(wifiState)}")
             appendLine("- Bluetooth: ${formatState(bluetoothState)}")
+            appendLine("- Battery Saver: ${if (DeviceControlController.batterySaverEnabled(context)) "ON" else "OFF"}")
+            appendLine(
+                "- Charging Separation: " +
+                    when (DeviceControlController.chargingSeparationState(context)) {
+                        true -> "ON"
+                        false -> "OFF"
+                        null -> "unavailable"
+                    }
+            )
             appendLine("- Helper: ${if (helperVersion != null) "installed • $helperVersion" else "not installed"}")
             appendLine(
                 "- Syncthing target: " +
@@ -255,6 +278,9 @@ object DiagnosticsBuilder {
             appendLine("- Helper restored: ${cycle.helperRestored}")
             appendLine("- Wi-Fi managed: ${cycle.wifiManaged}")
             appendLine("- Bluetooth managed: ${cycle.bluetoothManaged}")
+            appendLine("- Battery Saver restore owned: ${batterySaverOwned.owned} · previous=${batterySaverOwned.previous}")
+            appendLine("- Charging Separation restore owned: ${chargingSeparationOwned.owned} · previous=${chargingSeparationOwned.previous}")
+            appendLine("- Last service recovery: ${DeviceControlStore.lastServiceRecovery(context) ?: "none"}")
             appendLine("- Syncthing restore pending: $syncthingPending")
             appendLine(
                 "- Tailscale transaction: " +

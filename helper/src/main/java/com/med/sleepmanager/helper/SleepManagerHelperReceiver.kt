@@ -1,6 +1,8 @@
 package com.med.sleepmanager.helper
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -24,6 +26,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
         private const val EXTRA_WIFI = "wifi"
         private const val EXTRA_BLUETOOTH = "bluetooth"
+        private const val EXTRA_CYCLE_ID = "cycle_id"
         private const val EXTRA_WIFI_STATE = "wifi_state"
         private const val EXTRA_BLUETOOTH_STATE = "bluetooth_state"
         private const val EXTRA_PHASE = "phase"
@@ -41,6 +44,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         private const val EXTRA_STATUS = "status"
         private const val STATUS_OK = "OK"
         private const val STATUS_ALREADY_SLEEPING = "ALREADY_SLEEPING"
+        private const val STATUS_ALREADY_RESTORED = "ALREADY_RESTORED"
         private const val STATUS_NO_ACTIVE_CYCLE = "NO_ACTIVE_CYCLE"
         private const val STATUS_RESTORE_FAILED = "RESTORE_FAILED"
         private const val STATUS_WIFI_TOGGLE_FAILED = "WIFI_TOGGLE_FAILED"
@@ -50,6 +54,8 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
         private const val PREFS = "helper_state"
         private const val KEY_CYCLE_ACTIVE = "cycle_active"
+        private const val KEY_CYCLE_ID = "cycle_id"
+        private const val KEY_LAST_RESTORED_CYCLE_ID = "last_restored_cycle_id"
         private const val KEY_WIFI_PREVIOUS = "wifi_previous"
         private const val KEY_WIFI_CHANGED = "wifi_changed"
         private const val KEY_BT_PREVIOUS = "bt_previous"
@@ -63,9 +69,13 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             ACTION_SLEEP -> enterSleep(
                 context,
                 manageWifi = intent.getBooleanExtra(EXTRA_WIFI, false),
-                manageBluetooth = intent.getBooleanExtra(EXTRA_BLUETOOTH, false)
+                manageBluetooth = intent.getBooleanExtra(EXTRA_BLUETOOTH, false),
+                cycleId = intent.getLongExtra(EXTRA_CYCLE_ID, 0L)
             )
-            ACTION_WAKE, ACTION_RESTORE -> restore(context)
+            ACTION_WAKE, ACTION_RESTORE -> restore(
+                context,
+                requestedCycleId = intent.getLongExtra(EXTRA_CYCLE_ID, 0L)
+            )
             ACTION_QUERY -> reportCurrentState(context)
             ACTION_SET_TEMP_WIFI -> setTemporaryWifi(
                 context,
@@ -84,7 +94,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
     private fun reportCurrentState(context: Context) {
         val wifiManager =
             context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-        val bluetooth = BluetoothAdapter.getDefaultAdapter()
+        val bluetooth = bluetoothAdapter(context)
 
         val wifiOn = safeWifiState(wifiManager)
         val bluetoothOn = safeBluetoothState(bluetooth)
@@ -101,7 +111,8 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
     private fun enterSleep(
         context: Context,
         manageWifi: Boolean,
-        manageBluetooth: Boolean
+        manageBluetooth: Boolean,
+        cycleId: Long
     ) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_CYCLE_ACTIVE, false)) {
@@ -122,7 +133,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
         val wifiManager =
             context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-        val bluetooth = BluetoothAdapter.getDefaultAdapter()
+        val bluetooth = bluetoothAdapter(context)
 
         val wifiWasOn = safeWifiState(wifiManager)
         val bluetoothWasOn = safeBluetoothState(bluetooth)
@@ -136,6 +147,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         // restore() still knows which previous state must be recovered.
         prefs.edit()
             .putBoolean(KEY_CYCLE_ACTIVE, true)
+            .putLong(KEY_CYCLE_ID, cycleId)
             .putBoolean(KEY_WIFI_PREVIOUS, wifiWasOn)
             .putBoolean(KEY_WIFI_CHANGED, wifiChangeExpected)
             .putBoolean(KEY_BT_PREVIOUS, bluetoothWasOn)
@@ -271,10 +283,24 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun restore(context: Context) {
+    private fun restore(
+        context: Context,
+        requestedCycleId: Long
+    ) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(KEY_CYCLE_ACTIVE, false)) {
-            Log.i(TAG, "No active sleep cycle to restore; reporting mismatch")
+            val alreadyRestored =
+                requestedCycleId != 0L &&
+                    prefs.getLong(KEY_LAST_RESTORED_CYCLE_ID, 0L) == requestedCycleId
+
+            Log.i(
+                TAG,
+                if (alreadyRestored) {
+                    "Restore replay for already restored cycle=$requestedCycleId"
+                } else {
+                    "No active sleep cycle to restore; reporting mismatch"
+                }
+            )
             sendResult(
                 context = context,
                 phase = PHASE_WAKE,
@@ -284,16 +310,19 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
                 bluetoothManaged = false,
                 bluetoothPrevious = false,
                 bluetoothChanged = false,
-                restoreSuccess = false,
-                status = STATUS_NO_ACTIVE_CYCLE
+                restoreSuccess = alreadyRestored,
+                status = if (alreadyRestored) STATUS_ALREADY_RESTORED else STATUS_NO_ACTIVE_CYCLE
             )
             return
         }
 
         val wifiManager =
             context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-        val bluetooth = BluetoothAdapter.getDefaultAdapter()
+        val bluetooth = bluetoothAdapter(context)
 
+        val activeCycleId = prefs.getLong(KEY_CYCLE_ID, 0L)
+        val effectiveCycleId =
+            activeCycleId.takeIf { it != 0L } ?: requestedCycleId
         val wifiPrevious = prefs.getBoolean(KEY_WIFI_PREVIOUS, false)
         val wifiChanged = prefs.getBoolean(KEY_WIFI_CHANGED, false)
         val airplaneModeOn = isAirplaneModeOn(context)
@@ -321,7 +350,10 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         val restoreSuccess = wifiRestoreSuccess && bluetoothRestoreSuccess
 
         if (restoreSuccess) {
-            prefs.edit().clear().commit()
+            prefs.edit()
+                .clear()
+                .putLong(KEY_LAST_RESTORED_CYCLE_ID, effectiveCycleId)
+                .commit()
         } else {
             prefs.edit()
                 .putBoolean(KEY_WIFI_CHANGED, wifiChanged && !wifiRestoreSuccess)
@@ -428,6 +460,16 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             false
         }
 
+    private fun bluetoothAdapter(context: Context): BluetoothAdapter? =
+        (
+            context.getSystemService(Context.BLUETOOTH_SERVICE)
+                as? BluetoothManager
+        )?.adapter
+
+    // The Helper intentionally targets API 28 and declares the legacy
+    // BLUETOOTH/BLUETOOTH_ADMIN permissions so these compatibility calls
+    // remain available on handheld firmware.
+    @SuppressLint("MissingPermission")
     private fun safeBluetoothState(adapter: BluetoothAdapter?): Boolean =
         try {
             adapter?.isEnabled == true
@@ -437,6 +479,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         }
 
     @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission")
     private fun setBluetooth(adapter: BluetoothAdapter?, enabled: Boolean): Boolean =
         try {
             val result = if (enabled) {

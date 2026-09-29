@@ -1,5 +1,6 @@
 package com.med.sleepmanager.sync
 
+import androidx.core.content.ContextCompat
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -353,23 +354,14 @@ class SyncMaintenanceRunner(
         if (helperReceiverRegistered) return
 
         val filter = IntentFilter(HelperController.ACTION_RESULT)
-        if (Build.VERSION.SDK_INT >= 33) {
-            appContext.registerReceiver(
-                helperResultReceiver,
-                filter,
-                HelperController.PERMISSION,
-                handler,
-                Context.RECEIVER_EXPORTED
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appContext.registerReceiver(
-                helperResultReceiver,
-                filter,
-                HelperController.PERMISSION,
-                handler
-            )
-        }
+        ContextCompat.registerReceiver(
+            appContext,
+            helperResultReceiver,
+            filter,
+            HelperController.PERMISSION,
+            handler,
+            ContextCompat.RECEIVER_EXPORTED
+        )
         helperReceiverRegistered = true
     }
 

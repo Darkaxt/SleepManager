@@ -34,10 +34,14 @@ object SleepConditionEvaluator {
 
             when (AppPreferences.batterySaverMode(context)) {
                 AppPreferences.BATTERY_SAVER_ON -> {
-                    if (!isBatterySaverOn(context)) add("Battery Saver is OFF")
+                    if (!isBatterySaverOn(context)) {
+                        add("Battery Saver is OFF")
+                    }
                 }
                 AppPreferences.BATTERY_SAVER_OFF -> {
-                    if (isBatterySaverOn(context)) add("Battery Saver is ON")
+                    if (isBatterySaverOn(context)) {
+                        add("Battery Saver is ON")
+                    }
                 }
             }
 

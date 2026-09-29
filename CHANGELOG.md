@@ -2,6 +2,139 @@
 
 Release notes are organized by version and focus on user-visible behavior first.
 
+## 0.6.1.1 — 2026-09-29
+
+### Upstream synchronization
+
+- Merged the complete upstream SleepManager 0.6.1 history, including Battery
+  Saver ownership, broader clamshell support, background-reliability checks,
+  replay-safe Helper restoration, and the split UI architecture.
+- Retained state-aware TailDNS support alongside official Tailscale, including
+  active-VPN package selection and exact package-bound disconnect/restore
+  tokens.
+- Retained the Darkaxt update origin and permanent paired Main/Helper signing
+  identity.
+
+### Compatibility
+
+- Main app: **0.6.1.1 / versionCode 546**.
+- Helper: **1.1.1.1 / versionCode 1113**.
+
+---
+
+## 0.6.1 — 2026-09-28
+
+### New
+
+- Added optional **Battery Saver during sleep** on supported devices with state-aware restoration on wake.
+- Added **Disable Charging Separation with lid closed** on compatible clamshell devices.
+- Added generic standard **SW_LID** detection while retaining the AYN Thor-specific lid path.
+- Added **About → Background Reliability** checks for Battery Optimization and Unused App Restrictions.
+- Added direct **Release Notes** access from the updater.
+
+### Improved
+
+- Closed-lid false wakes now preserve active sleep, sync and maintenance work instead of interrupting the cycle.
+- Managed sync clients are allowed to stop before disruptive sleep actions such as Battery Saver or radio changes.
+- BasicSync can finish an already-running sync before SleepManager stops it for sleep.
+- BasicSync 3.19 completion-aware Advanced Sync works independently when Syncthing-Fork is also enabled.
+- Foreground-service recovery and Main ↔ Helper restoration are more robust after Android process restarts.
+- Home controls are organized into **System Controls**, **Sleep Behavior**, **Clamshell Options** and **App Integrations**.
+- Diagnostics include more system-control, clamshell, restore and capability information.
+- Background Reliability correctly recognizes the Device Admin exemption from unused-app restrictions.
+- UI code was split into focused screen and component files without intentionally changing feature behavior.
+
+### Helper 1.1.1
+
+- Improved Wi-Fi and Bluetooth restore reliability.
+- Added cycle-aware, replay-safe restore handling.
+- Updated Bluetooth access for better compatibility with current Android handheld firmware.
+
+### Compatibility
+
+- Main app: **0.6.1 / versionCode 545**.
+- Helper: **1.1.1 / versionCode 1112**.
+- Android **9 / API 28 or newer**.
+- BasicSync **3.18+** for state-aware normal sleep/wake control.
+- BasicSync **3.19+** for completion-aware Advanced Sync.
+- Syncthing-Fork STOP/FOLLOW sleep/wake control remains supported.
+- **No root, Shizuku or ADB is required for normal use.**
+
+---
+
+## 0.6.1-beta4 — 2026-09-27 — Preview
+
+### UI code refactor
+
+- Split the oversized `MainActivity.kt` into focused UI screen and component files.
+- Kept lifecycle, Android settings/permission flows and service coordination in `MainActivity`.
+- Moved the main Compose screen to a `MainActivity` extension so its existing callbacks and state ownership remain unchanged.
+- Separated Stats, Advanced, Activity and About UI from shared Home/settings/behavior components.
+- This is intentionally a structure-only refactor: no feature behavior is meant to change.
+- Main app: **0.6.1-beta4 / versionCode 543**.
+- Helper remains **1.1.1 / versionCode 1110**.
+
+---
+
+## 0.6.1-beta3 — 2026-09-27 — Preview
+
+### Beta3 UI and reliability
+
+- Moved Battery optimization and unused-app restrictions from the Home warning card to **About → Background reliability**.
+- Added direct Android settings actions for both reliability settings.
+- Re-checks reliability settings automatically when returning to SleepManager.
+- Fixed the periodic Home UI flash caused by resetting asynchronous reliability state to an empty value every three seconds.
+- Device-control capability checks now run off the UI thread and retain their last known value while refreshing.
+- Asynchronous UI status keeps its last known value while background checks complete instead of temporarily reverting to an empty/loading state.
+- Main app: **0.6.1-beta3 / versionCode 542**.
+- Helper remains **1.1.1 / versionCode 1110**.
+
+---
+
+## 0.6.1-beta2 — 2026-09-26 — Preview
+
+### Beta2 hardening
+
+- Re-checks fresh BasicSync state before the normal sleep path can STOP it, closing the race where a sync started just before sleep.
+- Reconciles persisted Charging Separation ownership after a service/process restart and re-applies the intended closed-lid state when needed.
+- Retries Battery Saver / Charging Separation restoration for a bounded period when SleepManager is disabled before giving up and preserving a restore warning.
+- Prevents the disable flow from finishing while owned system-state restoration is still being initialized or retried.
+- Shows **Power button sleeps with lid closed** only when the compatible power-key input is actually detected.
+- Clears a stale Battery Saver condition when the privileged control service is definitively unavailable.
+
+### Included from beta1
+
+
+### New
+
+- Added optional **Battery Saver during sleep** on devices where SleepManager can actually control it.
+- Added **Charging Separation with lid closed** on compatible clamshells, with lid/dock-aware ownership restoration.
+- Added generic standard **SW_LID** detection while keeping the existing Thor `hall_switch` path first.
+- Added passive background-reliability checks for battery optimization and unused-app restrictions.
+- Added **Release notes** links to update UI.
+
+### Fixed and improved
+
+- Foreground-service restarts after Android memory pressure preserve and resume active sleep transactions more clearly.
+- Main ↔ Helper restore requests are cycle-aware and replay-safe, preventing a completed Helper restore from becoming a false pending-restore warning after a process restart.
+- BasicSync advanced sync no longer becomes unavailable just because Syncthing-Fork is also managed.
+- Syncthing-Fork keeps its normal STOP/FOLLOW ownership while BasicSync uses completion-aware advanced sync.
+- In normal BasicSync mode, an already-running sync can finish before SleepManager sends STOP and removes managed Wi-Fi; the wait is bounded.
+- Battery Saver and Charging Separation changes are ownership-aware and survive process recovery.
+- Battery Saver action and Battery Saver condition are mutually exclusive.
+- Unsupported system controls stay hidden.
+- Home sleep controls are reorganized into **System controls**, **Sleep behavior** and **App integrations**.
+- Changed the unplugged condition wording to **Only start sleep actions when unplugged**.
+- Expanded diagnostics with lid detection, privileged-control capability and recovery state.
+
+### Compatibility
+
+- Main app: **0.6.1-beta2 / versionCode 541**.
+- Helper: **1.1.1 / versionCode 1110**.
+- No root, Shizuku or ADB is required for normal use.
+
+---
+
 ## 0.6.0.2 — 2026-09-26
 
 ### Maintenance

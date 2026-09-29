@@ -220,13 +220,9 @@ object ManagedSyncProviders {
     }
 
     fun selected(context: Context): List<SyncCompletionProvider> = buildList {
-        if (
-            AppPreferences.manageSyncthing(context) &&
-            SyncthingController.selectedTarget(context) != null
-        ) {
-            add(SyncthingCompletionProvider(context))
-        }
-
+        // Advanced completion-aware maintenance is intentionally BasicSync-only.
+        // Syncthing-Fork keeps its independent STOP/FOLLOW sleep/wake behavior
+        // because it does not expose a supported sync-completion API.
         if (
             AppPreferences.manageBasicSync(context) &&
             BasicSyncController.isInstalled(context)
