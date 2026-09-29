@@ -197,7 +197,7 @@ class RegressionTest {
             available = SyncthingController.installedTargets(targetContext).isNotEmpty()
         )
         assertIntegrationToggleMatchesAvailability(
-            contentDescription = "Tailscale toggle",
+            contentDescription = "Tailscale / TailDNS toggle",
             available = TailscaleController.isInstalled(targetContext)
         )
         assertIntegrationToggleMatchesAvailability(
