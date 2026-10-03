@@ -28,7 +28,13 @@ Helper assemblies pass. APK package IDs, versions and common pinned signer were
 independently checked. Adapted instrumentation compilation and workflow syntax
 checks pass. The false-wake regression now verifies retention of a TailDNS-bound
 restore token. Updater preferences retain their existing file/key identities.
-GitHub emulator gates, publication and public-artifact verification remain pending.
+GitHub run 37125598826 passed signed build, instrumentation/lifecycle and the
+previous-fork Helper compatibility matrix. Its combined-condition E2E fixture
+expired at the next minute during activity relaunch; the production schedule
+correctly rejected the expired window. Only that test fixture was widened to
+opposite half-day windows; checks across every minute/midnight preserve intended
+inside/outside semantics. Publication was skipped, not bypassed. Fresh release
+gates, publication and public-artifact verification remain pending.
 Historical device acceptance below is not new device verification.
 
 Blockers: none identified. Tracked deferrals: none.

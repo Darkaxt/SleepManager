@@ -214,17 +214,21 @@ class LocalE2EControlTest {
 
         val start =
             if (inside) {
-                (now + 1439) % 1440
+                (now + 1080) % 1440
             } else {
-                (now + 2) % 1440
+                (now + 360) % 1440
             }
 
         val end =
             if (inside) {
-                (now + 1) % 1440
+                (now + 360) % 1440
             } else {
-                (now + 3) % 1440
+                (now + 1080) % 1440
             }
+
+        // Opposite half-day windows keep the intended condition stable across
+        // activity relaunch and minute boundaries, including midnight. The
+        // previous next-minute end could expire before SCREEN_OFF was delivered.
 
         AppPreferences.setScheduleStartMinutes(context, start)
         AppPreferences.setScheduleEndMinutes(context, end)
