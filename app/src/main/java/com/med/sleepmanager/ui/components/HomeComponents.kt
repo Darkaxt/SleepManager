@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,7 +49,7 @@ import com.med.sleepmanager.R
 import com.med.sleepmanager.ui.AppSection
 import com.med.sleepmanager.ui.feedbackClick
 import com.med.sleepmanager.ui.iconRes
-import com.med.sleepmanager.ui.label
+import com.med.sleepmanager.ui.labelRes
 import com.med.sleepmanager.update.HelperUpdateInfo
 import com.med.sleepmanager.update.UpdateInfo
 
@@ -83,7 +84,7 @@ internal fun CompactSideRail(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_menu),
-                        contentDescription = "Open navigation"
+                        contentDescription = stringResource(R.string.open_navigation)
                     )
                 }
             }
@@ -96,7 +97,7 @@ internal fun CompactSideRail(
                     icon = {
                         Icon(
                             painter = painterResource(section.iconRes),
-                            contentDescription = section.label
+                            contentDescription = stringResource(section.labelRes)
                         )
                     }
                 )
@@ -132,91 +133,148 @@ internal fun OnboardingCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                "Quick setup",
+                stringResource(R.string.quick_setup),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
 
             Text(
                 if (helperInstalled) {
-                    "✓ Compatibility helper installed${helperVersion?.let { " • $it" } ?: ""}"
+                    if (helperVersion != null) {
+                        stringResource(
+                            R.string.quick_setup_helper_installed_with_version,
+                            helperVersion
+                        )
+                    } else {
+                        stringResource(R.string.quick_setup_helper_installed)
+                    }
                 } else {
-                    "• Compatibility helper not installed — only needed for Wi-Fi / Bluetooth."
+                    stringResource(R.string.quick_setup_helper_not_installed)
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
 
             if (!helperInstalled) {
                 TextButton(onClick = feedbackClick(onGetHelper)) {
-                    Text("Install Helper")
+                    Text(stringResource(R.string.install_helper))
                 }
             }
 
             Text(
-                syncthingTarget?.let { "✓ ${it.displayName} detected" }
-                    ?: "• Syncthing-Fork not detected — optional.",
+                if (syncthingTarget != null) {
+                    stringResource(
+                        R.string.quick_setup_integration_detected,
+                        syncthingTarget.displayName
+                    )
+                } else {
+                    stringResource(
+                        R.string.quick_setup_integration_not_detected,
+                        stringResource(R.string.integration_syncthing_fork)
+                    )
+                },
                 style = MaterialTheme.typography.bodyMedium
             )
 
             if (syncthingEnabled && syncthingTarget != null) {
                 Text(
-                    "Syncthing-Fork: make sure Settings → Behaviour → Service control by broadcast is enabled.",
+                    stringResource(R.string.quick_setup_syncthing_broadcast_reminder),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
 
+            val tailscaleDisplayVersion =
+                tailscaleVersion?.substringBefore("-")
             Text(
                 if (tailscaleInstalled) {
-                    val version =
-                        tailscaleVersion?.substringBefore("-")
-                    "✓ Tailscale" +
-                        (version?.let { " • $it" } ?: "") +
-                        " detected"
+                    if (tailscaleDisplayVersion != null) {
+                        stringResource(
+                            R.string.quick_setup_named_integration_detected_with_version,
+                            stringResource(R.string.integration_tailscale),
+                            tailscaleDisplayVersion
+                        )
+                    } else {
+                        stringResource(
+                            R.string.quick_setup_named_integration_detected,
+                            stringResource(R.string.integration_tailscale)
+                        )
+                    }
                 } else {
-                    "• Tailscale not detected — optional."
+                    stringResource(
+                        R.string.quick_setup_integration_not_detected,
+                        stringResource(R.string.integration_tailscale)
+                    )
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Text(
-                jamesDspTarget?.let { target ->
-                    "✓ JamesDSP" +
-                        (target.versionName?.let { " • $it" } ?: "") +
-                        " detected"
-                } ?: "• JamesDSP not detected — optional.",
+                if (jamesDspTarget != null) {
+                    val version = jamesDspTarget.versionName
+                    if (version != null) {
+                        stringResource(
+                            R.string.quick_setup_named_integration_detected_with_version,
+                            stringResource(R.string.integration_jamesdsp),
+                            version
+                        )
+                    } else {
+                        stringResource(
+                            R.string.quick_setup_named_integration_detected,
+                            stringResource(R.string.integration_jamesdsp)
+                        )
+                    }
+                } else {
+                    stringResource(
+                        R.string.quick_setup_integration_not_detected,
+                        stringResource(R.string.integration_jamesdsp)
+                    )
+                },
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Text(
                 if (basicSyncInstalled) {
-                    "✓ BasicSync" +
-                        (basicSyncVersion?.let { " • $it" } ?: "") +
-                        " detected"
+                    if (basicSyncVersion != null) {
+                        stringResource(
+                            R.string.quick_setup_named_integration_detected_with_version,
+                            stringResource(R.string.integration_basicsync),
+                            basicSyncVersion
+                        )
+                    } else {
+                        stringResource(
+                            R.string.quick_setup_named_integration_detected,
+                            stringResource(R.string.integration_basicsync)
+                        )
+                    }
                 } else {
-                    "• BasicSync not detected — optional."
+                    stringResource(
+                        R.string.quick_setup_integration_not_detected,
+                        stringResource(R.string.integration_basicsync)
+                    )
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
 
             Text(
-                if (managerEnabled) {
-                    "SleepManager is enabled. Finish setup when your selected actions look right."
-                } else {
-                    "Choose the actions you want below, enable SleepManager, then tap Finish setup."
-                },
+                stringResource(
+                    if (managerEnabled) {
+                        R.string.quick_setup_manager_enabled
+                    } else {
+                        R.string.quick_setup_manager_disabled
+                    }
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Text(
-                "Sleep statistics start automatically. Complete a sleep session of at least 3 hours without charging to build averages and standby estimates.",
+                stringResource(R.string.quick_setup_sleep_statistics),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             TextButton(onClick = feedbackClick(onShowTest)) {
-                Text("How to test sleep / wake")
+                Text(stringResource(R.string.how_to_test_sleep_wake))
             }
         }
     }
@@ -291,23 +349,35 @@ private fun UpdateAvailableText(
     helperUpdate: HelperUpdateInfo?
 ) {
     Text(
-        if (update != null && helperUpdate != null) {
-            "Updates available"
-        } else {
-            "Update available"
-        },
+        stringResource(
+            if (update != null && helperUpdate != null) {
+                R.string.updates_available
+            } else {
+                R.string.update_available
+            }
+        ),
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold
     )
     Text(
         when {
             update != null && helperUpdate != null ->
-                "SleepManager ${update.versionName} and Helper ${helperUpdate.versionName} are available."
+                stringResource(
+                    R.string.update_main_and_helper_available,
+                    update.versionName,
+                    helperUpdate.versionName
+                )
             update != null ->
-                "SleepManager ${update.versionName} is available on GitHub."
+                stringResource(
+                    R.string.update_main_available,
+                    update.versionName
+                )
             helperUpdate != null ->
-                "SleepManager Helper ${helperUpdate.versionName} is available."
-            else -> "An update is available."
+                stringResource(
+                    R.string.update_helper_available,
+                    helperUpdate.versionName
+                )
+            else -> stringResource(R.string.update_generic_available)
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -325,7 +395,7 @@ private fun UpdateAvailableActions(
     ) {
         OutlinedButton(onClick = feedbackClick(onUpdate)) {
             Text(
-                "Update",
+                stringResource(R.string.update_action),
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -333,7 +403,7 @@ private fun UpdateAvailableActions(
             TextButton(
                 onClick = feedbackClick(onReleaseNotes)
             ) {
-                Text("Release notes")
+                Text(stringResource(R.string.release_notes))
             }
         }
     }
@@ -391,21 +461,25 @@ internal fun StatusCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = when {
-                            active -> "SleepManager is active"
-                            enabled -> "SleepManager is starting"
-                            else -> "SleepManager is off"
-                        },
+                        text = stringResource(
+                            when {
+                                active -> R.string.status_active_title
+                                enabled -> R.string.status_starting_title
+                                else -> R.string.status_off_title
+                            }
+                        ),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
 
                     Text(
-                        text = when {
-                            active -> "Selected settings turn off or pause on sleep, then restore on wake."
-                            enabled -> "Background automation is starting…"
-                            else -> "Enable it once, and it will run automatically in the background."
-                        },
+                        text = stringResource(
+                            when {
+                                active -> R.string.status_active_description
+                                enabled -> R.string.status_starting_description
+                                else -> R.string.status_off_description
+                            }
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (active) {
                             MaterialTheme.colorScheme.onPrimaryContainer
@@ -421,8 +495,13 @@ internal fun StatusCard(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (enabled) "Disable SleepManager"
-                    else "Enable SleepManager"
+                    stringResource(
+                        if (enabled) {
+                            R.string.disable_sleepmanager
+                        } else {
+                            R.string.enable_sleepmanager
+                        }
+                    )
                 )
             }
 

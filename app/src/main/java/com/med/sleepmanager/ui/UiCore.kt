@@ -3,6 +3,7 @@ package com.med.sleepmanager.ui
 import android.view.HapticFeedbackConstants
 import android.view.SoundEffectConstants
 import android.view.View
+import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalView
 import com.med.sleepmanager.R
@@ -46,13 +47,34 @@ internal enum class AppSection {
     ABOUT
 }
 
-internal val AppSection.label: String
+@get:StringRes
+internal val AppSection.labelRes: Int
     get() = when (this) {
-        AppSection.HOME -> "Home"
-        AppSection.ADVANCED -> "Advanced settings"
-        AppSection.STATS -> "Stats"
-        AppSection.ACTIVITY_LOG -> "Activity log"
-        AppSection.ABOUT -> "About"
+        AppSection.HOME -> R.string.nav_home
+        AppSection.ADVANCED -> R.string.nav_advanced
+        AppSection.STATS -> R.string.nav_stats
+        AppSection.ACTIVITY_LOG -> R.string.nav_activity_log
+        AppSection.ABOUT -> R.string.nav_about
+    }
+
+@get:StringRes
+internal val AppSection.titleRes: Int
+    get() = when (this) {
+        AppSection.HOME -> R.string.app_name
+        AppSection.ADVANCED -> R.string.section_advanced_title
+        AppSection.STATS -> R.string.nav_stats
+        AppSection.ACTIVITY_LOG -> R.string.nav_activity_log
+        AppSection.ABOUT -> R.string.nav_about
+    }
+
+@get:StringRes
+internal val AppSection.subtitleRes: Int
+    get() = when (this) {
+        AppSection.HOME -> R.string.section_home_subtitle
+        AppSection.ADVANCED -> R.string.section_advanced_subtitle
+        AppSection.STATS -> R.string.section_stats_subtitle
+        AppSection.ACTIVITY_LOG -> R.string.section_activity_log_subtitle
+        AppSection.ABOUT -> R.string.section_about_subtitle
     }
 
 internal val AppSection.iconRes: Int

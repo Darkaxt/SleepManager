@@ -2,13 +2,18 @@ package com.med.sleepmanager.device
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.IBinder
 import android.os.Parcel
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import java.nio.charset.Charset
 
 object DeviceControlController {
+    private const val TAG = "SleepManagerDeviceControl"
     private const val PSERVER_SERVICE = "PServerBinder"
     private const val CHARGING_SEPARATION_KEY = "is_charging_separation"
 
@@ -61,14 +66,37 @@ object DeviceControlController {
         return powerManager?.isPowerSaveMode == true
     }
 
+    fun externalPowerConnected(context: Context): Boolean {
+        val batteryIntent =
+            context.registerReceiver(
+                null,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+        val plugged =
+            batteryIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        return plugged != 0
+    }
+
     fun setBatterySaverEnabled(enabled: Boolean): Boolean {
         val value = if (enabled) 1 else 0
-        if (executePrivileged("cmd power set-mode $value").isFailure) {
+        val commandResult = executePrivileged("cmd power set-mode $value")
+        if (commandResult.isFailure) {
+            Log.e(
+                TAG,
+                "Battery Saver privileged write failed enabled=$enabled",
+                commandResult.exceptionOrNull()
+            )
             return false
         }
-        return readPrivilegedBoolean(
-            "settings get global low_power"
-        ) == enabled
+
+        val actual = readPrivilegedBoolean("settings get global low_power")
+        if (actual != enabled) {
+            Log.w(
+                TAG,
+                "Battery Saver verification failed expected=$enabled actual=$actual"
+            )
+        }
+        return actual == enabled
     }
 
     fun chargingSeparationState(context: Context): Boolean? {
@@ -92,16 +120,30 @@ object DeviceControlController {
 
     fun setChargingSeparationEnabled(enabled: Boolean): Boolean {
         val value = if (enabled) 1 else 0
-        if (
+        val commandResult =
             executePrivileged(
                 "settings put system $CHARGING_SEPARATION_KEY $value"
-            ).isFailure
-        ) {
+            )
+        if (commandResult.isFailure) {
+            Log.e(
+                TAG,
+                "Charging Separation privileged write failed enabled=$enabled",
+                commandResult.exceptionOrNull()
+            )
             return false
         }
-        return readPrivilegedBoolean(
-            "settings get system $CHARGING_SEPARATION_KEY"
-        ) == enabled
+
+        val actual =
+            readPrivilegedBoolean(
+                "settings get system $CHARGING_SEPARATION_KEY"
+            )
+        if (actual != enabled) {
+            Log.w(
+                TAG,
+                "Charging Separation verification failed expected=$enabled actual=$actual"
+            )
+        }
+        return actual == enabled
     }
 
     private fun readPrivilegedBoolean(command: String): Boolean? =

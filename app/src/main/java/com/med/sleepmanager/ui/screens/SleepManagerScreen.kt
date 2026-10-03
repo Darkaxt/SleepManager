@@ -1,5 +1,6 @@
 package com.med.sleepmanager.ui.screens
 
+import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import android.view.View
@@ -54,10 +55,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.DeviceControlController
@@ -67,9 +70,8 @@ import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
-import com.med.sleepmanager.MainActivity
-import com.med.sleepmanager.protection.ThorLidMonitor
-import com.med.sleepmanager.protection.ThorPowerButtonMonitor
+import com.med.sleepmanager.protection.LidMonitor
+import com.med.sleepmanager.protection.PmicPowerButtonMonitor
 import com.med.sleepmanager.R
 import com.med.sleepmanager.service.SleepManagerService
 import com.med.sleepmanager.sync.basicSyncCompletionState
@@ -91,7 +93,9 @@ import com.med.sleepmanager.ui.components.SyncthingTargetDialog
 import com.med.sleepmanager.ui.components.UpdateAvailableCard
 import com.med.sleepmanager.ui.feedbackClick
 import com.med.sleepmanager.ui.iconRes
-import com.med.sleepmanager.ui.label
+import com.med.sleepmanager.ui.labelRes
+import com.med.sleepmanager.ui.subtitleRes
+import com.med.sleepmanager.ui.titleRes
 import com.med.sleepmanager.update.UpdateChecker
 import com.med.sleepmanager.update.UpdateCheckScheduler
 import com.med.sleepmanager.update.UpdateNotifier
@@ -100,14 +104,61 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.med.sleepmanager.ui.feedbackChange
+import com.med.sleepmanager.ui.state.SleepManagerUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    internal fun MainActivity.SleepManagerScreen(
+    internal fun SleepManagerScreen(
+        uiState: SleepManagerUiState,
+        context: Context,
+        openUpdatesOnLaunch: Boolean,
         useSystemColors: Boolean,
+        onRefreshRequested: () -> Unit,
+        onServiceRefreshRequested: () -> Unit,
+        onManagerEnabledChange: (Boolean) -> Unit,
+        onManageWifiChange: (Boolean) -> Unit,
+        onManageBluetoothChange: (Boolean) -> Unit,
+        onManageBatterySaverChange: (Boolean) -> Unit,
+        onChargingSeparationWithLidChange: (Boolean) -> Unit,
+        onManageSyncthingChange: (Boolean) -> Unit,
+        onManageTailscaleChange: (Boolean) -> Unit,
+        onManageJamesDspChange: (Boolean) -> Unit,
+        onManageBasicSyncChange: (Boolean) -> Unit,
+        onPeriodicSyncWhileSleepingChange: (Boolean) -> Unit,
+        onSyncThenStopOnSleepWakeChange: (Boolean) -> Unit,
+        onSleepGraceChange: (Long) -> Unit,
+        onCustomDelayEnabledChange: (Boolean) -> Unit,
+        onCustomDelayChange: (Long) -> Unit,
+        onBatteryConditionEnabledChange: (Boolean) -> Unit,
+        onBatteryBelowPercentChange: (Int) -> Unit,
+        onNotChargingOnlyChange: (Boolean) -> Unit,
+        onBatterySaverModeChange: (String) -> Unit,
+        onScheduleEnabledChange: (Boolean) -> Unit,
+        onScheduleStartMinutesChange: (Int) -> Unit,
+        onScheduleEndMinutesChange: (Int) -> Unit,
+        onAutomaticUpdateChecksChange: (Boolean) -> Unit,
+        onFinishSetupRequested: () -> Unit,
+        onFinishAppRequested: () -> Unit,
+        onClosedLidAdminActiveRequested: () -> Boolean,
+        onClosedLidProtectionChangeRequested: (Boolean) -> Unit,
+        onDockDisconnectSleepsChange: (Boolean) -> Unit,
+        onClosedLidPowerSleepsChange: (Boolean) -> Unit,
+        onCopyDiagnosticsRequested: () -> Unit,
+        onOpenExternalUrlRequested: (String) -> Unit,
+        onOpenAppInfoRequested: () -> Unit,
+        onOpenBatteryOptimizationRequested: () -> Unit,
+        onOpenUnusedAppRestrictionsRequested: () -> Unit,
+        onRequestUpdateNotificationPermissionRequested: () -> Unit,
+        onInstallVerifiedUpdateRequested: (String) -> Unit,
+        onCanScheduleExactAlarmsRequested: () -> Boolean,
+        onRequestExactAlarmAccessRequested: () -> Unit,
+        onShowTimePickerRequested: (Int, (Int) -> Unit) -> Unit,
+        onRestoreSyncthingRequested: () -> Unit,
+        onRestoreJamesDspRequested: () -> Unit,
+        onRestoreBasicSyncRequested: () -> Unit,
         onUseSystemColorsChanged: (Boolean) -> Unit
     ) {
-        val refreshToken = activityRefreshToken
+        val refreshToken = uiState.activityRefreshToken
         var showTargetDialog by remember { mutableStateOf(false) }
         var showTestDialog by remember { mutableStateOf(false) }
         var currentSection by rememberSaveable {
@@ -169,186 +220,143 @@ import com.med.sleepmanager.ui.feedbackChange
 
         val compactLayout = LocalConfiguration.current.screenWidthDp < 600
 
-        var managerEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.isEnabled(this))
-        }
-        var wifiEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageWifi(this))
-        }
-        var bluetoothEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageBluetooth(this))
-        }
-        var batterySaverActionEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageBatterySaver(this))
-        }
-        var chargingSeparationWithLidEnabled by remember(refreshToken) {
-            mutableStateOf(
-                AppPreferences.manageChargingSeparationWithLid(this)
-            )
-        }
-        var syncthingEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageSyncthing(this))
-        }
-        var tailscaleEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageTailscale(this))
-        }
-        var jamesDspEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageJamesDsp(this))
-        }
-        var basicSyncEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageBasicSync(this))
-        }
-        var periodicSyncWhileSleeping by remember(refreshToken) {
-            mutableStateOf(AppPreferences.periodicSyncWhileSleeping(this))
-        }
-        var syncThenStopOnSleepWake by remember(refreshToken) {
-            mutableStateOf(AppPreferences.syncThenStopOnSleepWake(this))
-        }
-        var thorProtectionEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.manageThorProtection(this))
-        }
-        var thorDockDisconnectSleeps by remember(refreshToken) {
-            mutableStateOf(AppPreferences.thorDockDisconnectSleeps(this))
-        }
-        var thorClosedPowerSleeps by remember(refreshToken) {
-            mutableStateOf(AppPreferences.thorClosedPowerSleeps(this))
-        }
-        var sleepGraceMs by remember(refreshToken) {
-            mutableStateOf(AppPreferences.sleepGraceMs(this))
-        }
-        var customDelayEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.customDelayEnabled(this))
-        }
-        var customDelayMs by remember(refreshToken) {
-            mutableStateOf(AppPreferences.customDelayMs(this))
-        }
-        var batteryConditionEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.batteryConditionEnabled(this))
-        }
-        var batteryBelowPercent by remember(refreshToken) {
-            mutableStateOf(AppPreferences.batteryBelowPercent(this))
-        }
-        var notChargingOnly by remember(refreshToken) {
-            mutableStateOf(AppPreferences.notChargingOnly(this))
-        }
-        var batterySaverMode by remember(refreshToken) {
-            mutableStateOf(AppPreferences.batterySaverMode(this))
-        }
-        var scheduleEnabled by remember(refreshToken) {
-            mutableStateOf(AppPreferences.scheduleEnabled(this))
-        }
-        var scheduleStartMinutes by remember(refreshToken) {
-            mutableStateOf(AppPreferences.scheduleStartMinutes(this))
-        }
-        var scheduleEndMinutes by remember(refreshToken) {
-            mutableStateOf(AppPreferences.scheduleEndMinutes(this))
-        }
+        val managerEnabled = uiState.managerEnabled
+        val wifiEnabled = uiState.manageWifiEnabled
+        val bluetoothEnabled = uiState.manageBluetoothEnabled
+        val batterySaverActionEnabled = uiState.manageBatterySaverEnabled
+        val chargingSeparationWithLidEnabled =
+            uiState.chargingSeparationWithLidEnabled
+        val syncthingEnabled = uiState.manageSyncthingEnabled
+        val tailscaleEnabled = uiState.manageTailscaleEnabled
+        val jamesDspEnabled = uiState.manageJamesDspEnabled
+        val basicSyncEnabled = uiState.manageBasicSyncEnabled
+        val periodicSyncWhileSleeping = uiState.periodicSyncWhileSleeping
+        val syncThenStopOnSleepWake = uiState.syncThenStopOnSleepWake
+        val closedLidProtectionEnabled = uiState.closedLidProtectionEnabled
+        val dockDisconnectSleeps = uiState.dockDisconnectSleeps
+        val closedLidPowerSleeps = uiState.closedLidPowerSleeps
+        val sleepGraceMs = uiState.sleepGraceMs
+        val customDelayEnabled = uiState.customDelayEnabled
+        val customDelayMs = uiState.customDelayMs
+        val batteryConditionEnabled = uiState.batteryConditionEnabled
+        val batteryBelowPercent = uiState.batteryBelowPercent
+        val notChargingOnly = uiState.notChargingOnly
+        val batterySaverMode = uiState.batterySaverMode
+        val scheduleEnabled = uiState.scheduleEnabled
+        val scheduleStartMinutes = uiState.scheduleStartMinutes
+        val scheduleEndMinutes = uiState.scheduleEndMinutes
         val effectiveSleepDelayMs =
             if (customDelayEnabled) customDelayMs else sleepGraceMs
-        val currentBatterySaverState = remember(refreshToken) {
-            DeviceControlController.batterySaverEnabled(this)
-        }
+        val currentBatterySaverState = uiState.currentBatterySaverState
 
         val setupComplete = remember(refreshToken) {
-            AppPreferences.isSetupComplete(this)
+            AppPreferences.isSetupComplete(context)
         }
 
         val helperInstalled = remember(refreshToken) {
-            HelperController.isInstalled(this)
+            HelperController.isInstalled(context)
         }
         val helperVersion = remember(refreshToken) {
             runCatching {
-                packageManager.getPackageInfo(HelperController.PACKAGE, 0).versionName
+                context.packageManager.getPackageInfo(HelperController.PACKAGE, 0).versionName
             }.getOrNull()
         }
         val targets = remember(refreshToken) {
-            SyncthingController.installedTargets(this)
+            SyncthingController.installedTargets(context)
         }
         val selectedTarget = remember(refreshToken) {
-            SyncthingController.selectedTarget(this)
+            SyncthingController.selectedTarget(context)
         }
         val tailscaleInstalled = remember(refreshToken) {
-            TailscaleController.isInstalled(this)
+            TailscaleController.isInstalled(context)
         }
         val tailscaleVersion = remember(refreshToken) {
-            TailscaleController.versionName(this)
+            TailscaleController.versionName(context)
         }
         val jamesDspTarget = remember(refreshToken) {
-            JamesDspController.selectedTarget(this)
+            JamesDspController.selectedTarget(context)
         }
         val basicSyncInstalled = remember(refreshToken) {
-            BasicSyncController.isInstalled(this)
+            BasicSyncController.isInstalled(context)
         }
         val basicSyncVersion = remember(refreshToken) {
-            BasicSyncController.versionName(this)
+            BasicSyncController.versionName(context)
         }
-        val thorProtectionSupported = remember(refreshToken) {
-            ThorLidMonitor.isSupported()
+        val closedLidProtectionSupported = remember(refreshToken) {
+            LidMonitor.isSupported()
+        }
+        val expectedThorClamshell = remember {
+            Build.MODEL.contains("thor", ignoreCase = true) ||
+                (
+                    Build.MANUFACTURER.contains("ayn", ignoreCase = true) &&
+                        Build.DEVICE.contains("thor", ignoreCase = true)
+                )
         }
         val closedLidPowerSupported = remember(refreshToken) {
-            ThorPowerButtonMonitor.isSupported()
+            PmicPowerButtonMonitor.isSupported()
         }
         val deviceControlCapabilities =
-            currentDeviceControlCapabilities
+            uiState.currentDeviceControlCapabilities
         val batterySaverControlSupported =
             deviceControlCapabilities?.batterySaverControl == true
         val chargingSeparationSupported =
-            thorProtectionSupported &&
+            closedLidProtectionSupported &&
                 deviceControlCapabilities?.chargingSeparationControl == true
         val backgroundReliability =
-            currentBackgroundReliability
-        val thorAdminActive = remember(refreshToken) {
-            isThorAdminActive()
+            uiState.currentBackgroundReliability
+        val closedLidAdminActive = remember(refreshToken) {
+            onClosedLidAdminActiveRequested()
         }
         val batteryDashboard = remember(refreshToken) {
-            BatterySleepStore.dashboard(this)
+            BatterySleepStore.dashboard(context)
         }
         val batteryStats = remember(refreshToken) {
-            BatterySleepStore.stats(this)
+            BatterySleepStore.stats(context)
         }
         val restoreProblem = remember(refreshToken) {
-            SleepCycleStore.restoreProblem(this)
+            SleepCycleStore.restoreProblem(context)
         }
-        var automaticUpdateChecks by remember(refreshToken) {
-            mutableStateOf(AppPreferences.automaticUpdateChecks(this))
-        }
+        val automaticUpdateChecks = uiState.automaticUpdateChecks
         val availableUpdate = remember(refreshToken) {
-            UpdateChecker.cachedUpdate(this)
+            UpdateChecker.cachedUpdate(context)
         }
         val availableHelperUpdate = remember(refreshToken) {
-            UpdateChecker.cachedHelperUpdate(this)
+            UpdateChecker.cachedHelperUpdate(context)
         }
         val updateNotificationsAllowed = remember(refreshToken) {
-            UpdateNotifier.notificationsAllowed(this)
+            UpdateNotifier.notificationsAllowed(context)
         }
 
         if (showTestDialog) {
             AlertDialog(
                 onDismissRequest = { showTestDialog = false },
-                title = { Text("Test sleep / wake") },
+                title = { Text(stringResource(R.string.test_sleep_wake_title)) },
                 text = {
                     Column(
                         modifier = Modifier.verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("1. Choose the sleep actions you want to test below.")
-                        Text("2. Enable SleepManager at the top of the app.")
-                        Text("3. Turn the screen off normally.")
+                        Text(stringResource(R.string.test_sleep_wake_step_1))
+                        Text(stringResource(R.string.test_sleep_wake_step_2))
+                        Text(stringResource(R.string.test_sleep_wake_step_3))
                         Text(
                             if (effectiveSleepDelayMs > 0L) {
-                                "4. Leave it off for more than ${formatDuration(effectiveSleepDelayMs)} so the sleep delay can finish."
+                                stringResource(
+                                    R.string.test_sleep_wake_step_4_with_delay,
+                                    formatDuration(effectiveSleepDelayMs)
+                                )
                             } else {
-                                "4. Leave it off for a few seconds."
+                                stringResource(R.string.test_sleep_wake_step_4_no_delay)
                             }
                         )
-                        Text("5. Wake the device normally, then reopen SleepManager.")
-                        Text("6. Last activity and View log should show the sleep / wake result.")
-                        Text("Copy log includes the full transaction details if needed.")
+                        Text(stringResource(R.string.test_sleep_wake_step_5))
+                        Text(stringResource(R.string.test_sleep_wake_step_6))
+                        Text(stringResource(R.string.test_sleep_wake_copy_log_hint))
                     }
                 },
                 confirmButton = {
                     TextButton(onClick = feedbackClick { showTestDialog = false }) {
-                        Text("Got it")
+                        Text(stringResource(R.string.got_it))
                     }
                 }
             )
@@ -360,7 +368,7 @@ import com.med.sleepmanager.ui.feedbackChange
                 selected = selectedTarget?.packageName,
                 onDismiss = { showTargetDialog = false },
                 onSelect = { target ->
-                    val previous = SyncthingController.selectedTarget(this)?.packageName
+                    val previous = SyncthingController.selectedTarget(context)?.packageName
 
                     if (
                         managerEnabled &&
@@ -369,7 +377,7 @@ import com.med.sleepmanager.ui.feedbackChange
                         previous != target.packageName
                     ) {
                         val change = SleepCycleStore.connectorChange(
-                            this,
+                            context,
                             SyncthingConnector.id
                         )
                         if (
@@ -377,14 +385,14 @@ import com.med.sleepmanager.ui.feedbackChange
                                 change?.restoreToken
                             ) == previous
                         ) {
-                            restoreSyncthingTransactionNow()
-                            SleepCycleStore.completeIfRestored(this)
+                            onRestoreSyncthingRequested()
+                            SleepCycleStore.completeIfRestored(context)
                         }
                     }
 
-                    SyncthingController.select(this, target.packageName)
+                    SyncthingController.select(context, target.packageName)
                     showTargetDialog = false
-                    activityRefreshToken++
+                    onRefreshRequested()
                 }
             )
         }
@@ -412,12 +420,12 @@ import com.med.sleepmanager.ui.feedbackChange
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Text(
-                                "SleepManager",
+                                stringResource(R.string.app_name),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                "Quiet on sleep. Ready on wake.",
+                                stringResource(R.string.section_home_subtitle),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -432,7 +440,7 @@ import com.med.sleepmanager.ui.feedbackChange
                                         contentDescription = null
                                     )
                                 },
-                                label = { Text(section.label) },
+                                label = { Text(stringResource(section.labelRes)) },
                                 selected = currentSection == section,
                                 onClick = feedbackClick {
                                     currentSection = section
@@ -463,16 +471,18 @@ import com.med.sleepmanager.ui.feedbackChange
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Use system colors",
+                                    stringResource(R.string.use_system_colors),
                                     style = MaterialTheme.typography.bodyLarge,
                                     fontWeight = FontWeight.Medium
                                 )
                                 Text(
-                                    if (Build.VERSION.SDK_INT >= 31) {
-                                        "Material You"
-                                    } else {
-                                        "Requires Android 12+"
-                                    },
+                                    stringResource(
+                                        if (Build.VERSION.SDK_INT >= 31) {
+                                            R.string.material_you
+                                        } else {
+                                            R.string.requires_android_12
+                                        }
+                                    ),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -516,7 +526,7 @@ import com.med.sleepmanager.ui.feedbackChange
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_menu),
-                                        contentDescription = "Open navigation"
+                                        contentDescription = stringResource(R.string.open_navigation)
                                     )
                                 }
                             }
@@ -524,25 +534,13 @@ import com.med.sleepmanager.ui.feedbackChange
                         title = {
                             Column {
                                 Text(
-                                    when (currentSection) {
-                                        AppSection.HOME -> "SleepManager"
-                                        AppSection.ADVANCED -> "Advanced"
-                                        AppSection.STATS -> "Stats"
-                                        AppSection.ACTIVITY_LOG -> "Activity log"
-                                        AppSection.ABOUT -> "About"
-                                    },
+                                    stringResource(currentSection.titleRes),
                                     modifier = Modifier.testTag("top_app_title"),
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    when (currentSection) {
-                                        AppSection.HOME -> "Quiet on sleep. Ready on wake."
-                                        AppSection.ADVANCED -> "Fine-tune synchronization and sleep behavior"
-                                        AppSection.STATS -> "Sleep and battery measurements"
-                                        AppSection.ACTIVITY_LOG -> "Recent SleepManager activity"
-                                        AppSection.ABOUT -> "App information"
-                                    },
+                                    stringResource(currentSection.subtitleRes),
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -575,9 +573,8 @@ import com.med.sleepmanager.ui.feedbackChange
                         enabled = managerEnabled,
                         running = SleepManagerService.running,
                         onToggle = {
-                            setManagerEnabled(!managerEnabled)
-                            managerEnabled = AppPreferences.isEnabled(this@SleepManagerScreen)
-                            activityRefreshToken++
+                            onManagerEnabledChange(!managerEnabled)
+                            onRefreshRequested()
                         }
                     )
                 }
@@ -595,7 +592,7 @@ import com.med.sleepmanager.ui.feedbackChange
                                     availableUpdate?.releaseUrl
                                         ?: availableHelperUpdate?.releaseUrl
                                 )?.let { url ->
-                                    { openReleaseUrl(url) }
+                                    { onOpenExternalUrlRequested(url) }
                                 }
                         )
                     }
@@ -624,8 +621,8 @@ import com.med.sleepmanager.ui.feedbackChange
 
                 item {
                     SectionTitle(
-                        title = "Battery",
-                        subtitle = "Track sleep drain, averages and standby estimates."
+                        title = stringResource(R.string.stats_battery),
+                        subtitle = stringResource(R.string.home_battery_description)
                     )
                 }
 
@@ -641,13 +638,13 @@ import com.med.sleepmanager.ui.feedbackChange
                         PendingRestoreCard(
                             problem = problem,
                             onForget = {
-                                HelperController.forgetPendingState(this@SleepManagerScreen)
-                                SleepCycleStore.clear(this@SleepManagerScreen)
-                                AppPreferences.recordEvent(
-                                    this@SleepManagerScreen,
+                                HelperController.forgetPendingState(context)
+                                SleepCycleStore.clear(context)
+                                DiagnosticsStateStore.recordEvent(
+                                    context,
                                     "Recovery → pending restore forgotten"
                                 )
-                                activityRefreshToken++
+                                onRefreshRequested()
                             }
                         )
                     }
@@ -655,8 +652,8 @@ import com.med.sleepmanager.ui.feedbackChange
 
                 item {
                     SectionTitle(
-                        title = "System controls",
-                        subtitle = "Choose which system features SleepManager manages during sleep."
+                        title = stringResource(R.string.home_system_controls),
+                        subtitle = stringResource(R.string.home_system_controls_description)
                     )
                 }
 
@@ -666,24 +663,31 @@ import com.med.sleepmanager.ui.feedbackChange
                     ) {
                         SettingRow(
                             icon = R.drawable.ic_wifi,
-                            title = "Wi‑Fi",
-                            subtitle = if (helperInstalled) {
-                                "Turn off during sleep. Restore previous state on wake."
-                            } else {
-                                "Compatibility helper required"
-                            },
+                            title = stringResource(R.string.wifi),
+                            subtitle = stringResource(
+                                if (helperInstalled) {
+                                    R.string.home_radio_sleep_description
+                                } else {
+                                    R.string.home_helper_required
+                                }
+                            ),
                             status = if (helperInstalled) {
-                                currentWifiState?.let {
-                                    "Current state: ${if (it) "ON" else "OFF"}"
-                                } ?: "Current state: CHECKING…"
+                                uiState.currentWifiState?.let {
+                                    stringResource(
+                                        if (it) {
+                                            R.string.home_current_state_on
+                                        } else {
+                                            R.string.home_current_state_off
+                                        }
+                                    )
+                                } ?: stringResource(R.string.home_current_state_checking)
                             } else {
                                 null
                             },
                             checked = wifiEnabled,
                             enabled = helperInstalled,
                             onCheckedChange = {
-                                wifiEnabled = it
-                                AppPreferences.setManageWifi(this@SleepManagerScreen, it)
+                                onManageWifiChange(it)
                             }
                         )
 
@@ -694,24 +698,31 @@ import com.med.sleepmanager.ui.feedbackChange
 
                         SettingRow(
                             icon = R.drawable.ic_bluetooth,
-                            title = "Bluetooth",
-                            subtitle = if (helperInstalled) {
-                                "Turn off during sleep. Restore previous state on wake."
-                            } else {
-                                "Compatibility helper required"
-                            },
+                            title = stringResource(R.string.bluetooth),
+                            subtitle = stringResource(
+                                if (helperInstalled) {
+                                    R.string.home_radio_sleep_description
+                                } else {
+                                    R.string.home_helper_required
+                                }
+                            ),
                             status = if (helperInstalled) {
-                                currentBluetoothState?.let {
-                                    "Current state: ${if (it) "ON" else "OFF"}"
-                                } ?: "Current state: CHECKING…"
+                                uiState.currentBluetoothState?.let {
+                                    stringResource(
+                                        if (it) {
+                                            R.string.home_current_state_on
+                                        } else {
+                                            R.string.home_current_state_off
+                                        }
+                                    )
+                                } ?: stringResource(R.string.home_current_state_checking)
                             } else {
                                 null
                             },
                             checked = bluetoothEnabled,
                             enabled = helperInstalled,
                             onCheckedChange = {
-                                bluetoothEnabled = it
-                                AppPreferences.setManageBluetooth(this@SleepManagerScreen, it)
+                                onManageBluetoothChange(it)
                             }
                         )
 
@@ -723,23 +734,27 @@ import com.med.sleepmanager.ui.feedbackChange
 
                             SettingRow(
                                 icon = R.drawable.ic_battery,
-                                title = "Battery Saver",
-                                subtitle = "Enable during sleep and restore the previous state on wake.",
-                                status =
-                                    "Current state: ${if (currentBatterySaverState) "ON" else "OFF"}",
+                                title = stringResource(R.string.battery_saver),
+                                subtitle = stringResource(
+                                    R.string.home_battery_saver_description
+                                ),
+                                status = stringResource(
+                                    if (currentBatterySaverState) {
+                                        R.string.home_current_state_on
+                                    } else {
+                                        R.string.home_current_state_off
+                                    }
+                                ),
                                 checked = batterySaverActionEnabled,
                                 enabled = true,
                                 onCheckedChange = {
-                                    batterySaverActionEnabled = it
-                                    AppPreferences.setManageBatterySaver(
-                                        this@SleepManagerScreen,
-                                        it
-                                    )
+                                    onManageBatterySaverChange(it)
                                     if (it) {
-                                        batterySaverMode =
+                                        onBatterySaverModeChange(
                                             AppPreferences.BATTERY_SAVER_IGNORE
+                                        )
                                     }
-                                    refreshRunningService()
+                                    onServiceRefreshRequested()
                                 }
                             )
                         }
@@ -750,9 +765,13 @@ import com.med.sleepmanager.ui.feedbackChange
                 item {
                     AnimatedVisibility(visible = !helperInstalled) {
                         InfoCard(
-                            title = "Compatibility helper not installed",
-                            text = "The helper controls Wi‑Fi and Bluetooth without root or Shizuku. It has no launcher icon and runs only when SleepManager asks it to.",
-                            actionLabel = "Install Helper",
+                            title = stringResource(
+                                R.string.home_helper_not_installed_title
+                            ),
+                            text = stringResource(
+                                R.string.home_helper_not_installed_description
+                            ),
+                            actionLabel = stringResource(R.string.install_helper),
                             onAction = {
                                 navigateToAbout(AboutScrollTarget.HELPER)
                             }
@@ -762,8 +781,8 @@ import com.med.sleepmanager.ui.feedbackChange
 
                 item {
                     SectionTitle(
-                        title = "Sleep behavior",
-                        subtitle = "Control how SleepManager reacts when the screen turns off."
+                        title = stringResource(R.string.home_sleep_behavior),
+                        subtitle = stringResource(R.string.home_sleep_behavior_description)
                     )
                 }
 
@@ -774,8 +793,7 @@ import com.med.sleepmanager.ui.feedbackChange
                             customDelayEnabled = customDelayEnabled,
                             customDelayMs = customDelayMs,
                             onChange = { value ->
-                                sleepGraceMs = value
-                                AppPreferences.setSleepGraceMs(this@SleepManagerScreen, value)
+                                onSleepGraceChange(value)
                             },
                             onCustom = {
                                 navigateToAdvanced(
@@ -786,61 +804,79 @@ import com.med.sleepmanager.ui.feedbackChange
                     }
                 }
 
-                if (thorProtectionSupported) {
+                if (closedLidProtectionSupported) {
                     item {
                         SectionTitle(
-                            title = "Clamshell options",
-                            subtitle = "Extra controls for devices with a compatible lid sensor."
+                            title = stringResource(R.string.home_clamshell_options),
+                            subtitle = stringResource(
+                                R.string.home_clamshell_options_description
+                            )
                         )
                     }
 
                     item {
                         ClamshellOptionsCard(
                             closedLidProtectionEnabled =
-                                thorProtectionEnabled && thorAdminActive,
+                                closedLidProtectionEnabled && closedLidAdminActive,
                             chargingSeparationSupported = chargingSeparationSupported,
                             chargingSeparationEnabled = chargingSeparationWithLidEnabled,
-                            sleepOnExternalDisplayDisconnect = thorDockDisconnectSleeps,
+                            sleepOnExternalDisplayDisconnect = dockDisconnectSleeps,
                             powerButtonSleepSupported = closedLidPowerSupported,
-                            powerButtonSleepsWithLidClosed = thorClosedPowerSleeps,
+                            powerButtonSleepsWithLidClosed = closedLidPowerSleeps,
                             onClosedLidProtectionChange = { enabled ->
-                                setThorProtectionEnabled(enabled)
-                                thorProtectionEnabled =
-                                    AppPreferences.manageThorProtection(
-                                        this@SleepManagerScreen
-                                    )
-                                activityRefreshToken++
+                                onClosedLidProtectionChangeRequested(enabled)
+                                onRefreshRequested()
                             },
                             onChargingSeparationChange = {
-                                chargingSeparationWithLidEnabled = it
-                                AppPreferences.setManageChargingSeparationWithLid(
-                                    this@SleepManagerScreen,
-                                    it
-                                )
-                                refreshRunningService()
+                                onChargingSeparationWithLidChange(it)
+                                onServiceRefreshRequested()
                             },
                             onSleepOnExternalDisplayDisconnectChange = {
-                                thorDockDisconnectSleeps = it
-                                AppPreferences.setThorDockDisconnectSleeps(
-                                    this@SleepManagerScreen,
-                                    it
-                                )
+                                onDockDisconnectSleepsChange(it)
                             },
                             onPowerButtonSleepsWithLidClosedChange = {
-                                thorClosedPowerSleeps = it
-                                AppPreferences.setThorClosedPowerSleeps(
-                                    this@SleepManagerScreen,
-                                    it
-                                )
+                                onClosedLidPowerSleepsChange(it)
                             }
                         )
+                    }
+                } else if (expectedThorClamshell) {
+                    item {
+                        SectionTitle(
+                            title = stringResource(R.string.home_clamshell_options),
+                            subtitle = stringResource(
+                                R.string.home_clamshell_options_description
+                            )
+                        )
+                    }
+
+                    item {
+                        SettingsCard {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.clamshell_lid_sensor_unavailable
+                                    ),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.clamshell_lid_sensor_unavailable_description
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
 
                 item {
                     SectionTitle(
-                        title = "App integrations",
-                        subtitle = "Pause background services that don’t need to run while your device sleeps."
+                        title = stringResource(R.string.home_app_integrations),
+                        subtitle = stringResource(R.string.home_app_integrations_description)
                     )
                 }
 
@@ -848,47 +884,64 @@ import com.med.sleepmanager.ui.feedbackChange
                     SettingsCard(
                         modifier = Modifier.testTag("app_integrations_card")
                     ) {
+                        val syncthingBroadcastReminder =
+                            stringResource(R.string.home_syncthing_broadcast_reminder)
                         CompactIntegrationRow(
                             icon = R.drawable.ic_syncthing,
-                            title = "Syncthing‑Fork",
+                            title = stringResource(R.string.home_syncthing_fork),
                             version = selectedTarget?.displayName
                                 ?.substringAfter("•")
                                 ?.trim()
-                                ?: if (selectedTarget != null) "Installed" else "Not detected",
+                                ?: stringResource(
+                                    if (selectedTarget != null) {
+                                        R.string.installed
+                                    } else {
+                                        R.string.not_detected
+                                    }
+                                ),
                             status = if (selectedTarget != null) {
-                                when (currentSyncthingState) {
-                                    SyncthingController.RuntimeState.RUNNING -> "Running"
-                                    SyncthingController.RuntimeState.STOPPED -> "Stopped"
-                                    SyncthingController.RuntimeState.UNKNOWN -> "Unknown"
-                                    null -> "Checking…"
-                                }
+                                stringResource(
+                                    when (uiState.currentSyncthingState) {
+                                        SyncthingController.RuntimeState.RUNNING ->
+                                            R.string.running
+                                        SyncthingController.RuntimeState.STOPPED ->
+                                            R.string.stopped
+                                        SyncthingController.RuntimeState.UNKNOWN ->
+                                            R.string.unknown
+                                        null ->
+                                            R.string.checking
+                                    }
+                                )
                             } else {
                                 null
                             },
                             checked = syncthingEnabled && selectedTarget != null,
                             enabled = selectedTarget != null,
                             onCheckedChange = {
-                                syncthingEnabled = it
-                                AppPreferences.setManageSyncthing(this@SleepManagerScreen, it)
+                                onManageSyncthingChange(it)
 
                                 if (it) {
                                     Toast.makeText(
-                                        this@SleepManagerScreen,
-                                        "Enable Settings → Behaviour → Service control by broadcast in Syncthing-Fork.",
+                                        context,
+                                        syncthingBroadcastReminder,
                                         Toast.LENGTH_LONG
                                     ).show()
                                 } else if (managerEnabled) {
-                                    restoreSyncthingTransactionNow()
-                                    SleepCycleStore.completeIfRestored(this@SleepManagerScreen)
+                                    onRestoreSyncthingRequested()
+                                    SleepCycleStore.completeIfRestored(context)
                                 }
                             },
                             onOpen = if (selectedTarget != null) {
-                                { SyncthingController.open(this@SleepManagerScreen) }
+                                { SyncthingController.open(context) }
                             } else {
                                 null
                             },
                             secondaryActionLabel =
-                                if (targets.size > 1) "Change target" else null,
+                                if (targets.size > 1) {
+                                    stringResource(R.string.change_target)
+                                } else {
+                                    null
+                                },
                             onSecondaryAction =
                                 if (targets.size > 1) {
                                     { showTargetDialog = true }
@@ -904,30 +957,33 @@ import com.med.sleepmanager.ui.feedbackChange
 
                         CompactIntegrationRow(
                             icon = R.drawable.ic_tailscale,
-                            title = "Tailscale / TailDNS",
+                            title = stringResource(R.string.integration_tailscale),
                             version = if (tailscaleInstalled) {
-                                tailscaleVersion?.substringBefore("-") ?: "Installed"
+                                tailscaleVersion?.substringBefore("-")
+                                    ?: stringResource(R.string.installed)
                             } else {
-                                "Not detected"
+                                stringResource(R.string.not_detected)
                             },
                             status = if (tailscaleInstalled) {
-                                currentTailscaleConnected?.let {
-                                    if (it) "Connected" else "Disconnected"
-                                } ?: "Checking…"
+                                uiState.currentTailscaleConnected?.let {
+                                    stringResource(
+                                        if (it) {
+                                            R.string.connected
+                                        } else {
+                                            R.string.disconnected
+                                        }
+                                    )
+                                } ?: stringResource(R.string.checking)
                             } else {
                                 null
                             },
                             checked = tailscaleEnabled && tailscaleInstalled,
                             enabled = tailscaleInstalled,
                             onCheckedChange = {
-                                tailscaleEnabled = it
-                                AppPreferences.setManageTailscale(
-                                    this@SleepManagerScreen,
-                                    it
-                                )
+                                onManageTailscaleChange(it)
                             },
                             onOpen = if (tailscaleInstalled) {
-                                { TailscaleController.open(this@SleepManagerScreen) }
+                                { TailscaleController.open(context) }
                             } else {
                                 null
                             }
@@ -940,25 +996,22 @@ import com.med.sleepmanager.ui.feedbackChange
 
                         CompactIntegrationRow(
                             icon = R.drawable.ic_equalizer,
-                            title = "JamesDSP",
-                            version = jamesDspTarget?.versionName ?: "Not detected",
+                            title = stringResource(R.string.integration_jamesdsp),
+                            version = jamesDspTarget?.versionName
+                                ?: stringResource(R.string.not_detected),
                             status = null,
                             checked = jamesDspEnabled && jamesDspTarget != null,
                             enabled = jamesDspTarget != null,
                             onCheckedChange = {
-                                jamesDspEnabled = it
-                                AppPreferences.setManageJamesDsp(
-                                    this@SleepManagerScreen,
-                                    it
-                                )
+                                onManageJamesDspChange(it)
 
                                 if (!it && managerEnabled) {
-                                    restoreJamesDspTransactionNow()
-                                    SleepCycleStore.completeIfRestored(this@SleepManagerScreen)
+                                    onRestoreJamesDspRequested()
+                                    SleepCycleStore.completeIfRestored(context)
                                 }
                             },
                             onOpen = if (jamesDspTarget != null) {
-                                { JamesDspController.open(this@SleepManagerScreen) }
+                                { JamesDspController.open(context) }
                             } else {
                                 null
                             }
@@ -969,50 +1022,75 @@ import com.med.sleepmanager.ui.feedbackChange
                             color = MaterialTheme.colorScheme.outlineVariant
                         )
 
+                        val basicSyncRemoteControlReminder =
+                            stringResource(
+                                if (BasicSyncController.supportsStateApi(context)) {
+                                    R.string.home_basicsync_remote_control_modern
+                                } else {
+                                    R.string.home_basicsync_remote_control_legacy
+                                }
+                            )
                         CompactIntegrationRow(
                             icon = R.drawable.ic_sync,
-                            title = "BasicSync",
+                            title = stringResource(R.string.integration_basicsync),
                             version = if (basicSyncInstalled) {
-                                basicSyncVersion ?: "Installed"
+                                basicSyncVersion ?: stringResource(R.string.installed)
                             } else {
-                                "Not detected"
+                                stringResource(R.string.not_detected)
                             },
                             status = if (basicSyncInstalled) {
-                                if (BasicSyncController.supportsStateApi(this@SleepManagerScreen)) {
-                                    currentBasicSyncState?.let { state ->
-                                        val mode = when (state.mode) {
-                                            BasicSyncController.Mode.AUTO_MODE -> "Auto mode"
-                                            BasicSyncController.Mode.MANUAL_MODE_STARTED -> "Manual mode"
-                                            BasicSyncController.Mode.MANUAL_MODE_STOPPED -> "Manual mode"
-                                        }
-                                        val runState = when (state.runState) {
-                                            BasicSyncController.RunState.RUNNING -> "Running"
-                                            BasicSyncController.RunState.NOT_RUNNING -> "Stopped"
-                                            BasicSyncController.RunState.PAUSED -> "Paused"
-                                            BasicSyncController.RunState.STARTING -> "Starting"
-                                            BasicSyncController.RunState.STOPPING -> "Stopping"
-                                            BasicSyncController.RunState.IMPORTING -> "Importing"
-                                            BasicSyncController.RunState.EXPORTING -> "Exporting"
-                                        }
+                                if (BasicSyncController.supportsStateApi(context)) {
+                                    uiState.currentBasicSyncState?.let { state ->
+                                        val mode = stringResource(
+                                            when (state.mode) {
+                                                BasicSyncController.Mode.AUTO_MODE ->
+                                                    R.string.auto_mode
+                                                BasicSyncController.Mode.MANUAL_MODE_STARTED ->
+                                                    R.string.manual_mode
+                                                BasicSyncController.Mode.MANUAL_MODE_STOPPED ->
+                                                    R.string.manual_mode
+                                            }
+                                        )
+                                        val runState = stringResource(
+                                            when (state.runState) {
+                                                BasicSyncController.RunState.RUNNING ->
+                                                    R.string.running
+                                                BasicSyncController.RunState.NOT_RUNNING ->
+                                                    R.string.stopped
+                                                BasicSyncController.RunState.PAUSED ->
+                                                    R.string.paused
+                                                BasicSyncController.RunState.STARTING ->
+                                                    R.string.starting
+                                                BasicSyncController.RunState.STOPPING ->
+                                                    R.string.stopping
+                                                BasicSyncController.RunState.IMPORTING ->
+                                                    R.string.importing
+                                                BasicSyncController.RunState.EXPORTING ->
+                                                    R.string.exporting
+                                            }
+                                        )
                                         val syncState =
                                             if (
                                                 BasicSyncController.supportsSyncCounters(
-                                                    this@SleepManagerScreen
+                                                    context
                                                 )
                                             ) {
                                                 when (basicSyncCompletionState(state)) {
-                                                    SyncCompletionState.SYNCING -> "Syncing"
-                                                    SyncCompletionState.SYNCED -> "Synced"
-                                                    SyncCompletionState.UNKNOWN -> null
+                                                    SyncCompletionState.SYNCING ->
+                                                        stringResource(R.string.syncing)
+                                                    SyncCompletionState.SYNCED ->
+                                                        stringResource(R.string.synced)
+                                                    SyncCompletionState.UNKNOWN ->
+                                                        null
                                                 }
                                             } else {
                                                 null
                                             }
                                         listOfNotNull(mode, runState, syncState)
                                             .joinToString(" · ")
-                                    } ?: "Checking…"
+                                    } ?: stringResource(R.string.checking)
                                 } else {
-                                    "Legacy: STOP → Auto mode"
+                                    stringResource(R.string.home_basicsync_legacy_status)
                                 }
                             } else {
                                 null
@@ -1020,42 +1098,34 @@ import com.med.sleepmanager.ui.feedbackChange
                             checked = basicSyncEnabled && basicSyncInstalled,
                             enabled = basicSyncInstalled,
                             onCheckedChange = {
-                                basicSyncEnabled = it
-                                AppPreferences.setManageBasicSync(
-                                    this@SleepManagerScreen,
-                                    it
-                                )
+                                onManageBasicSyncChange(it)
 
                                 if (it) {
                                     Toast.makeText(
-                                        this@SleepManagerScreen,
-                                        if (BasicSyncController.supportsStateApi(this@SleepManagerScreen)) {
-                                            "Enable Allow remote control in BasicSync. SleepManager will preserve and restore BasicSync's previous mode."
-                                        } else {
-                                            "Enable Allow remote control in BasicSync. This BasicSync version uses legacy STOP → Auto mode behavior."
-                                        },
+                                        context,
+                                        basicSyncRemoteControlReminder,
                                         Toast.LENGTH_LONG
                                     ).show()
                                 } else if (managerEnabled) {
-                                    restoreBasicSyncTransactionNow()
-                                    SleepCycleStore.completeIfRestored(this@SleepManagerScreen)
+                                    onRestoreBasicSyncRequested()
+                                    SleepCycleStore.completeIfRestored(context)
                                     // BasicSync is the only completion-aware
                                     // provider, so no periodic alarm should
                                     // remain armed while its integration is off.
                                     SyncMaintenanceScheduler.cancel(
-                                        this@SleepManagerScreen
+                                        context
                                     )
                                     // Also let the running service restore the
                                     // original state owned by Sync then stop.
-                                    refreshRunningService()
+                                    onServiceRefreshRequested()
                                 }
 
                                 if (it && managerEnabled) {
-                                    refreshRunningService()
+                                    onServiceRefreshRequested()
                                 }
                             },
                             onOpen = if (basicSyncInstalled) {
-                                { BasicSyncController.open(this@SleepManagerScreen) }
+                                { BasicSyncController.open(context) }
                             } else {
                                 null
                             }
@@ -1063,6 +1133,24 @@ import com.med.sleepmanager.ui.feedbackChange
                     }
                 }
                 item {
+                    val batteryBelowCondition =
+                        stringResource(
+                            R.string.home_condition_battery_below,
+                            batteryBelowPercent
+                        )
+                    val notChargingCondition =
+                        stringResource(R.string.home_condition_not_charging)
+                    val batterySaverOnCondition =
+                        stringResource(R.string.home_condition_battery_saver_on)
+                    val batterySaverOffCondition =
+                        stringResource(R.string.home_condition_battery_saver_off)
+                    val scheduleCondition =
+                        stringResource(
+                            R.string.home_condition_schedule,
+                            formatTime(scheduleStartMinutes),
+                            formatTime(scheduleEndMinutes)
+                        )
+
                     BehaviorCard(
                         wifi = wifiEnabled && helperInstalled,
                         bluetooth = bluetoothEnabled && helperInstalled,
@@ -1072,35 +1160,24 @@ import com.med.sleepmanager.ui.feedbackChange
                         tailscale = tailscaleEnabled && tailscaleInstalled,
                         jamesDsp = jamesDspEnabled && jamesDspTarget != null,
                         basicSync = basicSyncEnabled && basicSyncInstalled,
-                        closedLidProtection = thorProtectionEnabled && thorAdminActive,
+                        closedLidProtection = closedLidProtectionEnabled && closedLidAdminActive,
                         chargingSeparationWithLid =
                             chargingSeparationWithLidEnabled && chargingSeparationSupported,
                         sleepOnExternalDisplayDisconnect =
-                            thorProtectionSupported && thorDockDisconnectSleeps,
+                            closedLidProtectionSupported && dockDisconnectSleeps,
                         powerButtonSleepsWithLidClosed =
-                            closedLidPowerSupported && thorClosedPowerSleeps,
+                            closedLidPowerSupported && closedLidPowerSleeps,
                         sleepGraceMs = effectiveSleepDelayMs,
                         advancedConditions = buildList {
-                            if (batteryConditionEnabled) {
-                                add("Battery below ${batteryBelowPercent}%")
-                            }
-                            if (notChargingOnly) {
-                                add("Device is not charging")
-                            }
+                            if (batteryConditionEnabled) add(batteryBelowCondition)
+                            if (notChargingOnly) add(notChargingCondition)
                             when (batterySaverMode) {
                                 AppPreferences.BATTERY_SAVER_ON ->
-                                    add("Battery Saver is ON")
+                                    add(batterySaverOnCondition)
                                 AppPreferences.BATTERY_SAVER_OFF ->
-                                    add("Battery Saver is OFF")
+                                    add(batterySaverOffCondition)
                             }
-                            if (scheduleEnabled) {
-                                add(
-                                    "Time is between " +
-                                        formatTime(scheduleStartMinutes) +
-                                        " and " +
-                                        formatTime(scheduleEndMinutes)
-                                )
-                            }
+                            if (scheduleEnabled) add(scheduleCondition)
                         },
                         periodicSyncWhileSleeping = periodicSyncWhileSleeping,
                         syncThenStopOnSleepWake = syncThenStopOnSleepWake
@@ -1110,28 +1187,28 @@ import com.med.sleepmanager.ui.feedbackChange
                 if (managerEnabled && !setupComplete) {
                     item {
                         Button(
-                            onClick = feedbackClick { finishSetup() },
+                            onClick = feedbackClick { onFinishSetupRequested() },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Finish setup")
+                            Text(stringResource(R.string.finish_setup))
                         }
                     }
                 } else if (setupComplete) {
                     item {
                         Button(
-                            onClick = feedbackClick { finishAndRemoveTask() },
+                            onClick = feedbackClick { onFinishAppRequested() },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Done")
+                            Text(stringResource(R.string.done))
                         }
                     }
                 }
 
                 item {
                     LastActivityCard(
-                        context = this@SleepManagerScreen,
+                        context = context,
                         onViewLog = { navigateToActivityLog() },
-                        onCopyLog = { copyDiagnostics() }
+                        onCopyLog = { onCopyDiagnosticsRequested() }
                     )
                 }
                     }
@@ -1143,31 +1220,23 @@ import com.med.sleepmanager.ui.feedbackChange
                                 syncThenStopOnSleepWake = syncThenStopOnSleepWake,
                                 syncConditionsAvailable =
                                     ManagedSyncProviders.completionReady(
-                                        this@SleepManagerScreen
+                                        context
                                     ),
                                 onPeriodicSyncWhileSleepingChange = {
-                                    periodicSyncWhileSleeping = it
-                                    AppPreferences.setPeriodicSyncWhileSleeping(
-                                        this@SleepManagerScreen,
-                                        it
-                                    )
+                                    onPeriodicSyncWhileSleepingChange(it)
                                     if (!it) {
                                         SyncMaintenanceScheduler.cancel(
-                                            this@SleepManagerScreen
+                                            context
                                         )
                                     }
                                 },
                                 onSyncThenStopOnSleepWakeChange = {
-                                    syncThenStopOnSleepWake = it
-                                    AppPreferences.setSyncThenStopOnSleepWake(
-                                        this@SleepManagerScreen,
-                                        it
-                                    )
+                                    onSyncThenStopOnSleepWakeChange(it)
 
                                     if (managerEnabled) {
                                         // Disabling this option must hand
                                         // BasicSync back to its pre-feature state.
-                                        refreshRunningService()
+                                        onServiceRefreshRequested()
                                     }
                                 },
                                 customDelayEnabled = customDelayEnabled,
@@ -1182,71 +1251,49 @@ import com.med.sleepmanager.ui.feedbackChange
                                 onCustomDelayEnabledChange = { enabled ->
                                     if (
                                         enabled &&
-                                        !canScheduleExactAlarms()
+                                        !onCanScheduleExactAlarmsRequested()
                                     ) {
-                                        requestExactAlarmAccess()
+                                        onRequestExactAlarmAccessRequested()
                                     } else {
-                                        customDelayEnabled = enabled
-                                        AppPreferences.setCustomDelayEnabled(
-                                            this@SleepManagerScreen,
-                                            enabled
-                                        )
+                                        onCustomDelayEnabledChange(enabled)
 
                                         if (!enabled) {
-                                            sleepGraceMs = 0L
-                                            AppPreferences.setSleepGraceMs(
-                                                this@SleepManagerScreen,
-                                                0L
-                                            )
+                                            onSleepGraceChange(0L)
                                         }
                                     }
                                 },
                                 onCustomDelayChange = {
-                                    customDelayMs = it
-                                    AppPreferences.setCustomDelayMs(this@SleepManagerScreen, it)
+                                    onCustomDelayChange(it)
                                 },
                                 onBatteryConditionEnabledChange = {
-                                    batteryConditionEnabled = it
-                                    AppPreferences.setBatteryConditionEnabled(this@SleepManagerScreen, it)
+                                    onBatteryConditionEnabledChange(it)
                                 },
                                 onBatteryBelowPercentChange = {
-                                    batteryBelowPercent = it
-                                    AppPreferences.setBatteryBelowPercent(this@SleepManagerScreen, it)
+                                    onBatteryBelowPercentChange(it)
                                 },
                                 onNotChargingOnlyChange = {
-                                    notChargingOnly = it
-                                    AppPreferences.setNotChargingOnly(this@SleepManagerScreen, it)
+                                    onNotChargingOnlyChange(it)
                                 },
                                 onBatterySaverModeChange = {
-                                    batterySaverMode = it
-                                    AppPreferences.setBatterySaverMode(this@SleepManagerScreen, it)
+                                    onBatterySaverModeChange(it)
                                     if (
                                         it !=
                                         AppPreferences.BATTERY_SAVER_IGNORE
                                     ) {
-                                        batterySaverActionEnabled = false
+                                        onManageBatterySaverChange(false)
                                     }
                                 },
                                 onScheduleEnabledChange = {
-                                    scheduleEnabled = it
-                                    AppPreferences.setScheduleEnabled(this@SleepManagerScreen, it)
+                                    onScheduleEnabledChange(it)
                                 },
                                 onPickScheduleStart = {
-                                    showTimePicker(scheduleStartMinutes) { value ->
-                                        scheduleStartMinutes = value
-                                        AppPreferences.setScheduleStartMinutes(
-                                            this@SleepManagerScreen,
-                                            value
-                                        )
+                                    onShowTimePickerRequested(scheduleStartMinutes) { value ->
+                                        onScheduleStartMinutesChange(value)
                                     }
                                 },
                                 onPickScheduleEnd = {
-                                    showTimePicker(scheduleEndMinutes) { value ->
-                                        scheduleEndMinutes = value
-                                        AppPreferences.setScheduleEndMinutes(
-                                            this@SleepManagerScreen,
-                                            value
-                                        )
+                                    onShowTimePickerRequested(scheduleEndMinutes) { value ->
+                                        onScheduleEndMinutesChange(value)
                                     }
                                 },
                                 scrollTarget = advancedScrollTarget,
@@ -1269,8 +1316,8 @@ import com.med.sleepmanager.ui.feedbackChange
                     AppSection.ACTIVITY_LOG -> {
                         item {
                             ActivityLogPage(
-                                context = this@SleepManagerScreen,
-                                onCopyLog = { copyDiagnostics() }
+                                context = context,
+                                onCopyLog = { onCopyDiagnosticsRequested() }
                             )
                         }
                     }
@@ -1278,46 +1325,42 @@ import com.med.sleepmanager.ui.feedbackChange
                     AppSection.ABOUT -> {
                         item {
                             AboutPage(
-                                context = this@SleepManagerScreen,
+                                context = context,
                                 backgroundReliability = backgroundReliability,
                                 automaticUpdateChecks = automaticUpdateChecks,
                                 notificationsAllowed = updateNotificationsAllowed,
                                 onAutomaticUpdateChecksChange = { enabled ->
-                                    automaticUpdateChecks = enabled
-                                    AppPreferences.setAutomaticUpdateChecks(
-                                        this@SleepManagerScreen,
-                                        enabled
-                                    )
-                                    UpdateCheckScheduler.sync(this@SleepManagerScreen)
+                                    onAutomaticUpdateChecksChange(enabled)
+                                    UpdateCheckScheduler.sync(context)
                                     if (enabled) {
                                         UpdateChecker.checkOnForegroundAsync(
-                                            this@SleepManagerScreen,
+                                            context,
                                             notify = true
                                         )
                                     }
-                                    activityRefreshToken++
+                                    onRefreshRequested()
                                 },
                                 onRequestNotificationPermission = {
-                                    requestUpdateNotificationPermission()
+                                    onRequestUpdateNotificationPermissionRequested()
                                 },
                                 onOpenExternalUrl = { url ->
-                                    openReleaseUrl(url)
+                                    onOpenExternalUrlRequested(url)
                                 },
                                 onOpenAppInfo = {
-                                    openAppInfo()
+                                    onOpenAppInfoRequested()
                                 },
                                 onOpenBatteryOptimization = {
-                                    openBatteryOptimizationSettings()
+                                    onOpenBatteryOptimizationRequested()
                                 },
                                 onOpenUnusedAppRestrictions = {
-                                    openUnusedAppRestrictionsSettings()
+                                    onOpenUnusedAppRestrictionsRequested()
                                 },
                                 onInstallVerifiedUpdate = { apkPath ->
-                                    installVerifiedUpdate(apkPath)
+                                    onInstallVerifiedUpdateRequested(apkPath)
                                 },
-                                installerReturnToken = installerReturnToken,
+                                installerReturnToken = uiState.installerReturnToken,
                                 onUpdateStateChanged = {
-                                    activityRefreshToken++
+                                    onRefreshRequested()
                                 },
                                 scrollTarget = aboutScrollTarget,
                                 scrollRequestId = aboutScrollRequestId,

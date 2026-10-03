@@ -7,7 +7,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
 
-class ThorLidMonitor(
+class LidMonitor(
     private val onClosed: () -> Unit,
     private val onOpened: () -> Unit,
     private val onError: (Throwable) -> Unit = {}

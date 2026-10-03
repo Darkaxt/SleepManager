@@ -11,7 +11,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.med.sleepmanager.MainActivity
 import com.med.sleepmanager.R
-import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.UpdateStateStore
 
 object UpdateNotifier {
     private const val CHANNEL_ID = "sleepmanager_updates"
@@ -29,8 +29,8 @@ object UpdateNotifier {
     ) {
         if (!notificationsAllowed(context)) return
         if (
-            AppPreferences.lastNotifiedUpdateVersion(context) == update.versionName &&
-            AppPreferences.lastNotifiedHelperUpdateVersion(context) ==
+            UpdateStateStore.lastNotifiedUpdateVersion(context) == update.versionName &&
+            UpdateStateStore.lastNotifiedHelperUpdateVersion(context) ==
             helperUpdate.versionName
         ) {
             return
@@ -78,8 +78,8 @@ object UpdateNotifier {
 
         manager.cancel(NOTIFICATION_ID + 1)
         manager.notify(NOTIFICATION_ID, notification)
-        AppPreferences.setLastNotifiedUpdateVersion(context, update.versionName)
-        AppPreferences.setLastNotifiedHelperUpdateVersion(
+        UpdateStateStore.setLastNotifiedUpdateVersion(context, update.versionName)
+        UpdateStateStore.setLastNotifiedHelperUpdateVersion(
             context,
             helperUpdate.versionName
         )
@@ -88,7 +88,7 @@ object UpdateNotifier {
     fun notifyHelperIfNeeded(context: Context, update: HelperUpdateInfo) {
         if (!notificationsAllowed(context)) return
         if (
-            AppPreferences.lastNotifiedHelperUpdateVersion(context) ==
+            UpdateStateStore.lastNotifiedHelperUpdateVersion(context) ==
             update.versionName
         ) {
             return
@@ -133,7 +133,7 @@ object UpdateNotifier {
                 .build()
 
         manager.notify(NOTIFICATION_ID + 1, notification)
-        AppPreferences.setLastNotifiedHelperUpdateVersion(
+        UpdateStateStore.setLastNotifiedHelperUpdateVersion(
             context,
             update.versionName
         )
@@ -142,7 +142,7 @@ object UpdateNotifier {
     fun notifyIfNeeded(context: Context, update: UpdateInfo) {
         if (!notificationsAllowed(context)) return
         if (
-            AppPreferences.lastNotifiedUpdateVersion(context) ==
+            UpdateStateStore.lastNotifiedUpdateVersion(context) ==
             update.versionName
         ) {
             return
@@ -187,6 +187,6 @@ object UpdateNotifier {
                 .build()
 
         manager.notify(NOTIFICATION_ID, notification)
-        AppPreferences.setLastNotifiedUpdateVersion(context, update.versionName)
+        UpdateStateStore.setLastNotifiedUpdateVersion(context, update.versionName)
     }
 }

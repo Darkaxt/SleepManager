@@ -28,11 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.med.sleepmanager.R
 import com.med.sleepmanager.ui.feedbackClick
 
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +94,8 @@ internal fun SettingRow(
 ) {
     val contentAlpha = if (enabled || !dimWhenDisabled) 1f else 0.55f
     val secondaryAlpha = if (enabled || !dimWhenDisabled) 1f else 0.6f
+    val toggleContentDescription =
+        stringResource(R.string.toggle_content_description, title)
 
     Row(
         modifier = Modifier
@@ -162,7 +166,7 @@ internal fun SettingRow(
             onCheckedChange = feedbackChange(onCheckedChange),
             enabled = enabled,
             modifier = Modifier.semantics {
-                contentDescription = "$title toggle"
+                contentDescription = toggleContentDescription
             }
         )
     }
@@ -182,6 +186,8 @@ internal fun CompactIntegrationRow(
     onSecondaryAction: (() -> Unit)? = null
 ) {
     val compact = LocalConfiguration.current.screenWidthDp < 600
+    val toggleContentDescription =
+        stringResource(R.string.toggle_content_description, title)
 
     val iconContent: @Composable () -> Unit = {
         Surface(
@@ -261,7 +267,7 @@ internal fun CompactIntegrationRow(
             ) {
                 onOpen?.let { open ->
                     OutlinedButton(onClick = feedbackClick(open)) {
-                        Text("Open")
+                        Text(stringResource(R.string.open))
                     }
                 }
 
@@ -298,7 +304,7 @@ internal fun CompactIntegrationRow(
                     onCheckedChange = feedbackChange(onCheckedChange),
                     enabled = enabled,
                     modifier = Modifier.semantics {
-                        contentDescription = "$title toggle"
+                        contentDescription = toggleContentDescription
                     }
                 )
             }
@@ -333,7 +339,7 @@ internal fun CompactIntegrationRow(
                 onCheckedChange = feedbackChange(onCheckedChange),
                 enabled = enabled,
                 modifier = Modifier.semantics {
-                    contentDescription = "$title toggle"
+                    contentDescription = toggleContentDescription
                 }
             )
         }

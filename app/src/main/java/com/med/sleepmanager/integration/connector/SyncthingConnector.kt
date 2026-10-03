@@ -7,6 +7,16 @@ object SyncthingConnector : AppConnector {
     private const val TOKEN_CONFIRMED_RUNNING_PREFIX = "confirmed:"
     private const val TOKEN_UNVERIFIED_PREFIX = "unverified:"
 
+    enum class PreSleepState {
+        CONFIRMED_RUNNING,
+        UNKNOWN
+    }
+
+    data class PreSleepProbe(
+        val packageName: String,
+        val state: PreSleepState
+    )
+
     override val id: String = "syncthing"
     override val wakeRequiresNetwork: Boolean = true
 
@@ -26,6 +36,27 @@ object SyncthingConnector : AppConnector {
     override fun currentState(context: Context): ConnectorState =
         ConnectorState.UNKNOWN
 
+    /**
+     * Network probe intended for a background executor only.
+     *
+     * An unreachable local health endpoint cannot prove Syncthing was already stopped,
+     * so that outcome remains UNKNOWN instead of being treated as false/running=false.
+     */
+    fun probeBeforeSleep(packageName: String): PreSleepProbe =
+        PreSleepProbe(
+            packageName = packageName,
+            state =
+                when (SyncthingController.healthProbeState()) {
+                    SyncthingController.HealthProbeState.RUNNING ->
+                        PreSleepState.CONFIRMED_RUNNING
+                    SyncthingController.HealthProbeState.UNAVAILABLE ->
+                        PreSleepState.UNKNOWN
+                }
+        )
+
+    /**
+     * Safe fallback for generic connector callers: send STOP without doing network I/O.
+     */
     override fun sleep(context: Context): ConnectorSleepResult {
         val target = SyncthingController.selectedTarget(context)
             ?: return ConnectorSleepResult(
@@ -34,25 +65,56 @@ object SyncthingConnector : AppConnector {
                 detail = "No Syncthing target installed"
             )
 
-        val confirmedRunning = SyncthingController.healthProbeRunning()
-        val sent = SyncthingController.sendStopTo(context, target.packageName)
+        return sleep(
+            context = context,
+            preSleepProbe = PreSleepProbe(
+                packageName = target.packageName,
+                state = PreSleepState.UNKNOWN
+            )
+        )
+    }
+
+    fun sleep(
+        context: Context,
+        preSleepProbe: PreSleepProbe
+    ): ConnectorSleepResult {
+        val sent =
+            SyncthingController.sendStopTo(
+                context,
+                preSleepProbe.packageName
+            )
+
+        return resultAfterStop(
+            packageName = preSleepProbe.packageName,
+            preSleepState = preSleepProbe.state,
+            stopSent = sent
+        )
+    }
+
+    internal fun resultAfterStop(
+        packageName: String,
+        preSleepState: PreSleepState,
+        stopSent: Boolean
+    ): ConnectorSleepResult {
         val token =
-            if (!sent) {
-                null
-            } else if (confirmedRunning) {
-                TOKEN_CONFIRMED_RUNNING_PREFIX + target.packageName
-            } else {
-                TOKEN_UNVERIFIED_PREFIX + target.packageName
+            when {
+                !stopSent -> null
+                preSleepState == PreSleepState.CONFIRMED_RUNNING ->
+                    TOKEN_CONFIRMED_RUNNING_PREFIX + packageName
+                else ->
+                    TOKEN_UNVERIFIED_PREFIX + packageName
             }
 
         return ConnectorSleepResult(
             attempted = true,
-            changed = sent,
+            changed = stopSent,
             restoreToken = token,
             detail = when {
-                !sent -> "STOP not sent"
-                confirmedRunning -> "STOP sent; running state was confirmed"
-                else -> "STOP sent; previous state could not be confirmed"
+                !stopSent -> "STOP not sent"
+                preSleepState == PreSleepState.CONFIRMED_RUNNING ->
+                    "STOP sent; running state was confirmed"
+                else ->
+                    "STOP sent; previous state could not be confirmed"
             }
         )
     }
@@ -97,6 +159,9 @@ object SyncthingConnector : AppConnector {
             return null
         }
 
-        return !SyncthingController.healthProbeRunning()
+        return when (SyncthingController.healthProbeState()) {
+            SyncthingController.HealthProbeState.RUNNING -> false
+            SyncthingController.HealthProbeState.UNAVAILABLE -> true
+        }
     }
 }

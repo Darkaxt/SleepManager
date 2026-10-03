@@ -2,6 +2,12 @@ name: Responsive UI checks
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release-validation:
+        description: Run as a required gate for a stable release
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -15,15 +21,26 @@ on:
       - "scripts/test_emulator_regression.sh"
       - "scripts/run_prebuilt_emulator_tests.sh"
       - "scripts/run_real_sleep_wake_tests.sh"
+      - "scripts/test_helper_version_compatibility.sh"
+      - "scripts/run_ci_real_e2e.sh"
+      - "scripts/run_ci_helper_compatibility.sh"
       - ".github/workflows/responsive-ui.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: responsive-ui-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  responsive-ui:
+  instrumentation:
+    if: >-
+      inputs.release-validation ||
+      !(github.repository == 'Darkaxt/SleepManager' && github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release '))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -40,7 +57,17 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Validate emulator test scripts
+      - name: Prepare stable emulator test signing key
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/sleepmanager-emulator-test.jks"
+          base64 --decode .github/emulator-test-signing.jks.b64 > "$KEYSTORE_PATH"
+          echo "SLEEPMANAGER_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_STORE_PASSWORD=android" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_ALIAS=sleepmanager-emulator-test" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Validate emulator scripts
         run: |
           bash -n scripts/test_emulator_regression.sh
           bash -n scripts/run_prebuilt_emulator_tests.sh
@@ -49,21 +76,16 @@ jobs:
       - name: Install compile SDK
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             "platform-tools"             "platforms;android-36"             "build-tools;36.0.0"
 
       - name: Enable KVM
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run responsive UI matrix
-        id: responsive_tests
-        continue-on-error: true
+      - name: Run instrumentation and responsive regression
+        id: instrumentation_tests
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -78,12 +100,12 @@ jobs:
             -gpu swiftshader_indirect
           script: ADB_SERIAL=emulator-5554 SKIP_STATIC=1 ./scripts/test_emulator_regression.sh
 
-      - name: Print responsive UI test results
+      - name: Print instrumentation results
         if: always()
         run: |
           find app/build/outputs/androidTest-results -type f -name '*.xml' -print -exec cat {} \; || true
 
-      - name: Upload responsive UI reports
+      - name: Upload instrumentation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -96,7 +118,7 @@ jobs:
           retention-days: 14
 
       - name: Prepare local emulator test bundle
-        if: steps.responsive_tests.outcome == 'success'
+        if: success()
         id: local_bundle
         run: |
           set -euo pipefail
@@ -104,43 +126,30 @@ jobs:
           VERSION_NAME=$(sed -n 's/^SLEEPMANAGER_VERSION_NAME=//p' gradle.properties)
           echo "version=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
+          MAIN_APK="app/build/outputs/apk/debug/app-debug.apk"
+          HELPER_APK="helper/build/outputs/apk/debug/helper-debug.apk"
+          TEST_APK="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+
+          MAIN_CERT=$("$APKSIGNER" verify --print-certs "$MAIN_APK" | awk -F': ' '/certificate SHA-256 digest/{gsub(/[[:space:]]/,"",$2); print tolower($2); exit}')
+          HELPER_CERT=$("$APKSIGNER" verify --print-certs "$HELPER_APK" | awk -F': ' '/certificate SHA-256 digest/{gsub(/[[:space:]]/,"",$2); print tolower($2); exit}')
+          TEST_CERT=$("$APKSIGNER" verify --print-certs "$TEST_APK" | awk -F': ' '/certificate SHA-256 digest/{gsub(/[[:space:]]/,"",$2); print tolower($2); exit}')
+
+          [ -n "$MAIN_CERT" ]
+          [ "$MAIN_CERT" = "$HELPER_CERT" ]
+          [ "$MAIN_CERT" = "$TEST_CERT" ]
+
           mkdir -p local-emulator-test-bundle
-          cp app/build/outputs/apk/debug/app-debug.apk             local-emulator-test-bundle/SleepManager-debug.apk
-          cp helper/build/outputs/apk/debug/helper-debug.apk             local-emulator-test-bundle/SleepManager-Helper-debug.apk
-          cp app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk             local-emulator-test-bundle/SleepManager-tests.apk
-          cp scripts/run_prebuilt_emulator_tests.sh             local-emulator-test-bundle/run-tests.sh
-          cp scripts/run_real_sleep_wake_tests.sh             local-emulator-test-bundle/run-real-e2e.sh
+          cp "$MAIN_APK" local-emulator-test-bundle/SleepManager-debug.apk
+          cp "$HELPER_APK" local-emulator-test-bundle/SleepManager-Helper-debug.apk
+          cp "$TEST_APK" local-emulator-test-bundle/SleepManager-tests.apk
+          cp scripts/run_prebuilt_emulator_tests.sh local-emulator-test-bundle/run-tests.sh
+          cp scripts/run_real_sleep_wake_tests.sh local-emulator-test-bundle/run-real-e2e.sh
           chmod +x local-emulator-test-bundle/run-tests.sh
           chmod +x local-emulator-test-bundle/run-real-e2e.sh
 
-          cat > local-emulator-test-bundle/README.txt <<EOF
-          SleepManager $VERSION_NAME local emulator regression bundle
-
-          1. Start your Android emulator.
-          2. Open Terminal in this extracted folder.
-          3. Run:
-             ./run-tests.sh emulator-5554
-
-          This resets and reinstalls SleepManager + Helper on the selected emulator.
-          It leaves Syncthing-Fork, Tailscale, JamesDSP and BasicSync installed and
-          automatically uses them for real sleep/wake integration tests when present.
-
-          The suite runs:
-          - UI/state regression tests
-          - real SCREEN_OFF / SCREEN_ON cycles
-          - Wi-Fi and Bluetooth sleep/wake restoration
-          - real installed app integration transitions
-          - 5 s Grace period
-          - Custom delay with instant simulated expiry (no 60 s wait)
-          - Advanced battery / charging / Battery Saver / schedule conditions
-          - Sync then stop and Periodic sync with BasicSync when available
-
-          Hardware-only clamshell/dock/Charging Separation checks remain for the AYN Thor.
-          It refuses physical devices unless ALLOW_PHYSICAL_DEVICE=1 is explicitly set.
-          EOF
-
       - name: Upload local emulator test bundle
-        if: steps.responsive_tests.outcome == 'success'
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SleepManager-${{ steps.local_bundle.outputs.version }}-emulator-tests
@@ -148,6 +157,194 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Fail when responsive tests fail
-        if: steps.responsive_tests.outcome != 'success'
-        run: exit 1
+  real-e2e:
+    if: >-
+      inputs.release-validation ||
+      !(github.repository == 'Darkaxt/SleepManager' && github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Prepare stable emulator test signing key
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/sleepmanager-emulator-test.jks"
+          base64 --decode .github/emulator-test-signing.jks.b64 > "$KEYSTORE_PATH"
+          echo "SLEEPMANAGER_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_STORE_PASSWORD=android" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_ALIAS=sleepmanager-emulator-test" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Validate real E2E scripts
+        run: |
+          bash -n scripts/run_real_sleep_wake_tests.sh
+          bash -n scripts/run_ci_real_e2e.sh
+
+      - name: Install compile SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             "platform-tools"             "platforms;android-36"             "build-tools;36.0.0"
+
+      - name: Build current emulator APKs
+        run: |
+          gradle             :helper:assembleDebug             :app:assembleDebug             :app:assembleDebugAndroidTest
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run real SCREEN_OFF / SCREEN_ON E2E
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: >-
+            -no-window
+            -noaudio
+            -no-boot-anim
+            -gpu swiftshader_indirect
+          script: ./scripts/run_ci_real_e2e.sh emulator-5554
+
+      - name: Upload real E2E report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-e2e-report
+          path: build/ci-real-e2e/real-e2e-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+  helper-compatibility:
+    if: >-
+      inputs.release-validation ||
+      !(github.repository == 'Darkaxt/SleepManager' && github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Checkout stable 0.6.1 source
+        uses: actions/checkout@v5
+        with:
+          repository: Darkaxt/SleepManager
+          ref: f85c7cbe39f0ff0887c94293769b5835bf13482a
+          path: _compat/stable-0.6.1
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Prepare stable emulator test signing key
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/sleepmanager-emulator-test.jks"
+          base64 --decode .github/emulator-test-signing.jks.b64 > "$KEYSTORE_PATH"
+          echo "SLEEPMANAGER_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_STORE_PASSWORD=android" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_ALIAS=sleepmanager-emulator-test" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Validate Helper compatibility scripts
+        run: |
+          bash -n scripts/test_helper_version_compatibility.sh
+          bash -n scripts/run_ci_helper_compatibility.sh
+
+      - name: Install compile SDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"             "platform-tools"             "platforms;android-36"             "build-tools;36.0.0"
+
+      - name: Build current and stable compatibility APKs
+        run: |
+          gradle             :helper:assembleDebug             :app:assembleDebug             :app:assembleDebugAndroidTest
+          gradle -p _compat/stable-0.6.1             :app:assembleDebug             :helper:assembleDebug
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Helper compatibility matrix
+        uses: ReactiveCircus/android-emulator-runner@v2
+        env:
+          STABLE_HELPER_APK: ${{ github.workspace }}/_compat/stable-0.6.1/helper/build/outputs/apk/debug/helper-debug.apk
+          STABLE_MAIN_APK: ${{ github.workspace }}/_compat/stable-0.6.1/app/build/outputs/apk/debug/app-debug.apk
+          STABLE_MAIN_VERSION: 0.6.1.1
+          STABLE_HELPER_VERSION: 1.1.1.1
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: >-
+            -no-window
+            -noaudio
+            -no-boot-anim
+            -gpu swiftshader_indirect
+          script: ./scripts/run_ci_helper_compatibility.sh emulator-5554
+
+      - name: Upload Helper compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helper-compatibility-report
+          path: build/helper-compatibility/
+          if-no-files-found: warn
+          retention-days: 14
+
+  responsive-ui:
+    needs:
+      - instrumentation
+      - real-e2e
+      - helper-compatibility
+    if: >-
+      always() &&
+      (inputs.release-validation ||
+       !(github.repository == 'Darkaxt/SleepManager' && github.event_name == 'push' &&
+         github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release ')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify parallel emulator gates
+        run: |
+          echo "instrumentation=${{ needs.instrumentation.result }}"
+          echo "real-e2e=${{ needs.real-e2e.result }}"
+          echo "helper-compatibility=${{ needs.helper-compatibility.result }}"
+
+          [ "${{ needs.instrumentation.result }}" = "success" ]
+          [ "${{ needs.real-e2e.result }}" = "success" ]
+          [ "${{ needs.helper-compatibility.result }}" = "success" ]

@@ -9,13 +9,13 @@ class SleepWakePolicyTest {
     fun closedLidFalseWake_doesNotCancelGraceOrRestore() {
         val decision =
             SleepWakePolicy.onScreenOn(
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 sleepDelayPending = true
             )
 
         assertTrue(decision.suppressWake)
-        assertTrue(decision.requestThorLock)
+        assertTrue(decision.requestClosedLidLock)
         assertFalse(decision.cancelSleepDelay)
         assertFalse(decision.restoreNormalWake)
     }
@@ -24,13 +24,13 @@ class SleepWakePolicyTest {
     fun realWakeWithOpenLid_cancelsGraceAndRestores() {
         val decision =
             SleepWakePolicy.onScreenOn(
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = false,
                 sleepDelayPending = true
             )
 
         assertFalse(decision.suppressWake)
-        assertFalse(decision.requestThorLock)
+        assertFalse(decision.requestClosedLidLock)
         assertTrue(decision.cancelSleepDelay)
         assertTrue(decision.restoreNormalWake)
     }
@@ -39,7 +39,7 @@ class SleepWakePolicyTest {
     fun closedLidFalseWake_isSuppressedEvenWithoutGrace() {
         val decision =
             SleepWakePolicy.onScreenOn(
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 sleepDelayPending = false
             )
@@ -49,6 +49,45 @@ class SleepWakePolicyTest {
         assertFalse(decision.restoreNormalWake)
     }
 
+
+    @Test
+    fun falseWakeWithExistingCycle_preservesSleepTransactionForResleep() {
+        assertTrue(
+            SleepWakePolicy.shouldPreserveSleepTransactionOnFalseWake(
+                suppressWake = true,
+                sleepDelayPending = false,
+                cycleActive = true,
+                actionsApplied = true,
+                stopWaitPending = false
+            )
+        )
+    }
+
+    @Test
+    fun falseWakeDuringGrace_preservesPendingSleepWorkForResleep() {
+        assertTrue(
+            SleepWakePolicy.shouldPreserveSleepTransactionOnFalseWake(
+                suppressWake = true,
+                sleepDelayPending = true,
+                cycleActive = false,
+                actionsApplied = false,
+                stopWaitPending = false
+            )
+        )
+    }
+
+    @Test
+    fun suppressedWakeWithoutSleepWork_doesNotSkipFutureFreshSleep() {
+        assertFalse(
+            SleepWakePolicy.shouldPreserveSleepTransactionOnFalseWake(
+                suppressWake = true,
+                sleepDelayPending = false,
+                cycleActive = false,
+                actionsApplied = false,
+                stopWaitPending = false
+            )
+        )
+    }
 
     @Test
     fun batterySaverAlone_waitsForSyncthingStop() {
@@ -127,11 +166,11 @@ class SleepWakePolicyTest {
     }
 
     @Test
-    fun thorFalseWake_isStillEffectivelySleeping() {
+    fun closedLidFalseWake_isStillEffectivelySleeping() {
         assertTrue(
-            SleepWakePolicy.isSuppressedThorFalseWake(
+            SleepWakePolicy.isSuppressedClosedLidFalseWake(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 bypassClosedLidProtection = false
             )
@@ -139,7 +178,7 @@ class SleepWakePolicyTest {
         assertTrue(
             SleepWakePolicy.isEffectivelySleeping(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 bypassClosedLidProtection = false
             )
@@ -147,7 +186,7 @@ class SleepWakePolicyTest {
         assertFalse(
             SleepWakePolicy.isRealWake(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 bypassClosedLidProtection = false
             )
@@ -157,9 +196,9 @@ class SleepWakePolicyTest {
     @Test
     fun dockedClosedLidWake_isARealWake() {
         assertFalse(
-            SleepWakePolicy.isSuppressedThorFalseWake(
+            SleepWakePolicy.isSuppressedClosedLidFalseWake(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 bypassClosedLidProtection = true
             )
@@ -167,7 +206,7 @@ class SleepWakePolicyTest {
         assertFalse(
             SleepWakePolicy.isEffectivelySleeping(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 bypassClosedLidProtection = true
             )
@@ -175,7 +214,7 @@ class SleepWakePolicyTest {
         assertTrue(
             SleepWakePolicy.isRealWake(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = true,
                 bypassClosedLidProtection = true
             )
@@ -187,7 +226,7 @@ class SleepWakePolicyTest {
         assertTrue(
             SleepWakePolicy.isRealWake(
                 interactive = true,
-                thorProtectionEnabled = true,
+                closedLidProtectionEnabled = true,
                 lidClosed = false,
                 bypassClosedLidProtection = false
             )

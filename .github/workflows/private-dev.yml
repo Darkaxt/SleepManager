@@ -1,0 +1,119 @@
+name: Private development checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "dev/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: private-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      artifact-id: ${{ steps.reuse_bundle.outputs.artifact-id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Prepare stable emulator test signing key
+        run: |
+          set -euo pipefail
+          KEYSTORE_PATH="$RUNNER_TEMP/sleepmanager-emulator-test.jks"
+          base64 --decode .github/emulator-test-signing.jks.b64 > "$KEYSTORE_PATH"
+          echo "SLEEPMANAGER_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_STORE_PASSWORD=android" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_ALIAS=sleepmanager-emulator-test" >> "$GITHUB_ENV"
+          echo "SLEEPMANAGER_KEY_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Test release artifact verification
+        run: python3 -m unittest discover -s scripts/tests -v
+
+      - name: Unit tests, lint and debug builds
+        run: |
+          gradle \
+            :app:testDebugUnitTest \
+            :app:lintDebug \
+            :helper:lintDebug \
+            :app:assembleDebug \
+            :helper:assembleDebug
+
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepManager-private-dev
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            helper/build/outputs/apk/debug/helper-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Prepare artifact reuse dry run
+        run: |
+          python3 scripts/release_artifacts.py prepare \
+            --commit "$(git rev-parse HEAD)" \
+            --repository "$GITHUB_REPOSITORY" \
+            --variant debug \
+            --main-apk app/build/outputs/apk/debug/app-debug.apk \
+            --helper-apk helper/build/outputs/apk/debug/helper-debug.apk
+
+      - name: Upload artifact reuse dry run
+        id: reuse_bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifact-reuse-dry-run-${{ github.run_attempt }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  artifact-reuse:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout the build commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download the exact dry-run artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.checks.outputs.artifact-id }}
+          path: dist
+          merge-multiple: true
+
+      - name: Verify downloaded APKs without rebuilding or publishing
+        run: |
+          python3 scripts/release_artifacts.py verify \
+            --commit "$(git rev-parse HEAD)" \
+            --repository "$GITHUB_REPOSITORY" \
+            --variant debug

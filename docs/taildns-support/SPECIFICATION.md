@@ -2,6 +2,21 @@
 
 Status: authoritative
 
+## Maintained upstream synchronization
+
+The authorized upstream-sync workflow incorporates the complete upstream history,
+including upstream Main/Helper behavior changes, while preserving TD-1 through
+TD-9. The original integration-only constraint against Helper changes does not
+exclude subsequently authorized upstream updates. TD-10 records the original
+settings-preserving deployment; recurring release maintenance must not reinstall
+or control devices or claim new device verification.
+
+Each promotion requires focused fork-contract tests, release lint-vital checks,
+clean signed assemblies for both APKs, a normal paired fork release, and independent
+verification of package IDs, monotonic codes, common pinned signer, exact source,
+asset hashes and fork-only update URLs. Fork versions append a subversion to the
+actual upstream Main/Helper versions.
+
 ## Context
 
 SleepManager 0.6.0 supports the official Tailscale Android client by sending

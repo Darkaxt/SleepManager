@@ -5,60 +5,80 @@ object SleepWakePolicy {
         val suppressWake: Boolean,
         val cancelSleepDelay: Boolean,
         val restoreNormalWake: Boolean,
-        val requestThorLock: Boolean
+        val requestClosedLidLock: Boolean
     )
 
     fun onScreenOn(
-        thorProtectionEnabled: Boolean,
+        closedLidProtectionEnabled: Boolean,
         lidClosed: Boolean,
         sleepDelayPending: Boolean
     ): WakeDecision {
-        val suppress = thorProtectionEnabled && lidClosed
+        val suppress = closedLidProtectionEnabled && lidClosed
         return WakeDecision(
             suppressWake = suppress,
             cancelSleepDelay = !suppress && sleepDelayPending,
             restoreNormalWake = !suppress,
-            requestThorLock = suppress
+            requestClosedLidLock = suppress
         )
     }
 
-    fun isSuppressedThorFalseWake(
+    fun isSuppressedClosedLidFalseWake(
         interactive: Boolean,
-        thorProtectionEnabled: Boolean,
+        closedLidProtectionEnabled: Boolean,
         lidClosed: Boolean,
         bypassClosedLidProtection: Boolean
     ): Boolean =
         interactive &&
-            thorProtectionEnabled &&
+            closedLidProtectionEnabled &&
             lidClosed &&
             !bypassClosedLidProtection
 
     fun isEffectivelySleeping(
         interactive: Boolean,
-        thorProtectionEnabled: Boolean,
+        closedLidProtectionEnabled: Boolean,
         lidClosed: Boolean,
         bypassClosedLidProtection: Boolean
     ): Boolean =
         !interactive ||
-            isSuppressedThorFalseWake(
+            isSuppressedClosedLidFalseWake(
                 interactive = interactive,
-                thorProtectionEnabled = thorProtectionEnabled,
+                closedLidProtectionEnabled = closedLidProtectionEnabled,
                 lidClosed = lidClosed,
                 bypassClosedLidProtection = bypassClosedLidProtection
             )
 
     fun isRealWake(
         interactive: Boolean,
-        thorProtectionEnabled: Boolean,
+        closedLidProtectionEnabled: Boolean,
         lidClosed: Boolean,
         bypassClosedLidProtection: Boolean
     ): Boolean =
         interactive &&
-            !isSuppressedThorFalseWake(
+            !isSuppressedClosedLidFalseWake(
                 interactive = interactive,
-                thorProtectionEnabled = thorProtectionEnabled,
+                closedLidProtectionEnabled = closedLidProtectionEnabled,
                 lidClosed = lidClosed,
                 bypassClosedLidProtection = bypassClosedLidProtection
+            )
+
+    /**
+     * A suppressed closed-lid false wake must not restart or recover an
+     * already-running sleep transaction when the forced re-sleep produces a
+     * second SCREEN_OFF. Preserve the original ownership until a real wake.
+     */
+    fun shouldPreserveSleepTransactionOnFalseWake(
+        suppressWake: Boolean,
+        sleepDelayPending: Boolean,
+        cycleActive: Boolean,
+        actionsApplied: Boolean,
+        stopWaitPending: Boolean
+    ): Boolean =
+        suppressWake &&
+            (
+                sleepDelayPending ||
+                    cycleActive ||
+                    actionsApplied ||
+                    stopWaitPending
             )
 
     /**

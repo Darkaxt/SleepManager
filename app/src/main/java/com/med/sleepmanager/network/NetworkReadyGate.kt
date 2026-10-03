@@ -29,6 +29,7 @@ class NetworkReadyGate(
 
     private var completed = false
     private var registered = false
+    private var networkQueryFailureLogged = false
 
     private val timeoutRunnable = Runnable {
         complete(Result.TIMEOUT)
@@ -46,7 +47,13 @@ class NetworkReadyGate(
                         cm.getNetworkCapabilities(active)
                             ?: return@runCatching false
                     isValidated(capabilities)
-                }.getOrDefault(false)
+                }.getOrElse { error ->
+                    logNetworkQueryFailure(
+                        "Unable to query validated network during readiness recheck",
+                        error
+                    )
+                    false
+                }
 
             if (validated) {
                 Log.i(TAG, "Validated network detected by bounded recheck")
@@ -63,7 +70,13 @@ class NetworkReadyGate(
             val capabilities =
                 runCatching {
                     cm.getNetworkCapabilities(network)
-                }.getOrNull()
+                }.getOrElse { error ->
+                    logNetworkQueryFailure(
+                        "Unable to query capabilities from network callback",
+                        error
+                    )
+                    null
+                }
 
             if (capabilities != null && isValidated(capabilities)) {
                 complete(Result.VALIDATED)
@@ -97,7 +110,13 @@ class NetworkReadyGate(
 
         val currentCapabilities = runCatching {
             cm.activeNetwork?.let(cm::getNetworkCapabilities)
-        }.getOrNull()
+        }.getOrElse { error ->
+            logNetworkQueryFailure(
+                "Unable to query current network capabilities",
+                error
+            )
+            null
+        }
 
         if (currentCapabilities != null && isValidated(currentCapabilities)) {
             complete(Result.VALIDATED)
@@ -136,7 +155,18 @@ class NetworkReadyGate(
         registered = false
         runCatching {
             connectivityManager?.unregisterNetworkCallback(callback)
+        }.onFailure { error ->
+            Log.w(TAG, "Unable to unregister network-ready callback", error)
         }
+    }
+
+    private fun logNetworkQueryFailure(
+        message: String,
+        error: Throwable
+    ) {
+        if (networkQueryFailureLogged) return
+        networkQueryFailureLogged = true
+        Log.w(TAG, message, error)
     }
 
     private fun isValidated(capabilities: NetworkCapabilities): Boolean =

@@ -7,7 +7,9 @@ import org.json.JSONObject
 object EventHistoryStore {
     private const val PREFS = "event_history"
     private const val KEY_EVENTS = "events"
-    private const val MAX_EVENTS = 20
+    private const val STANDARD_MAX_STORED_EVENTS = 20
+    private const val MAX_STORED_EVENTS = 100
+    private const val DEFAULT_VISIBLE_EVENTS = 20
 
     data class Event(
         val timestamp: Long,
@@ -17,12 +19,24 @@ object EventHistoryStore {
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun record(context: Context, message: String, timestamp: Long = System.currentTimeMillis()) {
-        val existing = recent(context).toMutableList()
+    @Synchronized
+    fun record(
+        context: Context,
+        message: String,
+        timestamp: Long = System.currentTimeMillis()
+    ) {
+        val existing = readAll(context).toMutableList()
         existing.add(0, Event(timestamp, message))
 
+        val maxStoredEvents =
+            if (AppPreferences.advancedDiagnosticsEnabled(context)) {
+                MAX_STORED_EVENTS
+            } else {
+                STANDARD_MAX_STORED_EVENTS
+            }
+
         val json = JSONArray()
-        existing.take(MAX_EVENTS).forEach { event ->
+        existing.take(maxStoredEvents).forEach { event ->
             json.put(
                 JSONObject()
                     .put("timestamp", event.timestamp)
@@ -35,7 +49,23 @@ object EventHistoryStore {
             .apply()
     }
 
-    fun recent(context: Context): List<Event> {
+    fun recent(
+        context: Context,
+        limit: Int = DEFAULT_VISIBLE_EVENTS
+    ): List<Event> =
+        readAll(context).take(limit.coerceIn(0, MAX_STORED_EVENTS))
+
+    fun diagnosticHistory(context: Context): List<Event> {
+        val limit =
+            if (AppPreferences.advancedDiagnosticsEnabled(context)) {
+                MAX_STORED_EVENTS
+            } else {
+                STANDARD_MAX_STORED_EVENTS
+            }
+        return readAll(context).take(limit)
+    }
+
+    private fun readAll(context: Context): List<Event> {
         val raw = prefs(context).getString(KEY_EVENTS, null) ?: return emptyList()
 
         return runCatching {
@@ -53,6 +83,7 @@ object EventHistoryStore {
         }.getOrDefault(emptyList())
     }
 
+    @Synchronized
     fun clear(context: Context) {
         prefs(context).edit().clear().apply()
     }

@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - "dev/**"
     tags:
       - "v*"
 
@@ -14,7 +13,10 @@ permissions:
 
 jobs:
   build:
+    if: github.repository == 'Darkaxt/SleepManager'
     runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
 
     env:
       SLEEPMANAGER_STORE_PASSWORD: ${{ secrets.SLEEPMANAGER_KEYSTORE_PASSWORD }}
@@ -65,10 +67,16 @@ jobs:
 
           echo "SLEEPMANAGER_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
 
+      - name: Test release artifact verification
+        run: python3 -m unittest discover -s scripts/tests -v
+
       - name: Test, lint and build signed release APKs
         run: |
           gradle \
+            clean \
             :app:testDebugUnitTest \
+            :app:lintVitalRelease \
+            :helper:lintVitalRelease \
             :app:lintDebug \
             :helper:lintDebug \
             :app:assembleRelease \
@@ -134,25 +142,43 @@ jobs:
           echo "Package IDs verified."
           echo "Pinned release signing certificate verified: $MAIN_CERT"
 
-      - name: Prepare artifacts
+      - name: Prepare verified artifact bundle
         id: package
         run: |
           set -euo pipefail
-
           VERSION_NAME=$(sed -n 's/^SLEEPMANAGER_VERSION_NAME=//p' gradle.properties)
-          HELPER_VERSION_NAME=$(sed -n 's/^SLEEPMANAGER_HELPER_VERSION_NAME=//p' gradle.properties)
           echo "version=$VERSION_NAME" >> "$GITHUB_OUTPUT"
-          mkdir -p dist
+          python3 scripts/release_artifacts.py prepare \
+            --commit "$(git rev-parse HEAD)" \
+            --repository "$GITHUB_REPOSITORY" \
+            --variant release \
+            --main-apk app/build/outputs/apk/release/app-release.apk \
+            --helper-apk helper/build/outputs/apk/release/helper-release.apk
 
-          cp app/build/outputs/apk/release/app-release.apk \
-            "dist/SleepManager-$VERSION_NAME.apk"
-          cp helper/build/outputs/apk/release/helper-release.apk \
-            "dist/SleepManager-Helper-$HELPER_VERSION_NAME.apk"
-
-      - name: Upload APKs
+      - name: Upload verified APKs and manifest
+        id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: SleepManager-${{ steps.package.outputs.version }}
-          path: dist/*.apk
+          name: SleepManager-${{ steps.package.outputs.version }}-${{ github.run_attempt }}
+          path: dist/
           if-no-files-found: error
           retention-days: 14
+
+  release-regression:
+    needs: build
+    if: >-
+      github.repository == 'Darkaxt/SleepManager' &&
+      github.event_name == 'push' &&
+      ((github.ref_type == 'tag' && !contains(github.ref_name, '-')) ||
+       (github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release ')))
+    uses: ./.github/workflows/responsive-ui.yml
+    with:
+      release-validation: true
+
+  publish-stable:
+    needs: [build, release-regression]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      artifact-id: ${{ needs.build.outputs.artifact-id }}

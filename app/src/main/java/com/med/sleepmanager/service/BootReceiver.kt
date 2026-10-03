@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.update.UpdateCheckScheduler
 
 class BootReceiver : BroadcastReceiver() {
@@ -16,7 +17,7 @@ class BootReceiver : BroadcastReceiver() {
         try {
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service)
             else context.startService(service)
-            AppPreferences.recordEvent(context, "Started after ${intent?.action}")
+            DiagnosticsStateStore.recordEvent(context, "Started after ${intent?.action}")
         } catch (t: Throwable) {
             Log.e("SleepManager", "Unable to restart after boot", t)
         }

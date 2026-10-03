@@ -31,16 +31,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.med.sleepmanager.BuildConfig
-import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.R
+import com.med.sleepmanager.data.UpdateStateStore
 import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.ui.components.SectionTitle
 import com.med.sleepmanager.ui.components.SettingsCard
 import com.med.sleepmanager.ui.feedbackClick
-import com.med.sleepmanager.ui.label
 import com.med.sleepmanager.update.UpdateChecker
 import com.med.sleepmanager.update.UpdateCheckResult
 import com.med.sleepmanager.update.UpdateDownloadResult
@@ -91,7 +92,7 @@ internal fun AboutPage(
     val cachedUpdate = UpdateChecker.cachedUpdate(context)
     val cachedHelperUpdate = UpdateChecker.cachedHelperUpdate(context)
     val cachedHelperRelease = UpdateChecker.cachedHelperReleaseInfo(context)
-    val latestMainVersion = AppPreferences.latestReleaseVersion(context)
+    val latestMainVersion = UpdateStateStore.latestReleaseVersion(context)
     val updatesRequester = remember { BringIntoViewRequester() }
     val helperRequester = remember { BringIntoViewRequester() }
 
@@ -119,8 +120,11 @@ internal fun AboutPage(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         InfoCard(
-            title = "SleepManager",
-            text = "Quiet on sleep. Ready on wake.\nVersion ${packageInfo?.versionName ?: "Unknown"} • Smart sleep automation for Android."
+            title = stringResource(R.string.app_name),
+            text = stringResource(
+                R.string.about_summary,
+                packageInfo?.versionName ?: stringResource(R.string.unknown)
+            )
         )
 
         SettingsCard {
@@ -129,48 +133,52 @@ internal fun AboutPage(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "What SleepManager does",
+                    stringResource(R.string.about_what_sleepmanager_does),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "Runs your chosen sleep actions when the screen turns off, then restores only what SleepManager changed.",
+                    stringResource(R.string.about_what_sleepmanager_does_description),
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
         }
 
         SectionTitle(
-            title = "App details",
-            subtitle = "Version and compatibility information."
+            title = stringResource(R.string.about_app_details),
+            subtitle = stringResource(R.string.about_app_details_description)
         )
 
         SettingsCard {
             AboutInfoRow(
-                label = "SleepManager",
-                value = packageInfo?.versionName ?: "Unknown"
+                label = stringResource(R.string.app_name),
+                value = packageInfo?.versionName ?: stringResource(R.string.unknown)
             )
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             AboutInfoRow(
-                label = "Compatibility helper",
-                value = helperVersion ?: "Not installed"
+                label = stringResource(R.string.about_compatibility_helper),
+                value = helperVersion ?: stringResource(R.string.not_installed)
             )
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             AboutInfoRow(
-                label = "Android",
-                value = "${Build.VERSION.RELEASE} • API ${Build.VERSION.SDK_INT}"
+                label = stringResource(R.string.about_android),
+                value = stringResource(
+                    R.string.about_android_version,
+                    Build.VERSION.RELEASE,
+                    Build.VERSION.SDK_INT
+                )
             )
         }
 
         SectionTitle(
-            title = "Updates",
-            subtitle = "Check GitHub releases and keep SleepManager and the optional Helper up to date.",
+            title = stringResource(R.string.about_updates),
+            subtitle = stringResource(R.string.about_updates_description),
             modifier = Modifier.bringIntoViewRequester(updatesRequester)
         )
 
@@ -184,12 +192,12 @@ internal fun AboutPage(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Automatic update checks",
+                        stringResource(R.string.about_automatic_update_checks),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Check for updates when you open the app, and daily in the background.",
+                        stringResource(R.string.about_automatic_update_checks_description),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -207,40 +215,72 @@ internal fun AboutPage(
 
             val updateStatusText =
                 updateCheckMessage ?: buildString {
-                    val installedMain = packageInfo?.versionName ?: "Unknown"
-                    append("SleepManager ")
-                    when {
-                        cachedUpdate != null ->
-                            append("$installedMain → ${cachedUpdate.versionName} available")
-                        latestMainVersion != null ->
-                            append("$installedMain • Up to date")
-                        else ->
-                            append("$installedMain • Not checked")
-                    }
+                    val installedMain =
+                        packageInfo?.versionName
+                            ?: context.getString(R.string.unknown)
+                    append(
+                        when {
+                            cachedUpdate != null ->
+                                context.getString(
+                                    R.string.about_main_update_available_status,
+                                    installedMain,
+                                    cachedUpdate.versionName
+                                )
+                            latestMainVersion != null ->
+                                context.getString(
+                                    R.string.about_main_up_to_date_status,
+                                    installedMain
+                                )
+                            else ->
+                                context.getString(
+                                    R.string.about_main_not_checked_status,
+                                    installedMain
+                                )
+                        }
+                    )
 
-                    append("\nCompatibility Helper ")
-                    when {
-                        helperVersion == null && cachedHelperRelease != null ->
-                            append(
-                                "Not installed • ${cachedHelperRelease.versionName} available to install"
-                            )
-                        helperVersion == null ->
-                            append("Not installed • Not checked")
-                        cachedHelperUpdate != null ->
-                            append(
-                                "$helperVersion → ${cachedHelperUpdate.versionName} available"
-                            )
-                        cachedHelperRelease != null ->
-                            append("$helperVersion • Up to date")
-                        else ->
-                            append("$helperVersion • Not checked")
-                    }
+                    append("\n")
+                    append(
+                        when {
+                            helperVersion == null && cachedHelperRelease != null ->
+                                context.getString(
+                                    R.string.about_helper_available_to_install_status,
+                                    cachedHelperRelease.versionName
+                                )
+                            helperVersion == null ->
+                                context.getString(
+                                    R.string.about_helper_not_installed_not_checked_status
+                                )
+                            cachedHelperUpdate != null ->
+                                context.getString(
+                                    R.string.about_helper_update_available_status,
+                                    helperVersion,
+                                    cachedHelperUpdate.versionName
+                                )
+                            cachedHelperRelease != null ->
+                                context.getString(
+                                    R.string.about_helper_up_to_date_status,
+                                    helperVersion
+                                )
+                            else ->
+                                context.getString(
+                                    R.string.about_helper_not_checked_status,
+                                    helperVersion
+                                )
+                        }
+                    )
                 }
 
             AboutActionRow(
-                title = "Check for updates",
+                title = stringResource(R.string.about_check_for_updates),
                 subtitle = updateStatusText,
-                actionLabel = if (updateCheckRunning) "Checking…" else "Check",
+                actionLabel = stringResource(
+                    if (updateCheckRunning) {
+                        R.string.checking
+                    } else {
+                        R.string.check
+                    }
+                ),
                 enabled = !updateCheckRunning &&
                     !mainDownloadRunning &&
                     !helperDownloadRunning,
@@ -257,11 +297,11 @@ internal fun AboutPage(
                         }
                         updateCheckMessage = when (result) {
                             is UpdateCheckResult.Error ->
-                                "Unable to check right now."
+                                context.getString(R.string.about_unable_to_check)
                             UpdateCheckResult.Disabled ->
-                                "Automatic checks are disabled."
+                                context.getString(R.string.about_automatic_checks_disabled)
                             UpdateCheckResult.NotDue ->
-                                "An update check is already running."
+                                context.getString(R.string.about_update_check_already_running)
                             else -> null
                         }
                         updateCheckRunning = false
@@ -276,19 +316,26 @@ internal fun AboutPage(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 AboutActionRow(
-                    title = "SleepManager ${update.versionName}",
-                    subtitle = if (update.directInstallAvailable) {
-                        "Download, verify and install the signed APK."
-                    } else {
-                        "Direct install metadata unavailable. Open the GitHub release."
-                    },
-                    actionLabel = when {
-                        mainDownloadRunning -> "Downloading…"
-                        update.directInstallAvailable -> "Update"
-                        else -> "Open"
-                    },
+                    title = stringResource(
+                        R.string.about_sleepmanager_version,
+                        update.versionName
+                    ),
+                    subtitle = stringResource(
+                        if (update.directInstallAvailable) {
+                            R.string.about_download_verify_install_main
+                        } else {
+                            R.string.about_direct_install_unavailable
+                        }
+                    ),
+                    actionLabel = stringResource(
+                        when {
+                            mainDownloadRunning -> R.string.downloading
+                            update.directInstallAvailable -> R.string.update_action
+                            else -> R.string.open
+                        }
+                    ),
                     enabled = !mainDownloadRunning && !helperDownloadRunning,
-                    secondaryActionLabel = "Release notes",
+                    secondaryActionLabel = stringResource(R.string.release_notes),
                     onSecondaryClick = {
                         onOpenExternalUrl(update.releaseUrl)
                     },
@@ -298,7 +345,10 @@ internal fun AboutPage(
                         } else {
                             mainDownloadRunning = true
                             updateCheckMessage =
-                                "Downloading SleepManager ${update.versionName}…"
+                                context.getString(
+                                    R.string.about_downloading_sleepmanager,
+                                    update.versionName
+                                )
                             updateScope.launch {
                                 val result = withContext(Dispatchers.IO) {
                                     UpdateInstaller.downloadAndVerify(
@@ -311,7 +361,9 @@ internal fun AboutPage(
                                     is UpdateDownloadResult.Success -> {
                                         mainDownloadRunning = false
                                         updateCheckMessage =
-                                            "APK verified. Opening Android installer…"
+                                            context.getString(
+                                                R.string.about_main_apk_verified
+                                            )
                                         onInstallVerifiedUpdate(
                                             result.apk.absolutePath
                                         )
@@ -340,30 +392,47 @@ internal fun AboutPage(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
+                val helperActionTitle =
+                    if (helperActionInfo != null) {
+                        stringResource(
+                            R.string.about_helper_version,
+                            helperActionInfo.versionName
+                        )
+                    } else {
+                        stringResource(R.string.about_helper_name)
+                    }
+                val helperActionSubtitle =
+                    stringResource(
+                        when {
+                            helperVersion == null &&
+                                helperActionInfo != null &&
+                                !helperActionInfo.directInstallAvailable ->
+                                R.string.about_direct_install_unavailable
+                            helperVersion == null ->
+                                R.string.about_download_verify_install_helper_wifi_bluetooth
+                            helperActionInfo?.directInstallAvailable == true ->
+                                R.string.about_download_verify_install_helper
+                            else ->
+                                R.string.about_direct_install_unavailable
+                        }
+                    )
+                val helperActionLabel =
+                    stringResource(
+                        when {
+                            helperDownloadRunning -> R.string.downloading
+                            helperActionInfo != null &&
+                                !helperActionInfo.directInstallAvailable ->
+                                R.string.open
+                            helperVersion == null -> R.string.install
+                            else -> R.string.update_action
+                        }
+                    )
+
                 AboutActionRow(
                     modifier = Modifier.bringIntoViewRequester(helperRequester),
-                    title = helperActionInfo?.let {
-                        "SleepManager Helper ${it.versionName}"
-                    } ?: "SleepManager Helper",
-                    subtitle = when {
-                        helperVersion == null &&
-                            helperActionInfo != null &&
-                            !helperActionInfo.directInstallAvailable ->
-                            "Direct install metadata unavailable. Open the GitHub release."
-                        helperVersion == null ->
-                            "Download, verify and install the signed Helper for Wi-Fi and Bluetooth."
-                        helperActionInfo?.directInstallAvailable == true ->
-                            "Download, verify and install the signed Helper APK."
-                        else ->
-                            "Direct install metadata unavailable. Open the GitHub release."
-                    },
-                    actionLabel = when {
-                        helperDownloadRunning -> "Downloading…"
-                        helperActionInfo != null &&
-                            !helperActionInfo.directInstallAvailable -> "Open"
-                        helperVersion == null -> "Install"
-                        else -> "Update"
-                    },
+                    title = helperActionTitle,
+                    subtitle = helperActionSubtitle,
+                    actionLabel = helperActionLabel,
                     enabled = !mainDownloadRunning && !helperDownloadRunning,
                     onClick = {
                         if (
@@ -375,9 +444,14 @@ internal fun AboutPage(
                             helperDownloadRunning = true
                             updateCheckMessage =
                                 if (helperVersion == null) {
-                                    "Preparing SleepManager Helper…"
+                                    context.getString(
+                                        R.string.about_preparing_helper
+                                    )
                                 } else {
-                                    "Downloading SleepManager Helper ${helperActionInfo?.versionName.orEmpty()}…"
+                                    context.getString(
+                                        R.string.about_downloading_helper,
+                                        helperActionInfo?.versionName.orEmpty()
+                                    )
                                 }
 
                             updateScope.launch {
@@ -388,7 +462,9 @@ internal fun AboutPage(
                                                 context
                                             )
                                             ?: error(
-                                                "No Helper APK is available in the latest release."
+                                                context.getString(
+                                                    R.string.about_no_helper_apk
+                                                )
                                             )
                                     }
                                 }
@@ -398,7 +474,9 @@ internal fun AboutPage(
                                     helperDownloadRunning = false
                                     updateCheckMessage =
                                         helperInfoResult.exceptionOrNull()?.message
-                                            ?: "Unable to find the Helper release."
+                                            ?: context.getString(
+                                                R.string.about_unable_to_find_helper_release
+                                            )
                                     onUpdateStateChanged()
                                     return@launch
                                 }
@@ -406,13 +484,18 @@ internal fun AboutPage(
                                 if (!helperInfo.directInstallAvailable) {
                                     helperDownloadRunning = false
                                     updateCheckMessage =
-                                        "Direct install metadata is unavailable for the Helper."
+                                        context.getString(
+                                            R.string.about_helper_direct_install_unavailable
+                                        )
                                     onUpdateStateChanged()
                                     return@launch
                                 }
 
                                 updateCheckMessage =
-                                    "Downloading SleepManager Helper ${helperInfo.versionName}…"
+                                    context.getString(
+                                        R.string.about_downloading_helper,
+                                        helperInfo.versionName
+                                    )
 
                                 val result = withContext(Dispatchers.IO) {
                                     UpdateInstaller.downloadAndVerifyHelper(
@@ -425,7 +508,9 @@ internal fun AboutPage(
                                     is UpdateDownloadResult.Success -> {
                                         helperDownloadRunning = false
                                         updateCheckMessage =
-                                            "Helper APK verified. Opening Android installer…"
+                                            context.getString(
+                                                R.string.about_helper_apk_verified
+                                            )
                                         onInstallVerifiedUpdate(
                                             result.apk.absolutePath
                                         )
@@ -450,14 +535,16 @@ internal fun AboutPage(
                 )
                 if (notificationsAllowed) {
                     AboutInfoRow(
-                        label = "Update notifications",
-                        value = "Allowed"
+                        label = stringResource(R.string.about_update_notifications),
+                        value = stringResource(R.string.allowed)
                     )
                 } else {
                     AboutActionRow(
-                        title = "Update notifications",
-                        subtitle = "Allow Android notifications for new releases.",
-                        actionLabel = "Enable",
+                        title = stringResource(R.string.about_update_notifications),
+                        subtitle = stringResource(
+                            R.string.about_update_notifications_description
+                        ),
+                        actionLabel = stringResource(R.string.enable),
                         onClick = onRequestNotificationPermission
                     )
                 }
@@ -469,9 +556,12 @@ internal fun AboutPage(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 AboutActionRow(
-                    title = "Simulate update",
-                    subtitle = "Developer test: pretend SleepManager 0.5.2 is available.",
-                    actionLabel = "Simulate",
+                    title = stringResource(R.string.about_simulate_update),
+                    subtitle = stringResource(
+                        R.string.about_simulate_update_description,
+                        "0.5.2"
+                    ),
+                    actionLabel = stringResource(R.string.simulate),
                     onClick = {
                         val simulated =
                             UpdateChecker.simulateAvailableUpdate(
@@ -479,7 +569,10 @@ internal fun AboutPage(
                                 versionName = "0.5.2"
                             )
                         updateCheckMessage =
-                            "Simulated SleepManager ${simulated.versionName} update."
+                            context.getString(
+                                R.string.about_simulated_update,
+                                simulated.versionName
+                            )
                         onUpdateStateChanged()
                     }
                 )
@@ -487,28 +580,32 @@ internal fun AboutPage(
         }
 
         SectionTitle(
-            title = "Background reliability",
-            subtitle = "Android settings that can affect long-running background automation."
+            title = stringResource(R.string.about_background_reliability),
+            subtitle = stringResource(
+                R.string.about_background_reliability_description
+            )
         )
 
         SettingsCard {
             AboutActionRow(
-                title = "Battery optimization",
-                subtitle = when (
-                    backgroundReliability?.batteryOptimization
-                ) {
-                    BackgroundReliability.Status.OK ->
-                        "✓ Disabled • Recommended for reliable background operation"
-                    BackgroundReliability.Status.NEEDS_ATTENTION ->
-                        "⚠ Enabled • Recommended to disable for reliable background operation"
-                    BackgroundReliability.Status.UNAVAILABLE ->
-                        "— Not available on this Android version"
-                    BackgroundReliability.Status.UNKNOWN ->
-                        "? Unable to read the current setting"
-                    null ->
-                        "Checking…"
-                },
-                actionLabel = "Settings",
+                title = stringResource(R.string.about_battery_optimization),
+                subtitle = stringResource(
+                    when (
+                        backgroundReliability?.batteryOptimization
+                    ) {
+                        BackgroundReliability.Status.OK ->
+                            R.string.about_reliability_disabled_recommended
+                        BackgroundReliability.Status.NEEDS_ATTENTION ->
+                            R.string.about_reliability_enabled_disable_recommended
+                        BackgroundReliability.Status.UNAVAILABLE ->
+                            R.string.about_not_available_android_version
+                        BackgroundReliability.Status.UNKNOWN ->
+                            R.string.about_unable_to_read_setting
+                        null ->
+                            R.string.checking
+                    }
+                ),
+                actionLabel = stringResource(R.string.settings),
                 enabled =
                     backgroundReliability?.batteryOptimization !=
                         BackgroundReliability.Status.UNAVAILABLE,
@@ -526,26 +623,28 @@ internal fun AboutPage(
                     ?.unusedAppRestrictionsExemptByDeviceAdmin == true
 
             AboutActionRow(
-                title = "Unused app restrictions",
-                subtitle = when {
-                    unusedAppRestrictionsDeviceAdminExempt ->
-                        "✓ Disabled • Device administrator exemption"
-                    backgroundReliability?.unusedAppRestrictions ==
-                        BackgroundReliability.Status.OK ->
-                        "✓ Disabled • Recommended for reliable background operation"
-                    backgroundReliability?.unusedAppRestrictions ==
-                        BackgroundReliability.Status.NEEDS_ATTENTION ->
-                        "⚠ Enabled • Recommended to disable for reliable background operation"
-                    backgroundReliability?.unusedAppRestrictions ==
-                        BackgroundReliability.Status.UNAVAILABLE ->
-                        "— Not available on this device"
-                    backgroundReliability?.unusedAppRestrictions ==
-                        BackgroundReliability.Status.UNKNOWN ->
-                        "? Unable to read the current setting"
-                    else ->
-                        "Checking…"
-                },
-                actionLabel = "Settings",
+                title = stringResource(R.string.about_unused_app_restrictions),
+                subtitle = stringResource(
+                    when {
+                        unusedAppRestrictionsDeviceAdminExempt ->
+                            R.string.about_disabled_device_admin_exemption
+                        backgroundReliability?.unusedAppRestrictions ==
+                            BackgroundReliability.Status.OK ->
+                            R.string.about_reliability_disabled_recommended
+                        backgroundReliability?.unusedAppRestrictions ==
+                            BackgroundReliability.Status.NEEDS_ATTENTION ->
+                            R.string.about_reliability_enabled_disable_recommended
+                        backgroundReliability?.unusedAppRestrictions ==
+                            BackgroundReliability.Status.UNAVAILABLE ->
+                            R.string.about_not_available_device
+                        backgroundReliability?.unusedAppRestrictions ==
+                            BackgroundReliability.Status.UNKNOWN ->
+                            R.string.about_unable_to_read_setting
+                        else ->
+                            R.string.checking
+                    }
+                ),
+                actionLabel = stringResource(R.string.settings),
                 enabled =
                     !unusedAppRestrictionsDeviceAdminExempt &&
                         backgroundReliability?.unusedAppRestrictions !=
@@ -556,15 +655,15 @@ internal fun AboutPage(
         }
 
         SectionTitle(
-            title = "Support & project",
-            subtitle = "Useful links for troubleshooting and development."
+            title = stringResource(R.string.about_support_project),
+            subtitle = stringResource(R.string.about_support_project_description)
         )
 
         SettingsCard {
             AboutActionRow(
-                title = "Source code",
-                subtitle = "View SleepManager on GitHub",
-                actionLabel = "Open",
+                title = stringResource(R.string.about_source_code),
+                subtitle = stringResource(R.string.about_source_code_description),
+                actionLabel = stringResource(R.string.open),
                 onClick = {
                     onOpenExternalUrl("https://github.com/Darkaxt/SleepManager")
                 }
@@ -574,9 +673,9 @@ internal fun AboutPage(
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             AboutActionRow(
-                title = "Report an issue",
-                subtitle = "Open the GitHub issue tracker",
-                actionLabel = "Open",
+                title = stringResource(R.string.about_report_issue),
+                subtitle = stringResource(R.string.about_report_issue_description),
+                actionLabel = stringResource(R.string.open),
                 onClick = {
                     onOpenExternalUrl("https://github.com/Darkaxt/SleepManager/issues")
                 }
@@ -586,9 +685,9 @@ internal fun AboutPage(
                 color = MaterialTheme.colorScheme.outlineVariant
             )
             AboutActionRow(
-                title = "Android app info",
-                subtitle = "Permissions, battery and storage settings",
-                actionLabel = "Open",
+                title = stringResource(R.string.about_android_app_info),
+                subtitle = stringResource(R.string.about_android_app_info_description),
+                actionLabel = stringResource(R.string.open),
                 onClick = { onOpenAppInfo() }
             )
         }
@@ -750,17 +849,21 @@ private fun AboutActionButtons(
     }
 }
 
+@Composable
 internal fun formatDuration(valueMs: Long): String =
     when (valueMs) {
-        0L -> "Immediate"
-        3000L -> "3 s"
-        5000L -> "5 s"
-        10000L -> "10 s"
-        60000L -> "1 min"
-        300000L -> "5 min"
-        600000L -> "10 min"
-        1800000L -> "30 min"
-        else -> "${valueMs / 1000}s"
+        0L -> stringResource(R.string.grace_immediate)
+        3000L -> stringResource(R.string.duration_3_seconds)
+        5000L -> stringResource(R.string.duration_5_seconds)
+        10000L -> stringResource(R.string.duration_10_seconds)
+        60000L -> stringResource(R.string.duration_1_minute)
+        300000L -> stringResource(R.string.duration_5_minutes)
+        600000L -> stringResource(R.string.duration_10_minutes)
+        1800000L -> stringResource(R.string.duration_30_minutes)
+        else -> stringResource(
+            R.string.duration_seconds_compact,
+            valueMs / 1000L
+        )
     }
 
 internal fun formatTime(minutes: Int): String {

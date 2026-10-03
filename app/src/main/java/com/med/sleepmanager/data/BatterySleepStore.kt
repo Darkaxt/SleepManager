@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.SystemClock
+import com.med.sleepmanager.rules.BatteryCapacityPolicy
+import com.med.sleepmanager.rules.BatteryCapacitySelection
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -29,6 +31,7 @@ object BatterySleepStore {
     private const val KEY_SAW_CHARGING = "saw_charging"
     private const val KEY_START_ELAPSED_MS = "start_elapsed_ms"
     private const val KEY_START_UPTIME_MS = "start_uptime_ms"
+    private const val KEY_FALSE_WAKE_COUNT = "false_wake_count"
     private const val KEY_HISTORY = "history"
 
     private const val HISTORY_DAYS = 7L
@@ -38,17 +41,29 @@ object BatterySleepStore {
     data class BatterySnapshot(
         val percent: Int?,
         val charging: Boolean,
+        val externalPowerConnected: Boolean,
         val chargeCounterUah: Int?,
         val fullChargeUah: Long?,
         val designChargeUah: Long?
     ) {
+        val capacitySelection: BatteryCapacitySelection
+            get() =
+                BatteryCapacityPolicy.select(
+                    percent = percent,
+                    chargeCounterUah = chargeCounterUah?.toLong(),
+                    learnedFullUah = fullChargeUah,
+                    designFullUah = designChargeUah
+                )
+
         val chargeMah: Double?
-            get() = chargeCounterUah?.div(1000.0)
+            get() = capacitySelection.displayedCurrentUah?.div(1000.0)
 
         val precisePercent: Double?
             get() {
-                val current = chargeCounterUah ?: return null
-                val full = fullChargeUah ?: return null
+                val current =
+                    capacitySelection.displayedCurrentUah ?: return null
+                val full =
+                    capacitySelection.selectedFullUah ?: return null
                 if (current < 0 || full <= 0L) return null
 
                 val value = current.toDouble() / full.toDouble() * 100.0
@@ -68,7 +83,8 @@ object BatterySleepStore {
         val drainMah: Double?,
         val deepSleepMs: Long? = null,
         val preciseDrainPercent: Double? = null,
-        val preciseBatteryChangePercent: Double? = null
+        val preciseBatteryChangePercent: Double? = null,
+        val falseWakeCount: Int = 0
     ) {
         val drainPerHour: Double?
             get() {
@@ -173,6 +189,7 @@ object BatterySleepStore {
         return BatterySnapshot(
             percent = percent,
             charging = charging,
+            externalPowerConnected = plugged != 0,
             chargeCounterUah = chargeCounter,
             fullChargeUah = readChargeUahFromSysfs(
                 "/sys/class/power_supply/battery/charge_full"
@@ -196,7 +213,10 @@ object BatterySleepStore {
             .putInt(KEY_START_PERCENT, percent)
             .putInt(
                 KEY_START_CHARGE_UAH,
-                snapshot.chargeCounterUah ?: Int.MIN_VALUE
+                snapshot.capacitySelection.displayedCurrentUah
+                    ?.takeIf { it <= Int.MAX_VALUE.toLong() }
+                    ?.toInt()
+                    ?: Int.MIN_VALUE
             )
             .putLong(
                 KEY_START_CAPACITY_UAH,
@@ -206,6 +226,7 @@ object BatterySleepStore {
             .putBoolean(KEY_SAW_CHARGING, snapshot.charging)
             .putLong(KEY_START_ELAPSED_MS, SystemClock.elapsedRealtime())
             .putLong(KEY_START_UPTIME_MS, SystemClock.uptimeMillis())
+            .putInt(KEY_FALSE_WAKE_COUNT, 0)
             .commit()
     }
 
@@ -213,6 +234,15 @@ object BatterySleepStore {
         val p = prefs(context)
         if (!p.getBoolean(KEY_ACTIVE, false)) return
         p.edit().putBoolean(KEY_SAW_CHARGING, true).commit()
+    }
+
+    fun noteFalseWake(context: Context) {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_ACTIVE, false)) return
+
+        val current = p.getInt(KEY_FALSE_WAKE_COUNT, 0).coerceAtLeast(0)
+        val next = if (current == Int.MAX_VALUE) current else current + 1
+        p.edit().putInt(KEY_FALSE_WAKE_COUNT, next).commit()
     }
 
     fun finishSession(context: Context): SleepSession? {
@@ -227,6 +257,8 @@ object BatterySleepStore {
         val sawCharging = p.getBoolean(KEY_SAW_CHARGING, false)
         val startElapsedMs = p.getLong(KEY_START_ELAPSED_MS, -1L)
         val startUptimeMs = p.getLong(KEY_START_UPTIME_MS, -1L)
+        val falseWakeCount =
+            p.getInt(KEY_FALSE_WAKE_COUNT, 0).coerceAtLeast(0)
 
         val endElapsedMs = SystemClock.elapsedRealtime()
         val endUptimeMs = SystemClock.uptimeMillis()
@@ -258,7 +290,10 @@ object BatterySleepStore {
                 null
             }
 
-        val endCounter = end.chargeCounterUah
+        val endCounter =
+            end.capacitySelection.displayedCurrentUah
+                ?.takeIf { it <= Int.MAX_VALUE.toLong() }
+                ?.toInt()
         val drainMah =
             if (
                 !chargedDuringSleep &&
@@ -307,7 +342,8 @@ object BatterySleepStore {
             drainMah = drainMah,
             deepSleepMs = deepSleepMs,
             preciseDrainPercent = preciseDrainPercent,
-            preciseBatteryChangePercent = preciseBatteryChangePercent
+            preciseBatteryChangePercent = preciseBatteryChangePercent,
+            falseWakeCount = falseWakeCount
         )
 
         appendSession(context, session)
@@ -472,6 +508,7 @@ object BatterySleepStore {
                         item.preciseBatteryChangePercent?.let {
                             put("preciseBatteryChangePercent", it)
                         }
+                        put("falseWakeCount", item.falseWakeCount.coerceAtLeast(0))
                     }
             )
         }
@@ -529,7 +566,10 @@ object BatterySleepStore {
                                         .takeIf { it.isFinite() }
                                 } else {
                                     null
-                                }
+                                },
+                            falseWakeCount =
+                                item.optInt("falseWakeCount", 0)
+                                    .coerceAtLeast(0)
                         )
                     )
                 }
@@ -550,6 +590,7 @@ object BatterySleepStore {
             .remove(KEY_SAW_CHARGING)
             .remove(KEY_START_ELAPSED_MS)
             .remove(KEY_START_UPTIME_MS)
+            .remove(KEY_FALSE_WAKE_COUNT)
             .commit()
     }
 
@@ -605,30 +646,8 @@ object BatterySleepStore {
         )
     }
 
-    private fun bestCapacityUah(snapshot: BatterySnapshot): Long? {
-        snapshot.fullChargeUah
-            ?.takeIf { it > 0L }
-            ?.let { return it }
-
-        snapshot.designChargeUah
-            ?.takeIf { it > 0L }
-            ?.let { return it }
-
-        val percent = snapshot.percent
-        val counter = snapshot.chargeCounterUah
-        return if (
-            percent != null &&
-            percent > 0 &&
-            counter != null &&
-            counter > 0
-        ) {
-            (counter.toDouble() * 100.0 / percent.toDouble())
-                .toLong()
-                .takeIf { it > 0L }
-        } else {
-            null
-        }
-    }
+    private fun bestCapacityUah(snapshot: BatterySnapshot): Long? =
+        snapshot.capacitySelection.selectedFullUah
 
     private fun estimateCapacityMah(snapshot: BatterySnapshot): Double? =
         bestCapacityUah(snapshot)?.div(1000.0)

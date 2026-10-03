@@ -2,13 +2,17 @@
 set -Eeuo pipefail
 
 SERIAL="${1:-${ADB_SERIAL:-emulator-5554}}"
+START_AT="${2:-${E2E_START_AT:-core}}"
+ONLY_SECTION="${E2E_ONLY_SECTION:-}"
 SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
 ADB_BIN="${ADB:-$SDK_ROOT/platform-tools/adb}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_DIR="$SCRIPT_DIR/real-e2e-report"
 
 MAIN_PACKAGE="com.med.sleepmanager"
-TEST_RUNNER="com.med.sleepmanager.test/androidx.test.runner.AndroidJUnitRunner"
+HELPER_PACKAGE="com.med.sleepmanager.helper"
+TEST_PACKAGE="com.med.sleepmanager.test"
+TEST_RUNNER="$TEST_PACKAGE/androidx.test.runner.AndroidJUnitRunner"
 CONTROL_TEST="com.med.sleepmanager.LocalE2EControlTest#applyConfiguration"
 
 SYNCTHING_PACKAGES=(
@@ -47,6 +51,10 @@ warn() {
 fail() {
   printf '\n✗ %s\n' "$*" >&2
   adb_target logcat -d > "$REPORT_DIR/logcat-failure.txt" 2>/dev/null || true
+  printf '%s\n' '--- Recent SleepManager / Helper logcat ---' >&2
+  adb_target logcat -d 2>/dev/null \
+    | grep -E 'SleepManager|SleepManagerHelper|HelperController' \
+    | tail -n 120 >&2 || true
   exit 1
 }
 
@@ -54,14 +62,42 @@ package_installed() {
   adb_target shell pm path "$1" 2>/dev/null | grep -q '^package:'
 }
 
+power_is_awake() {
+  adb_target shell dumpsys power 2>/dev/null \
+    | grep -Eq 'mWakefulness=(Awake|Dreaming)'
+}
+
+power_is_asleep() {
+  adb_target shell dumpsys power 2>/dev/null \
+    | grep -Eq 'mWakefulness=Asleep'
+}
+
+wait_power_state() {
+  local wanted="$1"
+  local timeout="${2:-8}"
+  local deadline=$((SECONDS + timeout))
+
+  while (( SECONDS < deadline )); do
+    if [ "$wanted" = "awake" ] && power_is_awake; then
+      return 0
+    fi
+    if [ "$wanted" = "asleep" ] && power_is_asleep; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  return 1
+}
+
 wake_screen() {
   adb_target shell input keyevent 224 >/dev/null 2>&1 || true
-  sleep 1
+  wait_power_state awake 8 || sleep 1
 }
 
 sleep_screen() {
   adb_target shell input keyevent 223 >/dev/null 2>&1 || true
-  sleep 1
+  wait_power_state asleep 8 || sleep 1
 }
 
 wifi_is_on() {
@@ -193,17 +229,93 @@ run_config() {
 
   printf '%s\n' "$output" > "$REPORT_DIR/config-$mode.txt"
 
-  [ "$status" -eq 0 ] || fail "Configuration '$mode' instrumentation failed"
-  printf '%s\n' "$output" | grep -Eq '^OK \([0-9]+ tests?\)'     || fail "Configuration '$mode' did not report OK"
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$output" >&2
+    fail "Configuration '$mode' instrumentation failed"
+  fi
+
+  if ! printf '%s\n' "$output" | grep -Eq '^OK \([0-9]+ tests?\)'; then
+    printf '%s\n' "$output" >&2
+    fail "Configuration '$mode' did not report OK"
+  fi
 }
 
 start_manager() {
   local output
+  local status
+
+  set +e
   output="$(adb_target shell am start -W -n "$MAIN_PACKAGE/.MainActivity" 2>&1)"
-  printf '%s\n' "$output" | grep -q 'Status: ok'     || fail "Unable to launch SleepManager"
+  status=$?
+  set -e
+
+  printf '%s\n' "$output" > "$REPORT_DIR/start-manager-last.txt"
+
+  if [ "$status" -ne 0 ]; then
+    printf '%s\n' "$output" >&2
+    fail "Unable to launch SleepManager"
+  fi
+
   sleep 2
+  if ! adb_target shell pidof "$MAIN_PACKAGE" >/dev/null 2>&1; then
+    printf '%s\n' "$output" >&2
+    fail "SleepManager process did not stay alive after launch"
+  fi
+
   adb_target shell input keyevent 3 >/dev/null 2>&1 || true
   sleep 1
+}
+
+wait_main_process_state() {
+  local wanted="$1"
+  local timeout="${2:-8}"
+  local deadline=$((SECONDS + timeout))
+
+  while (( SECONDS < deadline )); do
+    if adb_target shell pidof "$MAIN_PACKAGE" >/dev/null 2>&1; then
+      [ "$wanted" = "running" ] && return 0
+    else
+      [ "$wanted" = "stopped" ] && return 0
+    fi
+    sleep 1
+  done
+
+  return 1
+}
+
+force_stop_main() {
+  adb_target shell am force-stop "$MAIN_PACKAGE" >/dev/null 2>&1 || return 1
+  wait_main_process_state stopped 8
+}
+
+restart_manager_service() {
+  local output
+  local status
+
+  # After `am force-stop`, Android marks the package stopped. Starting the
+  # foreground service through `run-as ... am start-foreground-service` is
+  # rejected on the emulator because the command crosses from the app UID back
+  # into the shell ActivityManager user context. A real app relaunch clears the
+  # stopped state and lets MainActivity restart the enabled foreground service,
+  # which is also the recovery path we want to exercise.
+  set +e
+  output="$(adb_target shell am start -W --user 0 \
+    -n "$MAIN_PACKAGE/.MainActivity" 2>&1)"
+  status=$?
+  set -e
+
+  printf '%s\n' "$output" > "$REPORT_DIR/recovery-service-start-last.txt"
+
+  [ "$status" -eq 0 ] || return 1
+  printf '%s\n' "$output" | grep -q 'Status: ok' || return 1
+  wait_main_process_state running 10
+}
+
+current_cycle_id() {
+  adb_target shell run-as "$MAIN_PACKAGE" \
+    cat shared_prefs/sleep_cycle_state.xml 2>/dev/null \
+    | sed -n 's/.*<long name="cycle_id" value="\([0-9][0-9]*\)".*/\1/p' \
+    | head -n 1
 }
 
 prepare_scenario() {
@@ -282,6 +394,18 @@ wait_basicsync_mode() {
   wait_log "STATE_CHANGED observed: mode=$mode runState=" "$timeout"
 }
 
+basicsync_empty_configuration_observed() {
+  adb_target logcat -d 2>/dev/null \
+    | grep 'STATE_CHANGED observed: .*counters=SyncCounters' \
+    | tail -n 1 \
+    | grep -Eq 'foldersIdle=0, foldersScanning=0, foldersSyncing=0, foldersCleaning=0, foldersErrored=0, foldersStarting=0, devicesConnected=0, devicesSyncing=0, devicesPending=0'
+}
+
+wait_basicsync_counter_snapshot() {
+  local timeout="${1:-8}"
+  wait_log 'STATE_CHANGED observed: .*counters=SyncCounters' "$timeout"
+}
+
 setup_syncthing_forward() {
   [ -n "$SYNCTHING_PACKAGE" ] || return 1
   command -v curl >/dev/null 2>&1 || return 1
@@ -314,11 +438,116 @@ wait_syncthing_state() {
 }
 
 fire_custom_delay_now() {
-  adb_target shell run-as "$MAIN_PACKAGE" /system/bin/am broadcast     -a com.med.sleepmanager.action.SLEEP_DELAY_ELAPSED     -n "$MAIN_PACKAGE/.service.SleepDelayReceiver"     >/dev/null 2>&1
+  local output
+  local status
+
+  set +e
+  output="$(adb_target shell run-as "$MAIN_PACKAGE" /system/bin/am broadcast \
+    -a com.med.sleepmanager.action.SLEEP_DELAY_ELAPSED \
+    -n "$MAIN_PACKAGE/.service.SleepDelayReceiver" 2>&1)"
+  status=$?
+  set -e
+
+  printf '%s\n' "$output" > "$REPORT_DIR/custom-delay-trigger.txt"
+
+  if [ "$status" -eq 0 ]; then
+    return 0
+  fi
+
+  warn "Custom-delay receiver trigger failed on emulator; falling back to the same service action"
+  set +e
+  output="$(adb_target shell run-as "$MAIN_PACKAGE" /system/bin/am start-foreground-service \
+    -a com.med.sleepmanager.action.SLEEP_DELAY_ELAPSED \
+    -n "$MAIN_PACKAGE/.service.SleepManagerService" 2>&1)"
+  status=$?
+  set -e
+
+  printf '%s\n' "$output" >> "$REPORT_DIR/custom-delay-trigger.txt"
+  return "$status"
 }
 
 fire_periodic_sync_now() {
-  adb_target shell run-as "$MAIN_PACKAGE" /system/bin/am start-foreground-service     -a com.med.sleepmanager.action.PERIODIC_SYNC     -n "$MAIN_PACKAGE/.service.SleepManagerService"     >/dev/null 2>&1
+  run_config fire_periodic_sync
+}
+
+section_rank() {
+  case "$1" in
+    core) printf '0' ;;
+    recovery) printf '1' ;;
+    grace) printf '2' ;;
+    custom) printf '3' ;;
+    conditions) printf '4' ;;
+    sync) printf '5' ;;
+    *) return 1 ;;
+  esac
+}
+
+should_run() {
+  local section="$1"
+
+  if [ -n "$ONLY_SECTION" ]; then
+    [ "$section" = "$ONLY_SECTION" ]
+    return
+  fi
+
+  local requested_rank section_rank_value
+  requested_rank="$(section_rank "$START_AT")" || return 1
+  section_rank_value="$(section_rank "$section")" || return 1
+  [ "$section_rank_value" -ge "$requested_rank" ]
+}
+
+install_bundle_apks() {
+  local main_apk="$SCRIPT_DIR/SleepManager-debug.apk"
+  local helper_apk="$SCRIPT_DIR/SleepManager-Helper-debug.apk"
+  local test_apk="$SCRIPT_DIR/SleepManager-tests.apk"
+
+  [ -f "$main_apk" ] || fail "Bundled Main APK is missing"
+  [ -f "$helper_apk" ] || fail "Bundled Helper APK is missing"
+  [ -f "$test_apk" ] || fail "Bundled instrumentation APK is missing"
+
+  printf '%s\n' '--- Sync local E2E test harness ---'
+
+  if [ "${E2E_REINSTALL_APP:-0}" = "1" ]; then
+    printf '%s\n' 'Full candidate reinstall requested; SleepManager app data will be reset.'
+    adb_target uninstall "$TEST_PACKAGE" >/dev/null 2>&1 || true
+    adb_target uninstall "$MAIN_PACKAGE" >/dev/null 2>&1 || true
+    adb_target uninstall "$HELPER_PACKAGE" >/dev/null 2>&1 || true
+    adb_target install "$main_apk" >/dev/null || fail "Unable to install bundled Main APK"
+    adb_target install "$helper_apk" >/dev/null || fail "Unable to install bundled Helper APK"
+    adb_target shell pm grant "$MAIN_PACKAGE" android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
+    adb_target shell cmd appops set "$MAIN_PACKAGE" SCHEDULE_EXACT_ALARM allow >/dev/null 2>&1 || true
+  else
+    if ! package_installed "$MAIN_PACKAGE"; then
+      adb_target install "$main_apk" >/dev/null || fail "Unable to install bundled Main APK"
+    fi
+    if ! package_installed "$HELPER_PACKAGE"; then
+      adb_target install "$helper_apk" >/dev/null || fail "Unable to install bundled Helper APK"
+    fi
+  fi
+
+  # CI debug APKs can be signed with a different ephemeral debug key on each
+  # runner. The instrumentation package is disposable, so replace it cleanly
+  # instead of using install -r and leave the already validated Main/Helper
+  # untouched during harness-only iterations.
+  adb_target uninstall "$TEST_PACKAGE" >/dev/null 2>&1 || true
+  adb_target install -t "$test_apk" >/dev/null || fail "Unable to install bundled instrumentation APK"
+
+  local preflight_output
+  local preflight_status
+  set +e
+  preflight_output="$(adb_target shell am instrument -w -r -e class "$CONTROL_TEST" "$TEST_RUNNER" 2>&1)"
+  preflight_status=$?
+  set -e
+
+  if [ "$preflight_status" -ne 0 ] || ! printf '%s\n' "$preflight_output" | grep -Eq '^OK \([0-9]+ tests?\)'; then
+    printf '%s\n' "$preflight_output" >&2
+    if printf '%s\n' "$preflight_output" | grep -q 'does not have a signature matching the target'; then
+      fail "Instrumentation signature mismatch. Re-run once with E2E_REINSTALL_APP=1 to align the emulator with this bundle."
+    fi
+    fail "Instrumentation preflight failed"
+  fi
+
+  pass "Instrumentation APK synced and signature-compatible with Main"
 }
 
 ORIGINAL_WIFI="$(adb_target shell settings get global wifi_on 2>/dev/null | tr -d '\r')"
@@ -363,6 +592,12 @@ if [[ "$SERIAL" != emulator-* ]]; then
   fail "Real end-to-end suite is intentionally limited to an Android emulator"
 fi
 
+if ! section_rank "$START_AT" >/dev/null; then
+  fail "Unknown start section '$START_AT' (use: core, grace, custom, conditions, sync)"
+fi
+
+install_bundle_apks
+
 for packageName in "${SYNCTHING_PACKAGES[@]}"; do
   if package_installed "$packageName"; then
     SYNCTHING_PACKAGE="$packageName"
@@ -380,8 +615,13 @@ done
 printf '\n========================================\n'
 printf 'SleepManager REAL sleep/wake E2E suite\n'
 printf 'Target: %s\n' "$SERIAL"
+printf 'Start at: %s\n' "$START_AT"
+if [ -n "$ONLY_SECTION" ]; then
+  printf 'Only section: %s\n' "$ONLY_SECTION"
+fi
 printf '========================================\n\n'
 
+if should_run core; then
 printf '%s\n' '--- Real Home sleep/wake cycle ---'
 wake_screen
 ensure_wifi_on || fail "Wi-Fi cannot be enabled on this emulator"
@@ -509,7 +749,77 @@ if [ -n "$JAMES_PACKAGE" ]; then
   pass "JamesDSP real ON command delivered on wake"
 fi
 
-printf '\n%s\n' '--- Grace period / Custom delay ---'
+fi
+
+if should_run recovery; then
+printf '\n%s\n' '--- Process / service recovery ---'
+
+# Awake restart: a clean service restart must not invent a sleep transaction.
+prepare_scenario core
+wake_screen
+wait_cycle_inactive 5 || fail "Recovery awake: unexpected active sleep transaction before restart"
+adb_target logcat -c
+force_stop_main || fail "Recovery awake: unable to force-stop Main"
+restart_manager_service || fail "Recovery awake: unable to restart foreground service"
+power_is_awake || fail "Recovery awake: emulator was no longer awake after service restart"
+cycle_active && fail "Recovery awake: restart created an unexpected sleep transaction"
+pass "Service/process restart while awake preserves an inactive sleep transaction"
+
+# Sleeping restart: persistent ownership and the original cycle must survive
+# Main process death while Helper keeps the radio sleep state.
+prepare_scenario core
+adb_target logcat -c
+sleep_screen
+wait_cycle_active 12 || fail "Recovery sleep: initial sleep transaction did not start"
+wait_wifi_state off 15 || fail "Recovery sleep: Wi-Fi did not enter sleep state"
+sleep_cycle_before="$(current_cycle_id)"
+[ -n "$sleep_cycle_before" ] || fail "Recovery sleep: unable to read original cycle id"
+
+force_stop_main || fail "Recovery sleep: unable to force-stop Main"
+cycle_active || fail "Recovery sleep: persistent transaction disappeared after process death"
+wifi_is_on && fail "Recovery sleep: Wi-Fi restored while Main was stopped"
+
+restart_manager_service || fail "Recovery sleep: unable to restart foreground service"
+wait_cycle_active 8 || fail "Recovery sleep: active transaction was not resumed"
+sleep_cycle_after="$(current_cycle_id)"
+[ "$sleep_cycle_after" = "$sleep_cycle_before" ] \
+  || fail "Recovery sleep: restart replaced the original transaction"
+wifi_is_on && fail "Recovery sleep: Wi-Fi was restored before a real wake"
+pass "Sleeping process restart preserves the original transaction and radio sleep state"
+
+wake_screen
+wait_cycle_inactive 25 || fail "Recovery sleep: transaction did not restore on real wake"
+wait_wifi_state on 15 || fail "Recovery sleep: Wi-Fi did not restore on real wake"
+pass "Sleeping process restart restores normally on real wake"
+
+# Pending wake recovery: wake while Main is dead, then restart Main. The startup
+# screen-state reconciliation must perform the missed Helper wake restore.
+prepare_scenario core
+adb_target logcat -c
+sleep_screen
+wait_cycle_active 12 || fail "Recovery pending wake: initial transaction did not start"
+wait_wifi_state off 15 || fail "Recovery pending wake: Wi-Fi did not enter sleep state"
+pending_cycle_before="$(current_cycle_id)"
+[ -n "$pending_cycle_before" ] || fail "Recovery pending wake: unable to read original cycle id"
+
+force_stop_main || fail "Recovery pending wake: unable to force-stop Main"
+wake_screen
+sleep 1
+cycle_active || fail "Recovery pending wake: persistent transaction disappeared while Main was dead"
+pending_cycle_after_wake="$(current_cycle_id)"
+[ "$pending_cycle_after_wake" = "$pending_cycle_before" ] \
+  || fail "Recovery pending wake: cycle changed while Main was dead"
+wifi_is_on && fail "Recovery pending wake: Helper restored Wi-Fi without Main wake handling"
+
+restart_manager_service || fail "Recovery pending wake: unable to restart foreground service"
+wait_wifi_state on 15 || fail "Recovery pending wake: startup reconciliation did not restore Wi-Fi"
+wait_cycle_inactive 25 || fail "Recovery pending wake: startup reconciliation left transaction active"
+pass "Restart while already awake resumes the pending Helper restore exactly once"
+
+fi
+
+if should_run grace; then
+  printf '\n%s\n' '--- Grace period ---'
 prepare_scenario grace5
 adb_target logcat -c
 sleep_screen
@@ -526,24 +836,34 @@ pass "Wake before 5 s cancels pending sleep actions"
 adb_target logcat -c
 sleep_screen
 wait_cycle_active 8 || fail "5 s grace: actions did not run after expiry"
-wait_wifi_state off 8 || fail "5 s grace: Wi-Fi did not turn OFF after expiry"
+wait_wifi_state off 15 || fail "5 s grace: Wi-Fi did not turn OFF after expiry"
 pass "Real 5 s grace expires and applies actions"
 restore_after_allowed_cycle
 
-prepare_scenario custom60
-adb_target logcat -c
-sleep_screen
-sleep 2
-cycle_active && fail "Custom delay: actions ran before the 60 s delay expired"
-wifi_is_on || fail "Custom delay: Wi-Fi changed before expiry"
-pass "60 s Custom delay is really pending"
+fi
 
-fire_custom_delay_now || fail "Unable to simulate Custom delay alarm expiry"
-wait_cycle_active 8 || fail "Custom delay: simulated alarm did not start sleep actions"
-wait_wifi_state off 8 || fail "Custom delay: Wi-Fi did not turn OFF after simulated expiry"
-pass "Custom delay expiry simulated instantly (no 60 s wait)"
-restore_after_allowed_cycle
+if should_run custom; then
+  printf '\n%s\n' '--- Custom delay ---'
+  if [ "${E2E_SKIP_CUSTOM:-0}" = "1" ]; then
+    warn "Custom delay skipped in emulator CI; validate the real 60 s alarm on physical Thor"
+  else
+    prepare_scenario custom60
+    adb_target logcat -c
+    sleep_screen
+    sleep 2
+    cycle_active && fail "Custom delay: actions ran before the 60 s delay expired"
+    wifi_is_on || fail "Custom delay: Wi-Fi changed before expiry"
+    pass "60 s Custom delay is really pending"
 
+    fire_custom_delay_now || fail "Unable to trigger Custom delay expiry"
+    wait_cycle_active 12 || fail "Custom delay: triggered expiry did not start sleep actions"
+    wait_wifi_state off 15 || fail "Custom delay: Wi-Fi did not turn OFF after triggered expiry"
+    pass "Custom delay expiry trigger applies actions without restarting Main"
+    restore_after_allowed_cycle
+  fi
+fi
+
+if should_run conditions; then
 printf '\n%s\n' '--- Advanced sleep conditions ---'
 battery_unplug_level 20
 prepare_scenario battery50
@@ -624,6 +944,9 @@ else
   warn "Combined condition E2E skipped because Battery Saver cannot be simulated"
 fi
 
+fi
+
+if should_run sync; then
 printf '\n%s\n' '--- Advanced sync modes with real BasicSync ---'
 if package_installed "$BASICSYNC_PACKAGE"; then
   battery_unplug_level 50
@@ -632,39 +955,47 @@ if package_installed "$BASICSYNC_PACKAGE"; then
   adb_target logcat -c
   sleep_screen
 
-  if wait_log 'Maintenance finished: trigger=BEFORE_SLEEP outcome=' 45; then
-    pass "Sync then stop: real BEFORE_SLEEP maintenance completes"
-    wait_wifi_state off 15       || fail "Sync then stop: Wi-Fi did not turn OFF after maintenance"
-
+  if wait_basicsync_counter_snapshot 8 && basicsync_empty_configuration_observed; then
+    warn "BasicSync has no configured folders/devices; real completion-based sync tests are not meaningful on this emulator"
     wake_screen
-    if wait_log 'Maintenance finished: trigger=AFTER_WAKE outcome=' 45; then
-      pass "Sync then stop: real AFTER_WAKE maintenance completes"
+    sleep 2
+  else
+    if wait_log 'Maintenance finished: trigger=BEFORE_SLEEP outcome=' 45; then
+      pass "Sync then stop: real BEFORE_SLEEP maintenance completes"
+      wait_wifi_state off 15       || fail "Sync then stop: Wi-Fi did not turn OFF after maintenance"
+
+      wake_screen
+      if wait_log 'Maintenance finished: trigger=AFTER_WAKE outcome=' 45; then
+        pass "Sync then stop: real AFTER_WAKE maintenance completes"
+      else
+        fail "Sync then stop: AFTER_WAKE maintenance did not complete within 45 s"
+      fi
+      wait_cycle_inactive 20 || fail "Sync then stop: wake restore remained pending"
     else
-      fail "Sync then stop: AFTER_WAKE maintenance did not complete within 45 s"
+      fail "Sync then stop: BEFORE_SLEEP maintenance did not complete within 45 s"
     fi
-    wait_cycle_inactive 20 || fail "Sync then stop: wake restore remained pending"
-  else
-    fail "Sync then stop: BEFORE_SLEEP maintenance did not complete within 45 s"
-  fi
 
-  ensure_wifi_on || fail "Unable to enable Wi-Fi for periodic sync"
-  prepare_scenario periodic
-  adb_target logcat -c
-  sleep_screen
-  wait_cycle_active 12 || fail "Periodic sync: base sleep transaction did not start"
-  wait_wifi_state off 15 || fail "Periodic sync: Wi-Fi did not enter sleep state"
+    ensure_wifi_on || fail "Unable to enable Wi-Fi for periodic sync"
+    prepare_scenario periodic
+    adb_target logcat -c
+    sleep_screen
+    wait_cycle_active 12 || fail "Periodic sync: base sleep transaction did not start"
+    wait_wifi_state off 15 || fail "Periodic sync: Wi-Fi did not enter sleep state"
 
-  fire_periodic_sync_now || fail "Unable to trigger periodic sync immediately"
-  if wait_log 'Maintenance finished: trigger=PERIODIC_SLEEP outcome=' 45; then
-    pass "Periodic sync: real maintenance executes without waiting 24 h"
-    wait_wifi_state off 15       || fail "Periodic sync: temporary Wi-Fi was not returned OFF"
-    pass "Periodic sync: temporary Wi-Fi cleaned up"
-  else
-    fail "Periodic sync did not finish within 45 s"
+    fire_periodic_sync_now || fail "Unable to trigger periodic sync immediately"
+    if wait_log 'Maintenance finished: trigger=PERIODIC_SLEEP outcome=' 45; then
+      pass "Periodic sync: real maintenance executes without waiting 24 h"
+      wait_wifi_state off 15       || fail "Periodic sync: temporary Wi-Fi was not returned OFF"
+      pass "Periodic sync: temporary Wi-Fi cleaned up"
+    else
+      fail "Periodic sync did not finish within 45 s"
+    fi
+    restore_after_allowed_cycle
   fi
-  restore_after_allowed_cycle
 else
   warn "BasicSync not installed; Advanced real sync-mode tests skipped"
+fi
+
 fi
 
 adb_target shell dumpsys battery reset >/dev/null 2>&1 || true

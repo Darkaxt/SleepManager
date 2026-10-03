@@ -25,9 +25,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.med.sleepmanager.R
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.EventHistoryStore
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.ui.feedbackClick
@@ -66,75 +69,121 @@ internal fun BehaviorCard(
             sleepOnExternalDisplayDisconnect ||
             powerButtonSleepsWithLidClosed
 
-    val sleepLines = buildList {
+    val sleepDuration =
         if (sleepGraceMs > 0L && hasSleepAction) {
-            add("Wait ${formatDuration(sleepGraceMs)}")
+            formatDuration(sleepGraceMs)
+        } else {
+            null
         }
-        advancedConditions.forEach { add("Only if $it") }
-        if (syncThenStopOnSleepWake) {
-            add("Sync supported clients before sleep, then stop them")
+    val waitLine =
+        sleepDuration?.let {
+            stringResource(R.string.behavior_wait, it)
         }
-        if (syncthing) add("Pause Syncthing‑Fork")
-        if (tailscale) add("Disconnect Tailscale")
-        if (jamesDsp) add("Power off JamesDSP")
-        if (basicSync && !syncThenStopOnSleepWake) add("Stop BasicSync when active")
-        if (batterySaver) add("Enable Battery Saver")
-        if (wifi) add("Wi‑Fi off")
-        if (bluetooth) add("Bluetooth off")
-        if (!hasSleepAction) add("No screen-off actions selected")
+    val onlyIfPrefix = stringResource(R.string.behavior_only_if_prefix)
+    val syncBeforeSleep = stringResource(R.string.behavior_sync_before_sleep)
+    val pauseSyncthing = stringResource(R.string.behavior_pause_syncthing)
+    val disconnectTailscale = stringResource(R.string.behavior_disconnect_tailscale)
+    val powerOffJamesDsp = stringResource(R.string.behavior_power_off_jamesdsp)
+    val stopBasicSync = stringResource(R.string.behavior_stop_basicsync)
+    val enableBatterySaver = stringResource(R.string.behavior_enable_battery_saver)
+    val wifiOff = stringResource(R.string.behavior_wifi_off)
+    val bluetoothOff = stringResource(R.string.behavior_bluetooth_off)
+    val noScreenOffActions = stringResource(R.string.behavior_no_screen_off_actions)
+    val restoreWifi = stringResource(R.string.behavior_restore_wifi)
+    val restoreBluetooth = stringResource(R.string.behavior_restore_bluetooth)
+    val restoreBatterySaver = stringResource(R.string.behavior_restore_battery_saver)
+    val resumeSyncthing = stringResource(R.string.behavior_resume_syncthing)
+    val restoreTailscale = stringResource(R.string.behavior_restore_tailscale)
+    val restoreJamesDsp = stringResource(R.string.behavior_restore_jamesdsp)
+    val restoreBasicSync = stringResource(R.string.behavior_restore_basicsync)
+    val syncAfterWake = stringResource(R.string.behavior_sync_after_wake)
+    val closedLidReturnToSleep =
+        stringResource(R.string.behavior_closed_lid_return_to_sleep)
+    val disableChargingSeparation =
+        stringResource(R.string.behavior_disable_charging_separation)
+    val sleepOnDisplayDisconnect =
+        stringResource(R.string.behavior_sleep_on_display_disconnect)
+    val powerButtonSleep = stringResource(R.string.behavior_power_button_sleep)
+    val periodicSyncLine = stringResource(R.string.behavior_periodic_sync)
+    val wifiLabel = stringResource(R.string.wifi)
+    val bluetoothLabel = stringResource(R.string.bluetooth)
+    val batterySaverLabel = stringResource(R.string.battery_saver)
+    val syncthingLabel = stringResource(R.string.behavior_syncthing)
+    val tailscaleLabel = stringResource(R.string.integration_tailscale)
+    val jamesDspLabel = stringResource(R.string.integration_jamesdsp)
+    val basicSyncLabel = stringResource(R.string.integration_basicsync)
+    val sleepWakeSyncLabel = stringResource(R.string.behavior_sleep_wake_sync)
+    val periodicSyncLabel = stringResource(R.string.behavior_periodic_sync_short)
+    val conditionSummary =
+        if (advancedConditions.isNotEmpty()) {
+            stringResource(
+                if (advancedConditions.size == 1) {
+                    R.string.behavior_condition_singular
+                } else {
+                    R.string.behavior_condition_plural
+                },
+                advancedConditions.size
+            )
+        } else {
+            null
+        }
+    val clamshellLabel = stringResource(R.string.behavior_clamshell)
+    val noActionsLabel = stringResource(R.string.behavior_no_actions)
+    val nothingToRestore = stringResource(R.string.behavior_nothing_to_restore)
+
+    val sleepLines = buildList {
+        waitLine?.let(::add)
+        advancedConditions.forEach {
+            add("$onlyIfPrefix $it")
+        }
+        if (syncThenStopOnSleepWake) add(syncBeforeSleep)
+        if (syncthing) add(pauseSyncthing)
+        if (tailscale) add(disconnectTailscale)
+        if (jamesDsp) add(powerOffJamesDsp)
+        if (basicSync && !syncThenStopOnSleepWake) add(stopBasicSync)
+        if (batterySaver) add(enableBatterySaver)
+        if (wifi) add(wifiOff)
+        if (bluetooth) add(bluetoothOff)
+        if (!hasSleepAction) add(noScreenOffActions)
     }
 
     val wakeLines = buildList {
-        if (wifi) add("Restore Wi‑Fi")
-        if (bluetooth) add("Restore Bluetooth")
-        if (batterySaver) add("Restore Battery Saver previous state")
-        if (syncthing) add("Resume Syncthing‑Fork")
-        if (tailscale) add("Restore Tailscale if SleepManager disconnected it")
-        if (jamesDsp) add("Restore JamesDSP")
-        if (basicSync && !syncThenStopOnSleepWake) add("Restore BasicSync previous mode")
-        if (syncThenStopOnSleepWake) {
-            add("Sync supported clients after wake, then stop them")
-        }
+        if (wifi) add(restoreWifi)
+        if (bluetooth) add(restoreBluetooth)
+        if (batterySaver) add(restoreBatterySaver)
+        if (syncthing) add(resumeSyncthing)
+        if (tailscale) add(restoreTailscale)
+        if (jamesDsp) add(restoreJamesDsp)
+        if (basicSync && !syncThenStopOnSleepWake) add(restoreBasicSync)
+        if (syncThenStopOnSleepWake) add(syncAfterWake)
     }
 
     val clamshellLines = buildList {
-        if (closedLidProtection) {
-            add("Return accidental closed-lid wake-ups to sleep")
-        }
-        if (chargingSeparationWithLid) {
-            add("Disable Charging Separation while lid is closed")
-        }
-        if (sleepOnExternalDisplayDisconnect) {
-            add("Sleep when external display disconnects with lid closed")
-        }
-        if (powerButtonSleepsWithLidClosed) {
-            add("Power button sleeps while lid is closed")
-        }
+        if (closedLidProtection) add(closedLidReturnToSleep)
+        if (chargingSeparationWithLid) add(disableChargingSeparation)
+        if (sleepOnExternalDisplayDisconnect) add(sleepOnDisplayDisconnect)
+        if (powerButtonSleepsWithLidClosed) add(powerButtonSleep)
     }
 
     val sleepMaintenanceLines = buildList {
-        if (periodicSyncWhileSleeping) {
-            add("Run supported sync clients every 24h, then stop them")
-        }
+        if (periodicSyncWhileSleeping) add(periodicSyncLine)
     }
 
     val compactSleepSummary = buildList {
-        if (sleepGraceMs > 0L && hasSleepAction) add(formatDuration(sleepGraceMs))
-        if (wifi) add("Wi‑Fi")
-        if (bluetooth) add("Bluetooth")
-        if (batterySaver) add("Battery Saver")
-        if (syncthing) add("Syncthing")
-        if (tailscale) add("Tailscale")
-        if (jamesDsp) add("JamesDSP")
-        if (basicSync) add("BasicSync")
-        if (syncThenStopOnSleepWake) add("Sleep/wake sync")
-        if (periodicSyncWhileSleeping) add("Periodic sync")
-        if (advancedConditions.isNotEmpty()) {
-            add("${advancedConditions.size} condition${if (advancedConditions.size > 1) "s" else ""}")
-        }
-        if (hasClamshellBehavior) add("Clamshell")
+        sleepDuration?.let(::add)
+        if (wifi) add(wifiLabel)
+        if (bluetooth) add(bluetoothLabel)
+        if (batterySaver) add(batterySaverLabel)
+        if (syncthing) add(syncthingLabel)
+        if (tailscale) add(tailscaleLabel)
+        if (jamesDsp) add(jamesDspLabel)
+        if (basicSync) add(basicSyncLabel)
+        if (syncThenStopOnSleepWake) add(sleepWakeSyncLabel)
+        if (periodicSyncWhileSleeping) add(periodicSyncLabel)
+        conditionSummary?.let(::add)
+        if (hasClamshellBehavior) add(clamshellLabel)
         if (!hasSleepAction && !hasClamshellBehavior && !periodicSyncWhileSleeping) {
-            add("No actions")
+            add(noActionsLabel)
         }
     }.joinToString(" • ")
 
@@ -155,7 +204,7 @@ internal fun BehaviorCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "Current behavior",
+                        stringResource(R.string.behavior_current),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -167,31 +216,37 @@ internal fun BehaviorCard(
                 }
 
                 TextButton(onClick = feedbackClick { expanded = !expanded }) {
-                    Text(if (expanded) "Less" else "Details")
+                    Text(
+                        stringResource(
+                            if (expanded) R.string.less else R.string.details
+                        )
+                    )
                 }
             }
 
             if (expanded) {
                 BehaviorGroup(
-                    title = "When screen turns OFF",
+                    title = stringResource(R.string.behavior_when_screen_off),
                     lines = sleepLines
                 )
 
                 BehaviorGroup(
-                    title = "When screen turns ON",
-                    lines = wakeLines.ifEmpty { listOf("Nothing to restore") }
+                    title = stringResource(R.string.behavior_when_screen_on),
+                    lines = wakeLines.ifEmpty {
+                        listOf(nothingToRestore)
+                    }
                 )
 
                 if (sleepMaintenanceLines.isNotEmpty()) {
                     BehaviorGroup(
-                        title = "While sleeping",
+                        title = stringResource(R.string.behavior_while_sleeping),
                         lines = sleepMaintenanceLines
                     )
                 }
 
                 if (clamshellLines.isNotEmpty()) {
                     BehaviorGroup(
-                        title = "Clamshell behavior",
+                        title = stringResource(R.string.behavior_clamshell_group),
                         lines = clamshellLines
                     )
                 }
@@ -200,7 +255,7 @@ internal fun BehaviorCard(
                     tailscale || jamesDsp
                 ) {
                     Text(
-                        "Only states changed by SleepManager are restored on wake.",
+                        stringResource(R.string.behavior_restore_only_changed),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -208,7 +263,7 @@ internal fun BehaviorCard(
 
                 if (closedLidProtection) {
                     Text(
-                        "False wakes while the lid is closed are returned to sleep without normal wake restoration.",
+                        stringResource(R.string.behavior_false_wakes_note),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -241,8 +296,8 @@ internal fun LastActivityCard(
     onViewLog: () -> Unit,
     onCopyLog: () -> Unit
 ) {
-    val event = AppPreferences.lastEvent(context)
-    val time = AppPreferences.lastEventTime(context)
+    val event = DiagnosticsStateStore.lastEvent(context)
+    val time = DiagnosticsStateStore.lastEventTime(context)
 
     val timeText = if (time > 0L) {
         val date = Date(time)
@@ -263,7 +318,7 @@ internal fun LastActivityCard(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            "Last activity",
+            stringResource(R.string.last_activity),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -283,6 +338,18 @@ internal fun LastActivityCard(
                     action.startsWith("BasicSync ") -> "BasicSync"
                     else -> null
                 }
+                val subjectLabel = when (subject) {
+                    "Wi‑Fi" -> context.getString(R.string.wifi)
+                    "Bluetooth" -> context.getString(R.string.bluetooth)
+                    "Battery Saver" -> context.getString(R.string.battery_saver)
+                    "Charging Separation" ->
+                        context.getString(R.string.charging_separation)
+                    "Syncthing" -> context.getString(R.string.behavior_syncthing)
+                    "Tailscale" -> context.getString(R.string.integration_tailscale)
+                    "JamesDSP" -> context.getString(R.string.integration_jamesdsp)
+                    "BasicSync" -> context.getString(R.string.integration_basicsync)
+                    else -> null
+                }
                 val detail = when (subject) {
                     "Wi‑Fi" -> action.removePrefix("Wi‑Fi ").replaceFirstChar { it.uppercase() }
                     "Bluetooth" -> action.removePrefix("Bluetooth ").replaceFirstChar { it.uppercase() }
@@ -299,8 +366,12 @@ internal fun LastActivityCard(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (subject != null) {
-                        Text("$subject ·", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    if (subjectLabel != null) {
+                        Text(
+                            "$subjectLabel ·",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                     Text(
                         detail,
@@ -331,14 +402,14 @@ internal fun LastActivityCard(
                 onClick = feedbackClick(onViewLog),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("View log")
+                Text(stringResource(R.string.view_log))
             }
 
             OutlinedButton(
                 onClick = feedbackClick(onCopyLog),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Copy log")
+                Text(stringResource(R.string.activity_copy_log))
             }
         }
     }
@@ -353,7 +424,7 @@ internal fun ActivityLogDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Activity log") },
+        title = { Text(stringResource(R.string.nav_activity_log)) },
         text = {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -361,7 +432,7 @@ internal fun ActivityLogDialog(
                 if (events.isEmpty()) {
                     item {
                         Text(
-                            "No recent activity",
+                            stringResource(R.string.activity_no_recent_activity),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -393,7 +464,7 @@ internal fun ActivityLogDialog(
         },
         confirmButton = {
             TextButton(onClick = feedbackClick(onDismiss)) {
-                Text("Close")
+                Text(stringResource(R.string.close))
             }
         }
     )
@@ -408,7 +479,7 @@ internal fun SyncthingTargetDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Choose Syncthing‑Fork build") },
+        title = { Text(stringResource(R.string.choose_syncthing_build)) },
         text = {
             Column {
                 targets.forEach { target ->
@@ -426,7 +497,7 @@ internal fun SyncthingTargetDialog(
                             )
                             if (target.packageName == selected) {
                                 Text(
-                                    "Selected",
+                                    stringResource(R.string.selected),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -438,7 +509,7 @@ internal fun SyncthingTargetDialog(
         },
         confirmButton = {
             TextButton(onClick = feedbackClick(onDismiss)) {
-                Text("Close")
+                Text(stringResource(R.string.close))
             }
         }
     )

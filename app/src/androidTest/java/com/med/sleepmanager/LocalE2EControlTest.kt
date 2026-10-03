@@ -5,12 +5,14 @@ import android.content.Intent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.DiagnosticsCycleStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
+import com.med.sleepmanager.service.PeriodicSyncReceiver
 import com.med.sleepmanager.service.SleepManagerService
 import com.med.sleepmanager.sync.SyncStopOwnershipStore
 import com.med.sleepmanager.sync.SyncTransitionStore
@@ -41,6 +43,17 @@ class LocalE2EControlTest {
 
         val context =
             InstrumentationRegistry.getInstrumentation().targetContext
+
+        when (mode) {
+            "fire_periodic_sync" -> {
+                PeriodicSyncReceiver().onReceive(
+                    context,
+                    Intent(context, PeriodicSyncReceiver::class.java)
+                        .setAction(PeriodicSyncReceiver.ACTION_PERIODIC_SYNC)
+                )
+                return
+            }
+        }
 
         resetScenarioState(context)
         configureCommon(context)
@@ -113,6 +126,7 @@ class LocalE2EControlTest {
             .commit()
 
         SleepCycleStore.clear(context)
+        DiagnosticsCycleStore.clear(context)
         SyncTransitionStore.clear(context)
         SyncStopOwnershipStore.clearBasicSync(context)
 
@@ -141,9 +155,9 @@ class LocalE2EControlTest {
         AppPreferences.setPeriodicSyncWhileSleeping(context, false)
         AppPreferences.setSyncThenStopOnSleepWake(context, false)
 
-        AppPreferences.setManageThorProtection(context, false)
-        AppPreferences.setThorDockDisconnectSleeps(context, false)
-        AppPreferences.setThorClosedPowerSleeps(context, false)
+        AppPreferences.setManageClosedLidProtection(context, false)
+        AppPreferences.setDockDisconnectSleeps(context, false)
+        AppPreferences.setClosedLidPowerSleeps(context, false)
 
         AppPreferences.setSleepGraceMs(context, 0L)
         AppPreferences.setCustomDelayEnabled(context, false)

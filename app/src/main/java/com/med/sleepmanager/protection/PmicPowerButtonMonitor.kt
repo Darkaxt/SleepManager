@@ -6,7 +6,7 @@ import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class ThorPowerButtonMonitor(
+class PmicPowerButtonMonitor(
     private val onPressed: () -> Unit,
     private val onError: (Throwable) -> Unit = {}
 ) {
@@ -62,7 +62,7 @@ class ThorPowerButtonMonitor(
                 running = false
             }
         }.apply {
-            name = "SleepManagerThorPower"
+            name = "SleepManagerPmicPower"
             isDaemon = true
             start()
         }

@@ -55,7 +55,9 @@ object SleepCycleStore {
             .putBoolean(KEY_BLUETOOTH_MANAGED, bluetoothManaged)
             .commit()
 
-        return current(context)
+        val snapshot = current(context)
+        DiagnosticsCycleStore.attachTransaction(context, snapshot)
+        return snapshot
     }
 
     fun current(context: Context): Snapshot {
@@ -78,12 +80,14 @@ object SleepCycleStore {
         prefs(context).edit()
             .putBoolean(KEY_HELPER_SLEEP_REQUESTED, true)
             .commit()
+        DiagnosticsCycleStore.markHelperSleepRequested(context)
     }
 
     fun markHelperRestored(context: Context) {
         prefs(context).edit()
             .putBoolean(KEY_HELPER_RESTORED, true)
             .commit()
+        DiagnosticsCycleStore.markHelperRestored(context)
     }
 
     fun recordConnectorChange(
@@ -98,6 +102,11 @@ object SleepCycleStore {
                 else putString(connectorTokenKey(connectorId), restoreToken)
             }
             .commit()
+        DiagnosticsCycleStore.recordConnectorOwnership(
+            context = context,
+            connectorId = connectorId,
+            restoreTokenPresent = restoreToken != null
+        )
     }
 
     fun connectorChange(context: Context, connectorId: String): ConnectorChange? {
@@ -114,6 +123,7 @@ object SleepCycleStore {
             .remove(connectorChangedKey(connectorId))
             .remove(connectorTokenKey(connectorId))
             .commit()
+        DiagnosticsCycleStore.clearConnectorOwnership(context, connectorId)
     }
 
     fun hasConnectorChange(context: Context, connectorId: String): Boolean =
@@ -130,6 +140,7 @@ object SleepCycleStore {
         prefs(context).edit()
             .putString(KEY_RESTORE_PROBLEM, message)
             .commit()
+        DiagnosticsCycleStore.markRestoreProblem(context, message)
     }
 
     fun restoreProblem(context: Context): String? =
@@ -137,6 +148,7 @@ object SleepCycleStore {
 
     fun clearRestoreProblem(context: Context) {
         prefs(context).edit().remove(KEY_RESTORE_PROBLEM).commit()
+        DiagnosticsCycleStore.clearRestoreProblem(context)
     }
 
     fun completeIfRestored(context: Context): Boolean {
@@ -147,6 +159,10 @@ object SleepCycleStore {
         val connectorsDone = !hasPendingConnectorChanges(context)
 
         if (helperDone && connectorsDone) {
+            DiagnosticsCycleStore.markRestorationComplete(
+                context = context,
+                transactionCycleId = snapshot.cycleId
+            )
             clear(context)
             return true
         }

@@ -1,7 +1,7 @@
 package com.med.sleepmanager.qs
 
-import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
+import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -9,9 +9,10 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.protection.ThorDeviceAdminReceiver
-import com.med.sleepmanager.protection.ThorLidMonitor
+import com.med.sleepmanager.protection.ClosedLidAdmin
+import com.med.sleepmanager.protection.LidMonitor
 import com.med.sleepmanager.service.SleepManagerService
 
 class SleepManagerTileService : TileService() {
@@ -58,14 +59,14 @@ class SleepManagerTileService : TileService() {
             return
         }
 
-        if (AppPreferences.manageThorProtection(this)) {
+        if (AppPreferences.manageClosedLidProtection(this)) {
             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val admin = ComponentName(this, ThorDeviceAdminReceiver::class.java)
+            val admin = ClosedLidAdmin.component(this)
 
-            if (!ThorLidMonitor.isSupported() || !dpm.isAdminActive(admin)) {
+            if (!LidMonitor.isSupported() || !dpm.isAdminActive(admin)) {
                 Toast.makeText(
                     this,
-                    "Open SleepManager to finish AYN Thor protection setup",
+                    "Open SleepManager to finish closed-lid protection setup",
                     Toast.LENGTH_SHORT
                 ).show()
                 return
@@ -79,10 +80,10 @@ class SleepManagerTileService : TileService() {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service)
             else startService(service)
 
-            AppPreferences.recordEvent(this, "SleepManager enabled • Quick Settings")
+            DiagnosticsStateStore.recordEvent(this, "SleepManager enabled • Quick Settings")
         } catch (t: Throwable) {
             AppPreferences.setEnabled(this, false)
-            AppPreferences.recordEvent(
+            DiagnosticsStateStore.recordEvent(
                 this,
                 "Quick Settings → Unable to start ${t.javaClass.simpleName}"
             )

@@ -24,7 +24,7 @@ import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
-import com.med.sleepmanager.protection.ThorLidMonitor
+import com.med.sleepmanager.protection.LidMonitor
 import com.med.sleepmanager.service.SleepManagerService
 import java.io.FileInputStream
 import org.junit.After
@@ -90,7 +90,7 @@ class RegressionTest {
 
         assertFalse(
             "Pixel emulator unexpectedly exposes a compatible lid sensor",
-            ThorLidMonitor.isSupported()
+            LidMonitor.isSupported()
         )
 
         assertFalse(
@@ -538,9 +538,9 @@ class RegressionTest {
         AppPreferences.setManageBasicSync(targetContext, false)
         AppPreferences.setPeriodicSyncWhileSleeping(targetContext, false)
         AppPreferences.setSyncThenStopOnSleepWake(targetContext, false)
-        AppPreferences.setManageThorProtection(targetContext, false)
-        AppPreferences.setThorDockDisconnectSleeps(targetContext, false)
-        AppPreferences.setThorClosedPowerSleeps(targetContext, false)
+        AppPreferences.setManageClosedLidProtection(targetContext, false)
+        AppPreferences.setDockDisconnectSleeps(targetContext, false)
+        AppPreferences.setClosedLidPowerSleeps(targetContext, false)
         AppPreferences.setManageChargingSeparationWithLid(
             targetContext,
             false

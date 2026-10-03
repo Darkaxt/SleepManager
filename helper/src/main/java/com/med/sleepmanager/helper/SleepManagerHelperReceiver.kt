@@ -9,49 +9,12 @@ import android.content.Intent
 import android.net.wifi.WifiManager
 import android.provider.Settings
 import android.util.Log
+import com.med.sleepmanager.protocol.HelperCyclePolicy
+import com.med.sleepmanager.protocol.HelperProtocol
 
 class SleepManagerHelperReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "SleepManagerHelper"
-        private const val ACTION_SLEEP = "com.med.sleepmanager.helper.action.SLEEP"
-        private const val ACTION_WAKE = "com.med.sleepmanager.helper.action.WAKE"
-        private const val ACTION_RESTORE = "com.med.sleepmanager.helper.action.RESTORE"
-        private const val ACTION_QUERY = "com.med.sleepmanager.helper.action.QUERY_STATE"
-        private const val ACTION_FORGET_STATE = "com.med.sleepmanager.helper.action.FORGET_STATE"
-        private const val ACTION_SET_TEMP_WIFI = "com.med.sleepmanager.helper.action.SET_TEMP_WIFI"
-        private const val ACTION_STATE = "com.med.sleepmanager.helper.action.STATE"
-        private const val ACTION_RESULT = "com.med.sleepmanager.helper.action.RESULT"
-        private const val MAIN_PACKAGE = "com.med.sleepmanager"
-        private const val PERMISSION = "com.med.sleepmanager.permission.CONTROL_HELPER"
-
-        private const val EXTRA_WIFI = "wifi"
-        private const val EXTRA_BLUETOOTH = "bluetooth"
-        private const val EXTRA_CYCLE_ID = "cycle_id"
-        private const val EXTRA_WIFI_STATE = "wifi_state"
-        private const val EXTRA_BLUETOOTH_STATE = "bluetooth_state"
-        private const val EXTRA_PHASE = "phase"
-        private const val EXTRA_WIFI_MANAGED = "wifi_managed"
-        private const val EXTRA_WIFI_PREVIOUS = "wifi_previous"
-        private const val EXTRA_WIFI_CHANGED = "wifi_changed"
-        private const val EXTRA_WIFI_ATTEMPTED = "wifi_attempted"
-        private const val EXTRA_WIFI_ACTION = "wifi_action"
-        private const val EXTRA_WIFI_TOGGLE_SUCCESS = "wifi_toggle_success"
-        private const val EXTRA_AIRPLANE_MODE = "airplane_mode"
-        private const val EXTRA_BLUETOOTH_MANAGED = "bluetooth_managed"
-        private const val EXTRA_BLUETOOTH_PREVIOUS = "bluetooth_previous"
-        private const val EXTRA_BLUETOOTH_CHANGED = "bluetooth_changed"
-        private const val EXTRA_RESTORE_SUCCESS = "restore_success"
-        private const val EXTRA_STATUS = "status"
-        private const val STATUS_OK = "OK"
-        private const val STATUS_ALREADY_SLEEPING = "ALREADY_SLEEPING"
-        private const val STATUS_ALREADY_RESTORED = "ALREADY_RESTORED"
-        private const val STATUS_NO_ACTIVE_CYCLE = "NO_ACTIVE_CYCLE"
-        private const val STATUS_RESTORE_FAILED = "RESTORE_FAILED"
-        private const val STATUS_WIFI_TOGGLE_FAILED = "WIFI_TOGGLE_FAILED"
-        private const val PHASE_SLEEP = "sleep"
-        private const val PHASE_WAKE = "wake"
-        private const val PHASE_MAINTENANCE_WIFI = "maintenance_wifi"
-
         private const val PREFS = "helper_state"
         private const val KEY_CYCLE_ACTIVE = "cycle_active"
         private const val KEY_CYCLE_ID = "cycle_id"
@@ -66,22 +29,22 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         when (intent?.action) {
-            ACTION_SLEEP -> enterSleep(
+            HelperProtocol.ACTION_SLEEP -> enterSleep(
                 context,
-                manageWifi = intent.getBooleanExtra(EXTRA_WIFI, false),
-                manageBluetooth = intent.getBooleanExtra(EXTRA_BLUETOOTH, false),
-                cycleId = intent.getLongExtra(EXTRA_CYCLE_ID, 0L)
+                manageWifi = intent.getBooleanExtra(HelperProtocol.EXTRA_WIFI, false),
+                manageBluetooth = intent.getBooleanExtra(HelperProtocol.EXTRA_BLUETOOTH, false),
+                cycleId = intent.getLongExtra(HelperProtocol.EXTRA_CYCLE_ID, 0L)
             )
-            ACTION_WAKE, ACTION_RESTORE -> restore(
+            HelperProtocol.ACTION_WAKE, HelperProtocol.ACTION_RESTORE -> restore(
                 context,
-                requestedCycleId = intent.getLongExtra(EXTRA_CYCLE_ID, 0L)
+                requestedCycleId = intent.getLongExtra(HelperProtocol.EXTRA_CYCLE_ID, 0L)
             )
-            ACTION_QUERY -> reportCurrentState(context)
-            ACTION_SET_TEMP_WIFI -> setTemporaryWifi(
+            HelperProtocol.ACTION_QUERY -> reportCurrentState(context)
+            HelperProtocol.ACTION_SET_TEMP_WIFI -> setTemporaryWifi(
                 context,
-                enabled = intent.getBooleanExtra(EXTRA_WIFI, false)
+                enabled = intent.getBooleanExtra(HelperProtocol.EXTRA_WIFI, false)
             )
-            ACTION_FORGET_STATE -> {
+            HelperProtocol.ACTION_FORGET_STATE -> {
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit()
                     .clear()
@@ -99,12 +62,12 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         val wifiOn = safeWifiState(wifiManager)
         val bluetoothOn = safeBluetoothState(bluetooth)
 
-        val response = Intent(ACTION_STATE)
-            .setPackage(MAIN_PACKAGE)
-            .putExtra(EXTRA_WIFI_STATE, wifiOn)
-            .putExtra(EXTRA_BLUETOOTH_STATE, bluetoothOn)
+        val response = Intent(HelperProtocol.ACTION_STATE)
+            .setPackage(HelperProtocol.MAIN_PACKAGE)
+            .putExtra(HelperProtocol.EXTRA_WIFI_STATE, wifiOn)
+            .putExtra(HelperProtocol.EXTRA_BLUETOOTH_STATE, bluetoothOn)
 
-        context.sendBroadcast(response, PERMISSION)
+        context.sendBroadcast(response, HelperProtocol.PERMISSION)
         Log.i(TAG, "Current state reported: wifi=$wifiOn bluetooth=$bluetoothOn")
     }
 
@@ -115,20 +78,54 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         cycleId: Long
     ) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_CYCLE_ACTIVE, false)) {
-            Log.i(TAG, "Sleep cycle already active; reporting existing state")
-            sendResult(
-                context = context,
-                phase = PHASE_SLEEP,
-                wifiManaged = prefs.getBoolean(KEY_WIFI_MANAGED, false),
-                wifiPrevious = prefs.getBoolean(KEY_WIFI_PREVIOUS, false),
-                wifiChanged = prefs.getBoolean(KEY_WIFI_CHANGED, false),
-                bluetoothManaged = prefs.getBoolean(KEY_BT_MANAGED, false),
-                bluetoothPrevious = prefs.getBoolean(KEY_BT_PREVIOUS, false),
-                bluetoothChanged = prefs.getBoolean(KEY_BT_CHANGED, false),
-                status = STATUS_ALREADY_SLEEPING
+        val cycleActive = prefs.getBoolean(KEY_CYCLE_ACTIVE, false)
+        val activeCycleId = prefs.getLong(KEY_CYCLE_ID, 0L)
+
+        when (
+            HelperCyclePolicy.sleepDecision(
+                cycleActive,
+                activeCycleId,
+                cycleId
             )
-            return
+        ) {
+            HelperCyclePolicy.SleepDecision.CYCLE_MISMATCH -> {
+                Log.w(
+                    TAG,
+                    "Sleep cycle mismatch: requested=$cycleId active=$activeCycleId"
+                )
+                sendResult(
+                    context = context,
+                    phase = HelperProtocol.PHASE_SLEEP,
+                    cycleId = cycleId,
+                    wifiManaged = false,
+                    wifiPrevious = false,
+                    wifiChanged = false,
+                    bluetoothManaged = false,
+                    bluetoothPrevious = false,
+                    bluetoothChanged = false,
+                    status = HelperProtocol.STATUS_CYCLE_MISMATCH
+                )
+                return
+            }
+
+            HelperCyclePolicy.SleepDecision.ALREADY_SLEEPING -> {
+                Log.i(TAG, "Sleep cycle already active; reporting existing state")
+                sendResult(
+                    context = context,
+                    phase = HelperProtocol.PHASE_SLEEP,
+                    cycleId = activeCycleId,
+                    wifiManaged = prefs.getBoolean(KEY_WIFI_MANAGED, false),
+                    wifiPrevious = prefs.getBoolean(KEY_WIFI_PREVIOUS, false),
+                    wifiChanged = prefs.getBoolean(KEY_WIFI_CHANGED, false),
+                    bluetoothManaged = prefs.getBoolean(KEY_BT_MANAGED, false),
+                    bluetoothPrevious = prefs.getBoolean(KEY_BT_PREVIOUS, false),
+                    bluetoothChanged = prefs.getBoolean(KEY_BT_CHANGED, false),
+                    status = HelperProtocol.STATUS_ALREADY_SLEEPING
+                )
+                return
+            }
+
+            HelperCyclePolicy.SleepDecision.START_NEW -> Unit
         }
 
         val wifiManager =
@@ -194,7 +191,8 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
         sendResult(
             context = context,
-            phase = PHASE_SLEEP,
+            phase = HelperProtocol.PHASE_SLEEP,
+            cycleId = cycleId,
             wifiManaged = manageWifi,
             wifiPrevious = wifiWasOn,
             wifiChanged = wifiChanged,
@@ -205,7 +203,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             bluetoothManaged = manageBluetooth,
             bluetoothPrevious = bluetoothWasOn,
             bluetoothChanged = bluetoothChanged,
-            status = if (wifiToggleFailed) STATUS_WIFI_TOGGLE_FAILED else STATUS_OK
+            status = if (wifiToggleFailed) HelperProtocol.STATUS_WIFI_TOGGLE_FAILED else HelperProtocol.STATUS_OK
         )
     }
 
@@ -235,7 +233,8 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             )
             sendResult(
                 context = context,
-                phase = PHASE_MAINTENANCE_WIFI,
+                phase = HelperProtocol.PHASE_MAINTENANCE_WIFI,
+                cycleId = prefs.getLong(KEY_CYCLE_ID, 0L),
                 wifiManaged = wifiManaged,
                 wifiPrevious = wifiWasOn,
                 wifiChanged = false,
@@ -246,7 +245,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
                 bluetoothManaged = false,
                 bluetoothPrevious = false,
                 bluetoothChanged = false,
-                status = if (cycleActive) STATUS_OK else STATUS_NO_ACTIVE_CYCLE
+                status = if (cycleActive) HelperProtocol.STATUS_OK else HelperProtocol.STATUS_NO_ACTIVE_CYCLE
             )
             return
         }
@@ -268,7 +267,8 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
         sendResult(
             context = context,
-            phase = PHASE_MAINTENANCE_WIFI,
+            phase = HelperProtocol.PHASE_MAINTENANCE_WIFI,
+            cycleId = prefs.getLong(KEY_CYCLE_ID, 0L),
             wifiManaged = true,
             wifiPrevious = wifiWasOn,
             wifiChanged = changed,
@@ -279,7 +279,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             bluetoothManaged = false,
             bluetoothPrevious = false,
             bluetoothChanged = false,
-            status = if (success) STATUS_OK else STATUS_WIFI_TOGGLE_FAILED
+            status = if (success) HelperProtocol.STATUS_OK else HelperProtocol.STATUS_WIFI_TOGGLE_FAILED
         )
     }
 
@@ -288,39 +288,89 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         requestedCycleId: Long
     ) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_CYCLE_ACTIVE, false)) {
-            val alreadyRestored =
-                requestedCycleId != 0L &&
-                    prefs.getLong(KEY_LAST_RESTORED_CYCLE_ID, 0L) == requestedCycleId
+        val cycleActive = prefs.getBoolean(KEY_CYCLE_ACTIVE, false)
+        val activeCycleId = prefs.getLong(KEY_CYCLE_ID, 0L)
+        val lastRestoredCycleId =
+            prefs.getLong(KEY_LAST_RESTORED_CYCLE_ID, 0L)
 
-            Log.i(
-                TAG,
-                if (alreadyRestored) {
+        when (
+            HelperCyclePolicy.restoreDecision(
+                cycleActive,
+                activeCycleId,
+                lastRestoredCycleId,
+                requestedCycleId
+            )
+        ) {
+            HelperCyclePolicy.RestoreDecision.ALREADY_RESTORED -> {
+                Log.i(
+                    TAG,
                     "Restore replay for already restored cycle=$requestedCycleId"
-                } else {
+                )
+                sendResult(
+                    context = context,
+                    phase = HelperProtocol.PHASE_WAKE,
+                    cycleId = requestedCycleId,
+                    wifiManaged = false,
+                    wifiPrevious = false,
+                    wifiChanged = false,
+                    bluetoothManaged = false,
+                    bluetoothPrevious = false,
+                    bluetoothChanged = false,
+                    restoreSuccess = true,
+                    status = HelperProtocol.STATUS_ALREADY_RESTORED
+                )
+                return
+            }
+
+            HelperCyclePolicy.RestoreDecision.NO_ACTIVE_CYCLE -> {
+                Log.i(
+                    TAG,
                     "No active sleep cycle to restore; reporting mismatch"
-                }
-            )
-            sendResult(
-                context = context,
-                phase = PHASE_WAKE,
-                wifiManaged = false,
-                wifiPrevious = false,
-                wifiChanged = false,
-                bluetoothManaged = false,
-                bluetoothPrevious = false,
-                bluetoothChanged = false,
-                restoreSuccess = alreadyRestored,
-                status = if (alreadyRestored) STATUS_ALREADY_RESTORED else STATUS_NO_ACTIVE_CYCLE
-            )
-            return
+                )
+                sendResult(
+                    context = context,
+                    phase = HelperProtocol.PHASE_WAKE,
+                    cycleId = requestedCycleId,
+                    wifiManaged = false,
+                    wifiPrevious = false,
+                    wifiChanged = false,
+                    bluetoothManaged = false,
+                    bluetoothPrevious = false,
+                    bluetoothChanged = false,
+                    restoreSuccess = false,
+                    status = HelperProtocol.STATUS_NO_ACTIVE_CYCLE
+                )
+                return
+            }
+
+            HelperCyclePolicy.RestoreDecision.CYCLE_MISMATCH -> {
+                Log.w(
+                    TAG,
+                    "Restore cycle mismatch: requested=$requestedCycleId active=$activeCycleId"
+                )
+                sendResult(
+                    context = context,
+                    phase = HelperProtocol.PHASE_WAKE,
+                    cycleId = requestedCycleId,
+                    wifiManaged = false,
+                    wifiPrevious = false,
+                    wifiChanged = false,
+                    bluetoothManaged = false,
+                    bluetoothPrevious = false,
+                    bluetoothChanged = false,
+                    restoreSuccess = false,
+                    status = HelperProtocol.STATUS_CYCLE_MISMATCH
+                )
+                return
+            }
+
+            HelperCyclePolicy.RestoreDecision.RESTORE_ACTIVE -> Unit
         }
 
         val wifiManager =
             context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
         val bluetooth = bluetoothAdapter(context)
 
-        val activeCycleId = prefs.getLong(KEY_CYCLE_ID, 0L)
         val effectiveCycleId =
             activeCycleId.takeIf { it != 0L } ?: requestedCycleId
         val wifiPrevious = prefs.getBoolean(KEY_WIFI_PREVIOUS, false)
@@ -378,7 +428,8 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
 
         sendResult(
             context = context,
-            phase = PHASE_WAKE,
+            phase = HelperProtocol.PHASE_WAKE,
+            cycleId = effectiveCycleId,
             wifiManaged = wifiManaged,
             wifiPrevious = wifiPrevious,
             wifiChanged = wifiRestored,
@@ -390,13 +441,14 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             bluetoothPrevious = bluetoothPrevious,
             bluetoothChanged = bluetoothRestored,
             restoreSuccess = restoreSuccess,
-            status = if (restoreSuccess) STATUS_OK else STATUS_RESTORE_FAILED
+            status = if (restoreSuccess) HelperProtocol.STATUS_OK else HelperProtocol.STATUS_RESTORE_FAILED
         )
     }
 
     private fun sendResult(
         context: Context,
         phase: String,
+        cycleId: Long,
         wifiManaged: Boolean,
         wifiPrevious: Boolean,
         wifiChanged: Boolean,
@@ -408,25 +460,26 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         bluetoothPrevious: Boolean,
         bluetoothChanged: Boolean,
         restoreSuccess: Boolean = true,
-        status: String = STATUS_OK
+        status: String = HelperProtocol.STATUS_OK
     ) {
-        val response = Intent(ACTION_RESULT)
-            .setPackage(MAIN_PACKAGE)
-            .putExtra(EXTRA_PHASE, phase)
-            .putExtra(EXTRA_WIFI_MANAGED, wifiManaged)
-            .putExtra(EXTRA_WIFI_PREVIOUS, wifiPrevious)
-            .putExtra(EXTRA_WIFI_CHANGED, wifiChanged)
-            .putExtra(EXTRA_WIFI_ATTEMPTED, wifiAttempted)
-            .putExtra(EXTRA_WIFI_ACTION, wifiAction)
-            .putExtra(EXTRA_WIFI_TOGGLE_SUCCESS, wifiToggleSuccess)
-            .putExtra(EXTRA_AIRPLANE_MODE, airplaneMode)
-            .putExtra(EXTRA_BLUETOOTH_MANAGED, bluetoothManaged)
-            .putExtra(EXTRA_BLUETOOTH_PREVIOUS, bluetoothPrevious)
-            .putExtra(EXTRA_BLUETOOTH_CHANGED, bluetoothChanged)
-            .putExtra(EXTRA_RESTORE_SUCCESS, restoreSuccess)
-            .putExtra(EXTRA_STATUS, status)
+        val response = Intent(HelperProtocol.ACTION_RESULT)
+            .setPackage(HelperProtocol.MAIN_PACKAGE)
+            .putExtra(HelperProtocol.EXTRA_PHASE, phase)
+            .putExtra(HelperProtocol.EXTRA_CYCLE_ID, cycleId)
+            .putExtra(HelperProtocol.EXTRA_WIFI_MANAGED, wifiManaged)
+            .putExtra(HelperProtocol.EXTRA_WIFI_PREVIOUS, wifiPrevious)
+            .putExtra(HelperProtocol.EXTRA_WIFI_CHANGED, wifiChanged)
+            .putExtra(HelperProtocol.EXTRA_WIFI_ATTEMPTED, wifiAttempted)
+            .putExtra(HelperProtocol.EXTRA_WIFI_ACTION, wifiAction)
+            .putExtra(HelperProtocol.EXTRA_WIFI_TOGGLE_SUCCESS, wifiToggleSuccess)
+            .putExtra(HelperProtocol.EXTRA_AIRPLANE_MODE, airplaneMode)
+            .putExtra(HelperProtocol.EXTRA_BLUETOOTH_MANAGED, bluetoothManaged)
+            .putExtra(HelperProtocol.EXTRA_BLUETOOTH_PREVIOUS, bluetoothPrevious)
+            .putExtra(HelperProtocol.EXTRA_BLUETOOTH_CHANGED, bluetoothChanged)
+            .putExtra(HelperProtocol.EXTRA_RESTORE_SUCCESS, restoreSuccess)
+            .putExtra(HelperProtocol.EXTRA_STATUS, status)
 
-        context.sendBroadcast(response, PERMISSION)
+        context.sendBroadcast(response, HelperProtocol.PERMISSION)
     }
 
     private fun isAirplaneModeOn(context: Context): Boolean =

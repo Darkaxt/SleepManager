@@ -1,245 +1,101 @@
 name: Publish stable release
 
+# Called only after the signed build succeeds. This workflow never compiles APKs
+# and receives no signing secrets: it promotes that build's immutable artifact.
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
+  workflow_call:
+    inputs:
+      artifact-id:
+        description: Exact artifact ID returned by the successful signed build
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: stable-release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.ref_type == 'tag' ||
-      startsWith(github.event.head_commit.message, 'Release ')
+    if: github.repository == 'Darkaxt/SleepManager'
     runs-on: ubuntu-latest
-
-    env:
-      SLEEPMANAGER_STORE_PASSWORD: ${{ secrets.SLEEPMANAGER_KEYSTORE_PASSWORD }}
-      SLEEPMANAGER_KEY_ALIAS: ${{ secrets.SLEEPMANAGER_KEY_ALIAS }}
-      SLEEPMANAGER_KEY_PASSWORD: ${{ secrets.SLEEPMANAGER_KEY_PASSWORD }}
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: Checkout the build commit
         uses: actions/checkout@v5
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
         with:
-          distribution: temurin
-          java-version: "17"
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install Android SDK packages
-        run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "9.6.0"
-
-      - name: Prepare stable signing key
+      - name: Require an exact artifact ID
         env:
-          KEYSTORE_B64: ${{ secrets.SLEEPMANAGER_KEYSTORE_B64 }}
+          ARTIFACT_ID: ${{ inputs.artifact-id }}
+        run: |
+          case "$ARTIFACT_ID" in
+            ''|*[!0-9]*|0) echo "::error::Missing or invalid artifact ID"; exit 1 ;;
+          esac
+
+      - name: Download the validated artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact-id }}
+          path: dist
+          merge-multiple: true
+
+      - name: Verify commit, stable versions and APK hashes
         run: |
           set -euo pipefail
+          python3 scripts/release_artifacts.py verify \
+            --commit "$(git rev-parse HEAD)" \
+            --repository "$GITHUB_REPOSITORY" \
+            --variant release \
+            --stable \
+            --github-env "$GITHUB_ENV"
 
-          if [ -z "$KEYSTORE_B64" ] \
-            || [ -z "$SLEEPMANAGER_STORE_PASSWORD" ] \
-            || [ -z "$SLEEPMANAGER_KEY_ALIAS" ] \
-            || [ -z "$SLEEPMANAGER_KEY_PASSWORD" ]; then
-            echo "::error::Stable signing secrets are not fully configured."
-            exit 1
-          fi
-
-          KEYSTORE_PATH="$RUNNER_TEMP/sleepmanager-signing.jks"
-          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE_PATH"
-          echo "SLEEPMANAGER_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-
-      - name: Read and validate version
+      - name: Verify release tag
         run: |
           set -euo pipefail
-
-          VERSION_NAME=$(sed -n 's/^SLEEPMANAGER_VERSION_NAME=//p' gradle.properties)
-          VERSION_CODE=$(sed -n 's/^SLEEPMANAGER_VERSION_CODE=//p' gradle.properties)
-          HELPER_VERSION_NAME=$(sed -n 's/^SLEEPMANAGER_HELPER_VERSION_NAME=//p' gradle.properties)
-          HELPER_VERSION_CODE=$(sed -n 's/^SLEEPMANAGER_HELPER_VERSION_CODE=//p' gradle.properties)
-          [ -n "$VERSION_NAME" ] || {
-            echo "::error::Version name is missing."
-            exit 1
-          }
-          [ -n "$VERSION_CODE" ] || {
-            echo "::error::Version code is missing."
-            exit 1
-          }
-          case "$VERSION_CODE" in
-            *[!0-9]*)
-              echo "::error::Version code must be numeric."
-              exit 1
-              ;;
-          esac
-          if [ "$VERSION_CODE" -lt 1 ]; then
-            echo "::error::Version code must be greater than zero."
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "$RELEASE_TAG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match $RELEASE_TAG."
             exit 1
           fi
-          [ -n "$HELPER_VERSION_NAME" ] || {
-            echo "::error::Helper version name is missing."
-            exit 1
-          }
-          [ -n "$HELPER_VERSION_CODE" ] || {
-            echo "::error::Helper version code is missing."
-            exit 1
-          }
-          case "$HELPER_VERSION_CODE" in
-            *[!0-9]*)
-              echo "::error::Helper version code must be numeric."
-              exit 1
-              ;;
-          esac
-          if [ "$HELPER_VERSION_CODE" -lt 1 ]; then
-            echo "::error::Helper version code must be greater than zero."
+          TAG_COMMIT=$(git rev-parse -q --verify "refs/tags/$RELEASE_TAG^{commit}" || true)
+          if [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$SOURCE_COMMIT" ]; then
+            echo "::error::Existing release tag points to a different commit."
             exit 1
           fi
 
-          case "$VERSION_NAME" in
-            *-*)
-              echo "::error::Stable release workflow refuses prerelease version: $VERSION_NAME"
-              exit 1
-              ;;
-          esac
-
-          if [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$VERSION_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match gradle.properties version v$VERSION_NAME."
-            exit 1
-          fi
-
-          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "HELPER_VERSION_NAME=$HELPER_VERSION_NAME" >> "$GITHUB_ENV"
-          echo "HELPER_VERSION_CODE=$HELPER_VERSION_CODE" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=v$VERSION_NAME" >> "$GITHUB_ENV"
-
-      - name: Check whether release already exists
+      - name: Publish the validated files
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "RELEASE_EXISTS=true" >> "$GITHUB_ENV"
-          else
-            echo "RELEASE_EXISTS=false" >> "$GITHUB_ENV"
+          if IS_DRAFT=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [ "$IS_DRAFT" != "false" ]; then
+              echo "::error::An existing draft needs review before retrying publication."
+              exit 1
+            fi
+            echo "Release $RELEASE_TAG already exists; leaving its assets and metadata unchanged."
+            exit 0
           fi
 
-      - name: Build signed APKs
-        if: env.RELEASE_EXISTS != 'true'
-        run: gradle :app:assembleRelease :helper:assembleRelease
-
-      - name: Verify package IDs and signatures
-        if: env.RELEASE_EXISTS != 'true'
-        run: |
-          set -euo pipefail
-
-          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
-          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-
-          MAIN_APK="app/build/outputs/apk/release/app-release.apk"
-          HELPER_APK="helper/build/outputs/apk/release/helper-release.apk"
-
-          MAIN_PACKAGE=$("$AAPT" dump badging "$MAIN_APK" \
-            | sed -n "s/^package: name='\([^']*\)'.*/\1/p" \
-            | head -n 1)
-          HELPER_PACKAGE=$("$AAPT" dump badging "$HELPER_APK" \
-            | sed -n "s/^package: name='\([^']*\)'.*/\1/p" \
-            | head -n 1)
-
-          [ "$MAIN_PACKAGE" = "com.med.sleepmanager" ]
-          [ "$HELPER_PACKAGE" = "com.med.sleepmanager.helper" ]
-
-          MAIN_CERT=$("$APKSIGNER" verify --print-certs "$MAIN_APK" \
-            | awk -F': ' '/certificate SHA-256 digest/{gsub(/[[:space:]]/,"",$2); print tolower($2); exit}')
-          HELPER_CERT=$("$APKSIGNER" verify --print-certs "$HELPER_APK" \
-            | awk -F': ' '/certificate SHA-256 digest/{gsub(/[[:space:]]/,"",$2); print tolower($2); exit}')
-          EXPECTED_CERT=$(sed -n 's/^SLEEPMANAGER_SIGNING_SHA256=//p' gradle.properties \
-            | tr '[:upper:]' '[:lower:]' \
-            | tr -d ':')
-
-          [ "$MAIN_CERT" = "$HELPER_CERT" ]
-          [ "$MAIN_CERT" = "$EXPECTED_CERT" ]
-
-      - name: Prepare release files
-        if: env.RELEASE_EXISTS != 'true'
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-
-          cp app/build/outputs/apk/release/app-release.apk \
-            "dist/SleepManager-$VERSION_NAME.apk"
-          cp helper/build/outputs/apk/release/helper-release.apk \
-            "dist/SleepManager-Helper-$HELPER_VERSION_NAME.apk"
-
-          MAIN_APK="dist/SleepManager-$VERSION_NAME.apk"
-          HELPER_APK="dist/SleepManager-Helper-$HELPER_VERSION_NAME.apk"
-          APK_SHA256=$(sha256sum "$MAIN_APK" | awk '{print $1}')
-          HELPER_APK_SHA256=$(sha256sum "$HELPER_APK" | awk '{print $1}')
-          RELEASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
-          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SleepManager-$VERSION_NAME.apk"
-          HELPER_APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/SleepManager-Helper-$HELPER_VERSION_NAME.apk"
-
-          export VERSION_NAME VERSION_CODE HELPER_VERSION_NAME HELPER_VERSION_CODE APK_SHA256 HELPER_APK_SHA256 RELEASE_URL APK_URL HELPER_APK_URL
-          python3 - <<'PY'
-          import json
-          import os
-
-          payload = {
-              "versionName": os.environ["VERSION_NAME"],
-              "versionCode": int(os.environ["VERSION_CODE"]),
-              "releaseUrl": os.environ["RELEASE_URL"],
-              "apkUrl": os.environ["APK_URL"],
-              "sha256": os.environ["APK_SHA256"],
-              "helperVersionName": os.environ["HELPER_VERSION_NAME"],
-              "helperVersionCode": int(os.environ["HELPER_VERSION_CODE"]),
-              "helperApkUrl": os.environ["HELPER_APK_URL"],
-              "helperSha256": os.environ["HELPER_APK_SHA256"],
-          }
-
-          with open("dist/update.json", "w", encoding="utf-8") as handle:
-              json.dump(payload, handle, separators=(",", ":"))
-              handle.write("\n")
-          PY
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          if [ "$RELEASE_EXISTS" = "true" ]; then
-            gh release edit "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "SleepManager $VERSION_NAME" \
-              --notes-file RELEASE_NOTES.md \
-              --latest
-          else
-            gh release create "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "SleepManager $VERSION_NAME" \
-              --notes-file RELEASE_NOTES.md \
-              --latest
-
-            gh release upload "$RELEASE_TAG" \
-              "dist/SleepManager-$VERSION_NAME.apk" \
-              "dist/SleepManager-Helper-$HELPER_VERSION_NAME.apk" \
-              "dist/update.json" \
-              --repo "$GITHUB_REPOSITORY"
-          fi
+          # Upload into a draft first so the updater cannot see a partial release.
+          gh release create "$RELEASE_TAG" \
+            "dist/SleepManager-$VERSION_NAME.apk" \
+            "dist/SleepManager-Helper-$HELPER_VERSION_NAME.apk" \
+            "dist/update.json" \
+            "dist/build-manifest.json" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_COMMIT" \
+            --title "SleepManager $VERSION_NAME" \
+            --notes-file RELEASE_NOTES.md \
+            --draft
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            --latest

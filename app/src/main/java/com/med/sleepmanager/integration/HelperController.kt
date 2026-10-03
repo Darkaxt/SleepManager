@@ -4,47 +4,49 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
+import com.med.sleepmanager.protocol.HelperProtocol
 
 object HelperController {
-    const val PACKAGE = "com.med.sleepmanager.helper"
-    const val PERMISSION = "com.med.sleepmanager.permission.CONTROL_HELPER"
+    @JvmField val PACKAGE = HelperProtocol.HELPER_PACKAGE
+    @JvmField val PERMISSION = HelperProtocol.PERMISSION
 
-    private const val ACTION_SLEEP = "com.med.sleepmanager.helper.action.SLEEP"
-    private const val ACTION_WAKE = "com.med.sleepmanager.helper.action.WAKE"
-    private const val ACTION_RESTORE = "com.med.sleepmanager.helper.action.RESTORE"
-    private const val ACTION_QUERY = "com.med.sleepmanager.helper.action.QUERY_STATE"
-    private const val ACTION_FORGET_STATE = "com.med.sleepmanager.helper.action.FORGET_STATE"
-    private const val ACTION_SET_TEMP_WIFI = "com.med.sleepmanager.helper.action.SET_TEMP_WIFI"
-    const val ACTION_STATE = "com.med.sleepmanager.helper.action.STATE"
-    const val ACTION_RESULT = "com.med.sleepmanager.helper.action.RESULT"
+    private val ACTION_SLEEP = HelperProtocol.ACTION_SLEEP
+    private val ACTION_WAKE = HelperProtocol.ACTION_WAKE
+    private val ACTION_RESTORE = HelperProtocol.ACTION_RESTORE
+    private val ACTION_QUERY = HelperProtocol.ACTION_QUERY
+    private val ACTION_FORGET_STATE = HelperProtocol.ACTION_FORGET_STATE
+    private val ACTION_SET_TEMP_WIFI = HelperProtocol.ACTION_SET_TEMP_WIFI
+    @JvmField val ACTION_STATE = HelperProtocol.ACTION_STATE
+    @JvmField val ACTION_RESULT = HelperProtocol.ACTION_RESULT
 
-    private const val EXTRA_WIFI = "wifi"
-    private const val EXTRA_BLUETOOTH = "bluetooth"
-    private const val EXTRA_CYCLE_ID = "cycle_id"
-    const val EXTRA_WIFI_STATE = "wifi_state"
-    const val EXTRA_BLUETOOTH_STATE = "bluetooth_state"
-    const val EXTRA_PHASE = "phase"
-    const val EXTRA_WIFI_MANAGED = "wifi_managed"
-    const val EXTRA_WIFI_PREVIOUS = "wifi_previous"
-    const val EXTRA_WIFI_CHANGED = "wifi_changed"
-    const val EXTRA_WIFI_ATTEMPTED = "wifi_attempted"
-    const val EXTRA_WIFI_ACTION = "wifi_action"
-    const val EXTRA_WIFI_TOGGLE_SUCCESS = "wifi_toggle_success"
-    const val EXTRA_AIRPLANE_MODE = "airplane_mode"
-    const val EXTRA_BLUETOOTH_MANAGED = "bluetooth_managed"
-    const val EXTRA_BLUETOOTH_PREVIOUS = "bluetooth_previous"
-    const val EXTRA_BLUETOOTH_CHANGED = "bluetooth_changed"
-    const val EXTRA_RESTORE_SUCCESS = "restore_success"
-    const val EXTRA_STATUS = "status"
-    const val STATUS_OK = "OK"
-    const val STATUS_ALREADY_SLEEPING = "ALREADY_SLEEPING"
-    const val STATUS_ALREADY_RESTORED = "ALREADY_RESTORED"
-    const val STATUS_NO_ACTIVE_CYCLE = "NO_ACTIVE_CYCLE"
-    const val STATUS_RESTORE_FAILED = "RESTORE_FAILED"
-    const val STATUS_WIFI_TOGGLE_FAILED = "WIFI_TOGGLE_FAILED"
-    const val PHASE_SLEEP = "sleep"
-    const val PHASE_WAKE = "wake"
-    const val PHASE_MAINTENANCE_WIFI = "maintenance_wifi"
+    private val EXTRA_WIFI = HelperProtocol.EXTRA_WIFI
+    private val EXTRA_BLUETOOTH = HelperProtocol.EXTRA_BLUETOOTH
+    @JvmField val EXTRA_CYCLE_ID = HelperProtocol.EXTRA_CYCLE_ID
+    @JvmField val EXTRA_WIFI_STATE = HelperProtocol.EXTRA_WIFI_STATE
+    @JvmField val EXTRA_BLUETOOTH_STATE = HelperProtocol.EXTRA_BLUETOOTH_STATE
+    @JvmField val EXTRA_PHASE = HelperProtocol.EXTRA_PHASE
+    @JvmField val EXTRA_WIFI_MANAGED = HelperProtocol.EXTRA_WIFI_MANAGED
+    @JvmField val EXTRA_WIFI_PREVIOUS = HelperProtocol.EXTRA_WIFI_PREVIOUS
+    @JvmField val EXTRA_WIFI_CHANGED = HelperProtocol.EXTRA_WIFI_CHANGED
+    @JvmField val EXTRA_WIFI_ATTEMPTED = HelperProtocol.EXTRA_WIFI_ATTEMPTED
+    @JvmField val EXTRA_WIFI_ACTION = HelperProtocol.EXTRA_WIFI_ACTION
+    @JvmField val EXTRA_WIFI_TOGGLE_SUCCESS = HelperProtocol.EXTRA_WIFI_TOGGLE_SUCCESS
+    @JvmField val EXTRA_AIRPLANE_MODE = HelperProtocol.EXTRA_AIRPLANE_MODE
+    @JvmField val EXTRA_BLUETOOTH_MANAGED = HelperProtocol.EXTRA_BLUETOOTH_MANAGED
+    @JvmField val EXTRA_BLUETOOTH_PREVIOUS = HelperProtocol.EXTRA_BLUETOOTH_PREVIOUS
+    @JvmField val EXTRA_BLUETOOTH_CHANGED = HelperProtocol.EXTRA_BLUETOOTH_CHANGED
+    @JvmField val EXTRA_RESTORE_SUCCESS = HelperProtocol.EXTRA_RESTORE_SUCCESS
+    @JvmField val EXTRA_STATUS = HelperProtocol.EXTRA_STATUS
+    @JvmField val STATUS_OK = HelperProtocol.STATUS_OK
+    @JvmField val STATUS_ALREADY_SLEEPING = HelperProtocol.STATUS_ALREADY_SLEEPING
+    @JvmField val STATUS_ALREADY_RESTORED = HelperProtocol.STATUS_ALREADY_RESTORED
+    @JvmField val STATUS_NO_ACTIVE_CYCLE = HelperProtocol.STATUS_NO_ACTIVE_CYCLE
+    @JvmField val STATUS_RESTORE_FAILED = HelperProtocol.STATUS_RESTORE_FAILED
+    @JvmField val STATUS_WIFI_TOGGLE_FAILED = HelperProtocol.STATUS_WIFI_TOGGLE_FAILED
+    @JvmField val STATUS_CYCLE_MISMATCH = HelperProtocol.STATUS_CYCLE_MISMATCH
+    @JvmField val PHASE_SLEEP = HelperProtocol.PHASE_SLEEP
+    @JvmField val PHASE_WAKE = HelperProtocol.PHASE_WAKE
+    @JvmField val PHASE_MAINTENANCE_WIFI = HelperProtocol.PHASE_MAINTENANCE_WIFI
 
     fun isInstalled(context: Context): Boolean {
         return try {

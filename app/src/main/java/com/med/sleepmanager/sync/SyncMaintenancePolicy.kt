@@ -2,8 +2,13 @@ package com.med.sleepmanager.sync
 
 enum class PeriodicAlarmDeviceDecision {
     RUN,
-    RETRY_AFTER_THOR_FALSE_WAKE,
+    RETRY_AFTER_CLOSED_LID_FALSE_WAKE,
     CANCEL_AWAKE
+}
+
+enum class PeriodicMaintenanceFollowUp {
+    SCHEDULE_NEXT,
+    CANCEL
 }
 
 object SyncMaintenancePolicy {
@@ -47,12 +52,22 @@ object SyncMaintenancePolicy {
 
     fun periodicAlarmDeviceDecision(
         interactive: Boolean,
-        thorClosedLidWakeSuppressed: Boolean
+        closedLidWakeSuppressed: Boolean
     ): PeriodicAlarmDeviceDecision =
         when {
             !interactive -> PeriodicAlarmDeviceDecision.RUN
-            thorClosedLidWakeSuppressed ->
-                PeriodicAlarmDeviceDecision.RETRY_AFTER_THOR_FALSE_WAKE
+            closedLidWakeSuppressed ->
+                PeriodicAlarmDeviceDecision.RETRY_AFTER_CLOSED_LID_FALSE_WAKE
             else -> PeriodicAlarmDeviceDecision.CANCEL_AWAKE
+        }
+
+    fun periodicCompletionFollowUp(
+        stillSleeping: Boolean,
+        periodicEnabled: Boolean
+    ): PeriodicMaintenanceFollowUp =
+        if (stillSleeping && periodicEnabled) {
+            PeriodicMaintenanceFollowUp.SCHEDULE_NEXT
+        } else {
+            PeriodicMaintenanceFollowUp.CANCEL
         }
 }

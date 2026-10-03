@@ -5,6 +5,34 @@ support for TailDNS.
 
 The specification in [SPECIFICATION.md](SPECIFICATION.md) is authoritative.
 
+## October 3 upstream promotion
+
+Status: **ACTIVE**
+
+Scope: merge upstream `12db8ed` (0.7.0), preserving TD-1 through TD-9.
+Main/Helper versions: 0.7.0.1 (551) / 1.1.2.1 (1116).
+
+Acceptance criteria:
+
+- Complete upstream ancestry incorporated; package-aware ownership, exact restore
+  tokens and legacy-token support preserved.
+- Fork-only updater, settings keys, package IDs and permanent signer preserved.
+- Focused unit tests, release lint-vital and clean paired signed assemblies pass
+  before committing/pushing maintained main.
+- Normal paired GitHub release passes required emulator regression gates and
+  independent package/version/signer/hash/source/update-URL verification.
+
+Evidence so far: artifact/protocol checks pass, including paired four-component
+fork versions; clean unit tests, both release lint-vital checks and signed Main/
+Helper assemblies pass. APK package IDs, versions and common pinned signer were
+independently checked. Adapted instrumentation compilation and workflow syntax
+checks pass. The false-wake regression now verifies retention of a TailDNS-bound
+restore token. Updater preferences retain their existing file/key identities.
+GitHub emulator gates, publication and public-artifact verification remain pending.
+Historical device acceptance below is not new device verification.
+
+Blockers: none identified. Tracked deferrals: none.
+
 ## Stage 1 — Package-aware control transaction
 
 Status: **COMPLETE**

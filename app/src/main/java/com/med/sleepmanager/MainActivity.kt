@@ -26,9 +26,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.IntentCompat
 import androidx.core.content.ContextCompat
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.device.DeviceControlController
@@ -47,11 +48,13 @@ import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
-import com.med.sleepmanager.protection.ThorDeviceAdminReceiver
-import com.med.sleepmanager.protection.ThorLidMonitor
+import com.med.sleepmanager.protection.ClosedLidAdmin
+import com.med.sleepmanager.protection.LidMonitor
 import com.med.sleepmanager.qs.SleepManagerTileService
 import com.med.sleepmanager.service.SleepManagerService
 import com.med.sleepmanager.ui.screens.SleepManagerScreen
+import com.med.sleepmanager.ui.state.SleepManagerUiState
+import com.med.sleepmanager.ui.state.SleepManagerViewModel
 import com.med.sleepmanager.ui.theme.SleepManagerTheme
 import com.med.sleepmanager.update.UpdateCheckScheduler
 import com.med.sleepmanager.update.UpdateInstaller
@@ -63,16 +66,216 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
-    internal var activityRefreshToken by mutableIntStateOf(0)
-    internal var currentWifiState by mutableStateOf<Boolean?>(null)
-    internal var currentBluetoothState by mutableStateOf<Boolean?>(null)
-    internal var currentSyncthingState by mutableStateOf<SyncthingController.RuntimeState?>(null)
-    internal var currentTailscaleConnected by mutableStateOf<Boolean?>(null)
-    internal var currentBasicSyncState by mutableStateOf<BasicSyncController.RemoteState?>(null)
-    internal var currentBackgroundReliability by
-        mutableStateOf<BackgroundReliability.Snapshot?>(null)
-    internal var currentDeviceControlCapabilities by
-        mutableStateOf<DeviceControlController.ControlCapabilities?>(null)
+    private val uiViewModel: SleepManagerViewModel by viewModels()
+
+    internal val uiState: SleepManagerUiState
+        get() = uiViewModel.uiState
+
+    // Compatibility delegates keep the current Activity/screen call sites
+    // unchanged while Step 6 moves ownership behind an explicit UiState.
+    internal var activityRefreshToken: Int
+        get() = uiState.activityRefreshToken
+        set(value) {
+            uiViewModel.update { it.copy(activityRefreshToken = value) }
+        }
+
+    internal var managerEnabledState: Boolean
+        get() = uiState.managerEnabled
+        set(value) {
+            uiViewModel.update { it.copy(managerEnabled = value) }
+        }
+
+    internal var manageWifiEnabledState: Boolean
+        get() = uiState.manageWifiEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageWifiEnabled = value) }
+        }
+
+    internal var manageBluetoothEnabledState: Boolean
+        get() = uiState.manageBluetoothEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageBluetoothEnabled = value) }
+        }
+
+    internal var manageBatterySaverEnabledState: Boolean
+        get() = uiState.manageBatterySaverEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageBatterySaverEnabled = value) }
+        }
+
+    internal var chargingSeparationWithLidEnabledState: Boolean
+        get() = uiState.chargingSeparationWithLidEnabled
+        set(value) {
+            uiViewModel.update { it.copy(chargingSeparationWithLidEnabled = value) }
+        }
+
+    internal var manageSyncthingEnabledState: Boolean
+        get() = uiState.manageSyncthingEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageSyncthingEnabled = value) }
+        }
+
+    internal var manageTailscaleEnabledState: Boolean
+        get() = uiState.manageTailscaleEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageTailscaleEnabled = value) }
+        }
+
+    internal var manageJamesDspEnabledState: Boolean
+        get() = uiState.manageJamesDspEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageJamesDspEnabled = value) }
+        }
+
+    internal var manageBasicSyncEnabledState: Boolean
+        get() = uiState.manageBasicSyncEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageBasicSyncEnabled = value) }
+        }
+
+    internal var closedLidProtectionEnabledState: Boolean
+        get() = uiState.closedLidProtectionEnabled
+        set(value) {
+            uiViewModel.update { it.copy(closedLidProtectionEnabled = value) }
+        }
+
+    internal var dockDisconnectSleepsState: Boolean
+        get() = uiState.dockDisconnectSleeps
+        set(value) {
+            uiViewModel.update { it.copy(dockDisconnectSleeps = value) }
+        }
+
+    internal var closedLidPowerSleepsState: Boolean
+        get() = uiState.closedLidPowerSleeps
+        set(value) {
+            uiViewModel.update { it.copy(closedLidPowerSleeps = value) }
+        }
+
+    internal var periodicSyncWhileSleepingState: Boolean
+        get() = uiState.periodicSyncWhileSleeping
+        set(value) {
+            uiViewModel.update { it.copy(periodicSyncWhileSleeping = value) }
+        }
+
+    internal var syncThenStopOnSleepWakeState: Boolean
+        get() = uiState.syncThenStopOnSleepWake
+        set(value) {
+            uiViewModel.update { it.copy(syncThenStopOnSleepWake = value) }
+        }
+
+    internal var sleepGraceMsState: Long
+        get() = uiState.sleepGraceMs
+        set(value) {
+            uiViewModel.update { it.copy(sleepGraceMs = value) }
+        }
+
+    internal var customDelayEnabledState: Boolean
+        get() = uiState.customDelayEnabled
+        set(value) {
+            uiViewModel.update { it.copy(customDelayEnabled = value) }
+        }
+
+    internal var customDelayMsState: Long
+        get() = uiState.customDelayMs
+        set(value) {
+            uiViewModel.update { it.copy(customDelayMs = value) }
+        }
+
+    internal var batteryConditionEnabledState: Boolean
+        get() = uiState.batteryConditionEnabled
+        set(value) {
+            uiViewModel.update { it.copy(batteryConditionEnabled = value) }
+        }
+
+    internal var batteryBelowPercentState: Int
+        get() = uiState.batteryBelowPercent
+        set(value) {
+            uiViewModel.update { it.copy(batteryBelowPercent = value) }
+        }
+
+    internal var notChargingOnlyState: Boolean
+        get() = uiState.notChargingOnly
+        set(value) {
+            uiViewModel.update { it.copy(notChargingOnly = value) }
+        }
+
+    internal var batterySaverModeState: String
+        get() = uiState.batterySaverMode
+        set(value) {
+            uiViewModel.update { it.copy(batterySaverMode = value) }
+        }
+
+    internal var scheduleEnabledState: Boolean
+        get() = uiState.scheduleEnabled
+        set(value) {
+            uiViewModel.update { it.copy(scheduleEnabled = value) }
+        }
+
+    internal var scheduleStartMinutesState: Int
+        get() = uiState.scheduleStartMinutes
+        set(value) {
+            uiViewModel.update { it.copy(scheduleStartMinutes = value) }
+        }
+
+    internal var scheduleEndMinutesState: Int
+        get() = uiState.scheduleEndMinutes
+        set(value) {
+            uiViewModel.update { it.copy(scheduleEndMinutes = value) }
+        }
+
+    internal var automaticUpdateChecksState: Boolean
+        get() = uiState.automaticUpdateChecks
+        set(value) {
+            uiViewModel.update { it.copy(automaticUpdateChecks = value) }
+        }
+
+    internal var currentWifiState: Boolean?
+        get() = uiState.currentWifiState
+        set(value) {
+            uiViewModel.update { it.copy(currentWifiState = value) }
+        }
+
+    internal var currentBluetoothState: Boolean?
+        get() = uiState.currentBluetoothState
+        set(value) {
+            uiViewModel.update { it.copy(currentBluetoothState = value) }
+        }
+
+    internal var currentSyncthingState: SyncthingController.RuntimeState?
+        get() = uiState.currentSyncthingState
+        set(value) {
+            uiViewModel.update { it.copy(currentSyncthingState = value) }
+        }
+
+    internal var currentTailscaleConnected: Boolean?
+        get() = uiState.currentTailscaleConnected
+        set(value) {
+            uiViewModel.update { it.copy(currentTailscaleConnected = value) }
+        }
+
+    internal var currentBasicSyncState: BasicSyncController.RemoteState?
+        get() = uiState.currentBasicSyncState
+        set(value) {
+            uiViewModel.update { it.copy(currentBasicSyncState = value) }
+        }
+
+    internal var currentBackgroundReliability: BackgroundReliability.Snapshot?
+        get() = uiState.currentBackgroundReliability
+        set(value) {
+            uiViewModel.update { it.copy(currentBackgroundReliability = value) }
+        }
+
+    internal var currentDeviceControlCapabilities: DeviceControlController.ControlCapabilities?
+        get() = uiState.currentDeviceControlCapabilities
+        set(value) {
+            uiViewModel.update { it.copy(currentDeviceControlCapabilities = value) }
+        }
+
+    internal var currentBatterySaverState: Boolean
+        get() = uiState.currentBatterySaverState
+        set(value) {
+            uiViewModel.update { it.copy(currentBatterySaverState = value) }
+        }
 
     @Volatile
     private var syncthingStateProbeRunning = false
@@ -81,12 +284,17 @@ class MainActivity : ComponentActivity() {
     @Volatile
     private var deviceCapabilitiesProbeRunning = false
     private var helperStateReceiverRegistered = false
-    private var pendingThorAdminEnable = false
+    private var batterySaverStateReceiverRegistered = false
+    private var pendingClosedLidAdminEnable = false
     private var pendingExactAlarmEnable = false
     private var pendingExternalNavigation = false
     private var pendingUpdateInstallPath: String? = null
     private var pendingPackageInstallerReturn = false
-    internal var installerReturnToken by mutableIntStateOf(0)
+    internal var installerReturnToken: Int
+        get() = uiState.installerReturnToken
+        set(value) {
+            uiViewModel.update { it.copy(installerReturnToken = value) }
+        }
     internal var openUpdatesOnLaunch = false
 
     private val notificationPermissionLauncher =
@@ -112,6 +320,16 @@ class MainActivity : ComponentActivity() {
                 // Refresh the real radio states through the compatibility helper.
                 HelperController.requestState(this@MainActivity)
                 refreshIntegrationRuntimeStates()
+                refreshManagerEnabledState()
+                refreshManagedRadioSettingsState()
+                refreshManagedDeviceActionSettingsState()
+                refreshManagedIntegrationSettingsState()
+                refreshManagedClamshellSettingsState()
+                refreshManagedSyncSettingsState()
+                refreshSleepDelaySettingsState()
+                refreshAdvancedBatteryConditionSettingsState()
+                refreshScheduleSettingsState()
+                refreshUpdateSettingsState()
 
                 // Re-read every UI-facing state while the Activity is visible:
                 // manager/service state, enabled actions, helper availability,
@@ -214,11 +432,95 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val batterySaverStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != PowerManager.ACTION_POWER_SAVE_MODE_CHANGED) return
+            refreshBatterySaverState()
+        }
+    }
+
+    private fun refreshBatterySaverState() {
+        currentBatterySaverState =
+            DeviceControlController.batterySaverEnabled(this)
+    }
+
+    private fun refreshManagerEnabledState() {
+        managerEnabledState = AppPreferences.isEnabled(this)
+    }
+
+    private fun refreshManagedRadioSettingsState() {
+        manageWifiEnabledState = AppPreferences.manageWifi(this)
+        manageBluetoothEnabledState = AppPreferences.manageBluetooth(this)
+    }
+
+    private fun refreshManagedDeviceActionSettingsState() {
+        manageBatterySaverEnabledState = AppPreferences.manageBatterySaver(this)
+        chargingSeparationWithLidEnabledState =
+            AppPreferences.manageChargingSeparationWithLid(this)
+    }
+
+    private fun refreshManagedIntegrationSettingsState() {
+        manageSyncthingEnabledState = AppPreferences.manageSyncthing(this)
+        manageTailscaleEnabledState = AppPreferences.manageTailscale(this)
+        manageJamesDspEnabledState = AppPreferences.manageJamesDsp(this)
+        manageBasicSyncEnabledState = AppPreferences.manageBasicSync(this)
+    }
+
+    private fun refreshManagedClamshellSettingsState() {
+        closedLidProtectionEnabledState =
+            AppPreferences.manageClosedLidProtection(this)
+        dockDisconnectSleepsState = AppPreferences.dockDisconnectSleeps(this)
+        closedLidPowerSleepsState = AppPreferences.closedLidPowerSleeps(this)
+    }
+
+    private fun refreshManagedSyncSettingsState() {
+        periodicSyncWhileSleepingState =
+            AppPreferences.periodicSyncWhileSleeping(this)
+        syncThenStopOnSleepWakeState =
+            AppPreferences.syncThenStopOnSleepWake(this)
+    }
+
+    private fun refreshSleepDelaySettingsState() {
+        sleepGraceMsState = AppPreferences.sleepGraceMs(this)
+        customDelayEnabledState = AppPreferences.customDelayEnabled(this)
+        customDelayMsState = AppPreferences.customDelayMs(this)
+    }
+
+    private fun refreshAdvancedBatteryConditionSettingsState() {
+        batteryConditionEnabledState =
+            AppPreferences.batteryConditionEnabled(this)
+        batteryBelowPercentState = AppPreferences.batteryBelowPercent(this)
+        notChargingOnlyState = AppPreferences.notChargingOnly(this)
+        batterySaverModeState = AppPreferences.batterySaverMode(this)
+    }
+
+    private fun refreshScheduleSettingsState() {
+        scheduleEnabledState = AppPreferences.scheduleEnabled(this)
+        scheduleStartMinutesState = AppPreferences.scheduleStartMinutes(this)
+        scheduleEndMinutesState = AppPreferences.scheduleEndMinutes(this)
+    }
+
+    private fun refreshUpdateSettingsState() {
+        automaticUpdateChecksState =
+            AppPreferences.automaticUpdateChecks(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         openUpdatesOnLaunch =
             intent?.getBooleanExtra(EXTRA_OPEN_UPDATES, false) == true
         UpdateCheckScheduler.sync(this)
+        refreshBatterySaverState()
+        refreshManagerEnabledState()
+        refreshManagedRadioSettingsState()
+        refreshManagedDeviceActionSettingsState()
+        refreshManagedIntegrationSettingsState()
+        refreshManagedClamshellSettingsState()
+        refreshManagedSyncSettingsState()
+        refreshSleepDelaySettingsState()
+        refreshAdvancedBatteryConditionSettingsState()
+        refreshScheduleSettingsState()
+        refreshUpdateSettingsState()
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = android.graphics.Color.TRANSPARENT,
@@ -237,7 +539,198 @@ class MainActivity : ComponentActivity() {
                 useSystemColors = useSystemColors
             ) {
                 SleepManagerScreen(
+                    uiState = uiState,
+                    context = this@MainActivity,
+                    openUpdatesOnLaunch = openUpdatesOnLaunch,
                     useSystemColors = useSystemColors,
+                    onRefreshRequested = {
+                        activityRefreshToken++
+                    },
+                    onServiceRefreshRequested = {
+                        refreshRunningService()
+                    },
+                    onManagerEnabledChange = { enabled ->
+                        setManagerEnabled(enabled)
+                    },
+                    onManageWifiChange = { enabled ->
+                        AppPreferences.setManageWifi(this@MainActivity, enabled)
+                        manageWifiEnabledState = enabled
+                    },
+                    onManageBluetoothChange = { enabled ->
+                        AppPreferences.setManageBluetooth(this@MainActivity, enabled)
+                        manageBluetoothEnabledState = enabled
+                    },
+                    onManageBatterySaverChange = { enabled ->
+                        AppPreferences.setManageBatterySaver(this@MainActivity, enabled)
+                        manageBatterySaverEnabledState = enabled
+                    },
+                    onChargingSeparationWithLidChange = { enabled ->
+                        AppPreferences.setManageChargingSeparationWithLid(
+                            this@MainActivity,
+                            enabled
+                        )
+                        chargingSeparationWithLidEnabledState = enabled
+                    },
+                    onManageSyncthingChange = { enabled ->
+                        AppPreferences.setManageSyncthing(this@MainActivity, enabled)
+                        manageSyncthingEnabledState = enabled
+                    },
+                    onManageTailscaleChange = { enabled ->
+                        AppPreferences.setManageTailscale(this@MainActivity, enabled)
+                        manageTailscaleEnabledState = enabled
+                    },
+                    onManageJamesDspChange = { enabled ->
+                        AppPreferences.setManageJamesDsp(this@MainActivity, enabled)
+                        manageJamesDspEnabledState = enabled
+                    },
+                    onManageBasicSyncChange = { enabled ->
+                        AppPreferences.setManageBasicSync(this@MainActivity, enabled)
+                        manageBasicSyncEnabledState = enabled
+                    },
+                    onPeriodicSyncWhileSleepingChange = { enabled ->
+                        AppPreferences.setPeriodicSyncWhileSleeping(
+                            this@MainActivity,
+                            enabled
+                        )
+                        periodicSyncWhileSleepingState = enabled
+                    },
+                    onSyncThenStopOnSleepWakeChange = { enabled ->
+                        AppPreferences.setSyncThenStopOnSleepWake(
+                            this@MainActivity,
+                            enabled
+                        )
+                        syncThenStopOnSleepWakeState = enabled
+                    },
+                    onSleepGraceChange = { value ->
+                        AppPreferences.setSleepGraceMs(this@MainActivity, value)
+                        sleepGraceMsState = value
+                    },
+                    onCustomDelayEnabledChange = { enabled ->
+                        AppPreferences.setCustomDelayEnabled(this@MainActivity, enabled)
+                        customDelayEnabledState = enabled
+                    },
+                    onCustomDelayChange = { value ->
+                        AppPreferences.setCustomDelayMs(this@MainActivity, value)
+                        customDelayMsState = value
+                    },
+                    onBatteryConditionEnabledChange = { enabled ->
+                        AppPreferences.setBatteryConditionEnabled(
+                            this@MainActivity,
+                            enabled
+                        )
+                        batteryConditionEnabledState = enabled
+                    },
+                    onBatteryBelowPercentChange = { value ->
+                        AppPreferences.setBatteryBelowPercent(
+                            this@MainActivity,
+                            value
+                        )
+                        batteryBelowPercentState = value.coerceIn(5, 95)
+                    },
+                    onNotChargingOnlyChange = { enabled ->
+                        AppPreferences.setNotChargingOnly(
+                            this@MainActivity,
+                            enabled
+                        )
+                        notChargingOnlyState = enabled
+                    },
+                    onBatterySaverModeChange = { mode ->
+                        AppPreferences.setBatterySaverMode(
+                            this@MainActivity,
+                            mode
+                        )
+                        batterySaverModeState =
+                            AppPreferences.batterySaverMode(this@MainActivity)
+                    },
+                    onScheduleEnabledChange = { enabled ->
+                        AppPreferences.setScheduleEnabled(
+                            this@MainActivity,
+                            enabled
+                        )
+                        scheduleEnabledState = enabled
+                    },
+                    onScheduleStartMinutesChange = { value ->
+                        AppPreferences.setScheduleStartMinutes(
+                            this@MainActivity,
+                            value
+                        )
+                        scheduleStartMinutesState = value.coerceIn(0, 1439)
+                    },
+                    onScheduleEndMinutesChange = { value ->
+                        AppPreferences.setScheduleEndMinutes(
+                            this@MainActivity,
+                            value
+                        )
+                        scheduleEndMinutesState = value.coerceIn(0, 1439)
+                    },
+                    onAutomaticUpdateChecksChange = { enabled ->
+                        AppPreferences.setAutomaticUpdateChecks(
+                            this@MainActivity,
+                            enabled
+                        )
+                        automaticUpdateChecksState = enabled
+                    },
+                    onFinishSetupRequested = {
+                        finishSetup()
+                    },
+                    onFinishAppRequested = {
+                        finishAndRemoveTask()
+                    },
+                    onClosedLidAdminActiveRequested = {
+                        isClosedLidAdminActive()
+                    },
+                    onClosedLidProtectionChangeRequested = { enabled ->
+                        setClosedLidProtectionEnabled(enabled)
+                        closedLidProtectionEnabledState =
+                            AppPreferences.manageClosedLidProtection(this@MainActivity)
+                    },
+                    onDockDisconnectSleepsChange = { enabled ->
+                        AppPreferences.setDockDisconnectSleeps(this@MainActivity, enabled)
+                        dockDisconnectSleepsState = enabled
+                    },
+                    onClosedLidPowerSleepsChange = { enabled ->
+                        AppPreferences.setClosedLidPowerSleeps(this@MainActivity, enabled)
+                        closedLidPowerSleepsState = enabled
+                    },
+                    onCopyDiagnosticsRequested = {
+                        copyDiagnostics()
+                    },
+                    onOpenExternalUrlRequested = { url ->
+                        openReleaseUrl(url)
+                    },
+                    onOpenAppInfoRequested = {
+                        openAppInfo()
+                    },
+                    onOpenBatteryOptimizationRequested = {
+                        openBatteryOptimizationSettings()
+                    },
+                    onOpenUnusedAppRestrictionsRequested = {
+                        openUnusedAppRestrictionsSettings()
+                    },
+                    onRequestUpdateNotificationPermissionRequested = {
+                        requestUpdateNotificationPermission()
+                    },
+                    onInstallVerifiedUpdateRequested = { apkPath ->
+                        installVerifiedUpdate(apkPath)
+                    },
+                    onCanScheduleExactAlarmsRequested = {
+                        canScheduleExactAlarms()
+                    },
+                    onRequestExactAlarmAccessRequested = {
+                        requestExactAlarmAccess()
+                    },
+                    onShowTimePickerRequested = { initialMinutes, onSelected ->
+                        showTimePicker(initialMinutes, onSelected)
+                    },
+                    onRestoreSyncthingRequested = {
+                        restoreSyncthingTransactionNow()
+                    },
+                    onRestoreJamesDspRequested = {
+                        restoreJamesDspTransactionNow()
+                    },
+                    onRestoreBasicSyncRequested = {
+                        restoreBasicSyncTransactionNow()
+                    },
                     onUseSystemColorsChanged = { value ->
                         AppPreferences.setUseSystemColors(
                             this@MainActivity,
@@ -253,7 +746,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         registerHelperStateReceiver()
+        registerBatterySaverStateReceiver()
         HelperController.requestState(this)
+        refreshBatterySaverState()
     }
 
     override fun onResume() {
@@ -279,10 +774,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        if (pendingThorAdminEnable) {
-            pendingThorAdminEnable = false
-            val granted = isThorAdminActive()
-            AppPreferences.setManageThorProtection(this, granted)
+        if (pendingClosedLidAdminEnable) {
+            pendingClosedLidAdminEnable = false
+            val granted = isClosedLidAdminActive()
+            AppPreferences.setManageClosedLidProtection(this, granted)
             if (!granted) {
                 Toast.makeText(
                     this,
@@ -294,10 +789,10 @@ class MainActivity : ComponentActivity() {
         }
 
         if (
-            AppPreferences.manageThorProtection(this) &&
-            !isThorAdminActive()
+            AppPreferences.manageClosedLidProtection(this) &&
+            !isClosedLidAdminActive()
         ) {
-            AppPreferences.setManageThorProtection(this, false)
+            AppPreferences.setManageClosedLidProtection(this, false)
             activityRefreshToken++
         }
 
@@ -306,7 +801,9 @@ class MainActivity : ComponentActivity() {
             val granted = canScheduleExactAlarms()
             if (granted) {
                 AppPreferences.setCustomDelayEnabled(this, true)
+                customDelayEnabledState = true
                 AppPreferences.setSleepGraceMs(this, 0L)
+                sleepGraceMsState = 0L
                 Toast.makeText(
                     this,
                     "Precise custom delay enabled",
@@ -349,7 +846,27 @@ class MainActivity : ComponentActivity() {
             }
             helperStateReceiverRegistered = false
         }
+
+        if (batterySaverStateReceiverRegistered) {
+            try {
+                unregisterReceiver(batterySaverStateReceiver)
+            } catch (_: IllegalArgumentException) {
+            }
+            batterySaverStateReceiverRegistered = false
+        }
         super.onStop()
+    }
+
+    private fun registerBatterySaverStateReceiver() {
+        if (batterySaverStateReceiverRegistered) return
+
+        ContextCompat.registerReceiver(
+            this,
+            batterySaverStateReceiver,
+            IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        batterySaverStateReceiverRegistered = true
     }
 
     private fun registerHelperStateReceiver() {
@@ -375,7 +892,7 @@ class MainActivity : ComponentActivity() {
         // user pressing Home, otherwise the SleepManager task is removed before
         // the confirmation screen can be shown.
         if (
-            pendingThorAdminEnable ||
+            pendingClosedLidAdminEnable ||
             pendingExactAlarmEnable ||
             pendingExternalNavigation
         ) {
@@ -390,18 +907,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun thorAdminComponent(): ComponentName =
-        ComponentName(this, ThorDeviceAdminReceiver::class.java)
+    private fun closedLidAdminComponent(): ComponentName =
+        ClosedLidAdmin.component(this)
 
-    internal fun isThorAdminActive(): Boolean {
+    internal fun isClosedLidAdminActive(): Boolean {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return dpm.isAdminActive(thorAdminComponent())
+        return dpm.isAdminActive(closedLidAdminComponent())
     }
 
-    private fun refreshBackgroundReliabilityAfterThorAdminRemoval(
+    private fun refreshBackgroundReliabilityAfterClosedLidAdminRemoval(
         attempt: Int = 0
     ) {
-        val adminStillActive = isThorAdminActive()
+        val adminStillActive = isClosedLidAdminActive()
 
         if (!adminStillActive || attempt >= 5) {
             refreshBackgroundReliabilityAsync()
@@ -411,7 +928,7 @@ class MainActivity : ComponentActivity() {
 
         statusRefreshHandler.postDelayed(
             {
-                refreshBackgroundReliabilityAfterThorAdminRemoval(
+                refreshBackgroundReliabilityAfterClosedLidAdminRemoval(
                     attempt = attempt + 1
                 )
             },
@@ -419,10 +936,10 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    private fun requestThorAdmin() {
-        pendingThorAdminEnable = true
+    private fun requestClosedLidAdmin() {
+        pendingClosedLidAdminEnable = true
         val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, thorAdminComponent())
+            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, closedLidAdminComponent())
             putExtra(
                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                 "Allows SleepManager to immediately return the device to sleep if it wakes while the lid is still closed."
@@ -431,22 +948,22 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    internal fun setThorProtectionEnabled(enabled: Boolean) {
+    internal fun setClosedLidProtectionEnabled(enabled: Boolean) {
         if (!enabled) {
-            AppPreferences.setManageThorProtection(this, false)
+            AppPreferences.setManageClosedLidProtection(this, false)
             refreshRunningService()
 
             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            if (dpm.isAdminActive(thorAdminComponent())) {
-                runCatching { dpm.removeActiveAdmin(thorAdminComponent()) }
-                refreshBackgroundReliabilityAfterThorAdminRemoval()
+            if (dpm.isAdminActive(closedLidAdminComponent())) {
+                runCatching { dpm.removeActiveAdmin(closedLidAdminComponent()) }
+                refreshBackgroundReliabilityAfterClosedLidAdminRemoval()
             } else {
                 refreshBackgroundReliabilityAsync()
             }
             return
         }
 
-        if (!ThorLidMonitor.isSupported()) {
+        if (!LidMonitor.isSupported()) {
             Toast.makeText(
                 this,
                 "Compatible lid sensor not detected",
@@ -455,12 +972,12 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (!isThorAdminActive()) {
-            requestThorAdmin()
+        if (!isClosedLidAdminActive()) {
+            requestClosedLidAdmin()
             return
         }
 
-        AppPreferences.setManageThorProtection(this, true)
+        AppPreferences.setManageClosedLidProtection(this, true)
         refreshRunningService()
     }
 
@@ -471,7 +988,8 @@ class MainActivity : ComponentActivity() {
             val service = Intent(this, SleepManagerService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service)
             else startService(service)
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            Log.e("SleepManager", "Unable to refresh running service", t)
         }
     }
 
@@ -486,13 +1004,14 @@ class MainActivity : ComponentActivity() {
         }
 
         AppPreferences.setSetupComplete(this, true)
-        AppPreferences.recordEvent(this, "Setup finished • background automation active")
+        DiagnosticsStateStore.recordEvent(this, "Setup finished • background automation active")
         finishAndRemoveTask()
     }
 
     internal fun setManagerEnabled(enabled: Boolean) {
         if (!enabled) {
             AppPreferences.setEnabled(this, false)
+            managerEnabledState = false
 
             val service = Intent(this, SleepManagerService::class.java)
                 .setAction(SleepManagerService.ACTION_DISABLE_AND_RESTORE)
@@ -516,8 +1035,8 @@ class MainActivity : ComponentActivity() {
         }
 
         if (
-            AppPreferences.manageThorProtection(this) &&
-            (!ThorLidMonitor.isSupported() || !isThorAdminActive())
+            AppPreferences.manageClosedLidProtection(this) &&
+            (!LidMonitor.isSupported() || !isClosedLidAdminActive())
         ) {
             Toast.makeText(
                 this,
@@ -528,16 +1047,18 @@ class MainActivity : ComponentActivity() {
         }
 
         AppPreferences.setEnabled(this, true)
+        managerEnabledState = true
 
         try {
             val service = Intent(this, SleepManagerService::class.java)
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service)
             else startService(service)
 
-            AppPreferences.recordEvent(this, "SleepManager enabled")
+            DiagnosticsStateStore.recordEvent(this, "SleepManager enabled")
             SleepManagerTileService.requestRefresh(this)
         } catch (t: Throwable) {
             AppPreferences.setEnabled(this, false)
+            managerEnabledState = false
             SleepManagerTileService.requestRefresh(this)
             Toast.makeText(
                 this,
@@ -557,7 +1078,7 @@ class MainActivity : ComponentActivity() {
         if (result.success) {
             SleepCycleStore.clearConnectorChange(this, SyncthingConnector.id)
         } else {
-            AppPreferences.recordEvent(this, "Syncthing restore pending")
+            DiagnosticsStateStore.recordEvent(this, "Syncthing restore pending")
         }
     }
 
@@ -571,7 +1092,7 @@ class MainActivity : ComponentActivity() {
         if (result.success) {
             SleepCycleStore.clearConnectorChange(this, JamesDspConnector.id)
         } else {
-            AppPreferences.recordEvent(this, "JamesDSP restore pending")
+            DiagnosticsStateStore.recordEvent(this, "JamesDSP restore pending")
         }
     }
 
@@ -585,7 +1106,7 @@ class MainActivity : ComponentActivity() {
         if (result.success) {
             SleepCycleStore.clearConnectorChange(this, BasicSyncConnector.id)
         } else {
-            AppPreferences.recordEvent(this, "BasicSync restore pending")
+            DiagnosticsStateStore.recordEvent(this, "BasicSync restore pending")
         }
     }
 

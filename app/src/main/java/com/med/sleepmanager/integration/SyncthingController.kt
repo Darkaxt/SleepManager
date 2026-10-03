@@ -32,6 +32,11 @@ object SyncthingController {
         UNKNOWN
     }
 
+    enum class HealthProbeState {
+        RUNNING,
+        UNAVAILABLE
+    }
+
     private val supported = listOf(
         PACKAGE_CURRENT,
         PACKAGE_CURRENT_DEBUG,
@@ -88,14 +93,18 @@ object SyncthingController {
             return RuntimeState.STOPPED
         }
 
-        return if (healthCheckDefaultGui()) {
-            RuntimeState.RUNNING
-        } else {
-            RuntimeState.UNKNOWN
+        return when (healthProbeState()) {
+            HealthProbeState.RUNNING -> RuntimeState.RUNNING
+            HealthProbeState.UNAVAILABLE -> RuntimeState.UNKNOWN
         }
     }
 
-    fun healthProbeRunning(): Boolean = healthCheckDefaultGui()
+    fun healthProbeState(): HealthProbeState =
+        if (healthCheckDefaultGui()) {
+            HealthProbeState.RUNNING
+        } else {
+            HealthProbeState.UNAVAILABLE
+        }
 
     fun sendStart(context: Context) =
         send(

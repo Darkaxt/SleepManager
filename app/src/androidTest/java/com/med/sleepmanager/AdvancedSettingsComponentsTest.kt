@@ -100,8 +100,10 @@ class AdvancedSettingsComponentsTest {
 
         composeRule.onNodeWithTag("custom_delay_option_1800000")
             .performScrollTo()
-            .performClick()
-        composeRule.waitForIdle()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            customDelayMs == 1_800_000L
+        }
         assertEquals(1_800_000L, customDelayMs)
         composeRule.onNodeWithTag("custom_delay_option_1800000")
             .assertIsSelected()
@@ -111,7 +113,11 @@ class AdvancedSettingsComponentsTest {
         assertTrue(batteryCondition)
 
         composeRule.onNodeWithText("< 60%")
-            .performScrollTo().performClick()
+            .performScrollTo()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            batteryBelow == 60
+        }
         assertEquals(60, batteryBelow)
 
         composeRule.onNodeWithContentDescription("Not charging toggle")

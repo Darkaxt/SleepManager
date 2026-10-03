@@ -24,15 +24,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.med.sleepmanager.R
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.ui.components.SectionTitle
 import com.med.sleepmanager.ui.components.SettingsCard
 import com.med.sleepmanager.ui.feedbackClick
-import com.med.sleepmanager.ui.label
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -48,9 +49,9 @@ internal fun SleepGraceSelector(
     onCustom: () -> Unit
 ) {
     val options = listOf(
-        "Immediate" to 0L,
-        "5 s" to 5000L,
-        "10 s" to 10000L
+        stringResource(R.string.grace_immediate) to 0L,
+        stringResource(R.string.duration_5_seconds) to 5000L,
+        stringResource(R.string.duration_10_seconds) to 10000L
     )
 
     Column(
@@ -58,16 +59,18 @@ internal fun SleepGraceSelector(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
-            "Grace period",
+            stringResource(R.string.grace_period),
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.Medium
         )
         Text(
-            if (customDelayEnabled) {
-                "Using custom delay from Advanced settings."
-            } else {
-                "Wait before applying sleep actions. If the device wakes during this period, no changes are applied."
-            },
+            stringResource(
+                if (customDelayEnabled) {
+                    R.string.grace_period_custom_delay_active
+                } else {
+                    R.string.grace_period_description
+                }
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -89,14 +92,19 @@ internal fun SleepGraceSelector(
                 FilterChip(
                     selected = customDelayEnabled,
                     onClick = feedbackClick(onCustom),
-                    label = { Text("Custom") }
+                    label = { Text(stringResource(R.string.custom)) }
                 )
             }
         }
 
         if (customDelayEnabled) {
             TextButton(onClick = feedbackClick(onCustom)) {
-                Text("Advanced • ${formatDuration(customDelayMs)}")
+                Text(
+                    stringResource(
+                        R.string.advanced_with_duration,
+                        formatDuration(customDelayMs)
+                    )
+                )
             }
         }
     }
@@ -148,18 +156,20 @@ internal fun AdvancedSettingsPage(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         SectionTitle(
-            title = "Advanced sync behavior",
-            subtitle = "Control how supported sync apps run during sleep and wake transitions."
+            title = stringResource(R.string.advanced_sync_behavior),
+            subtitle = stringResource(R.string.advanced_sync_behavior_description)
         )
 
         SettingsCard {
             AdvancedToggleRow(
-                title = "Periodic sync while sleeping",
-                subtitle = if (syncConditionsAvailable) {
-                    "While the device stays asleep, sync managed clients every 24h, then stop them and restore the sleep state."
-                } else {
-                    "Requires BasicSync 3.19+. Syncthing-Fork support is planned."
-                },
+                title = stringResource(R.string.periodic_sync_while_sleeping),
+                subtitle = stringResource(
+                    if (syncConditionsAvailable) {
+                        R.string.periodic_sync_while_sleeping_description
+                    } else {
+                        R.string.advanced_sync_unavailable
+                    }
+                ),
                 checked = periodicSyncWhileSleeping,
                 enabled = syncConditionsAvailable,
                 onCheckedChange = onPeriodicSyncWhileSleepingChange
@@ -171,12 +181,14 @@ internal fun AdvancedSettingsPage(
             )
 
             AdvancedToggleRow(
-                title = "Sync then stop on sleep & wake",
-                subtitle = if (syncConditionsAvailable) {
-                    "Sync managed clients after wake and again before sleep. After each sync completes, stop them to reduce background battery use."
-                } else {
-                    "Requires BasicSync 3.19+. Syncthing-Fork support is planned."
-                },
+                title = stringResource(R.string.sync_then_stop_sleep_wake),
+                subtitle = stringResource(
+                    if (syncConditionsAvailable) {
+                        R.string.sync_then_stop_sleep_wake_description
+                    } else {
+                        R.string.advanced_sync_unavailable
+                    }
+                ),
                 checked = syncThenStopOnSleepWake,
                 enabled = syncConditionsAvailable,
                 onCheckedChange = onSyncThenStopOnSleepWakeChange
@@ -184,19 +196,22 @@ internal fun AdvancedSettingsPage(
         }
 
         SectionTitle(
-            title = "Advanced sleep conditions",
-            subtitle = "Fine-tune when sleep actions are allowed and when they begin."
+            title = stringResource(R.string.advanced_sleep_conditions),
+            subtitle = stringResource(R.string.advanced_sleep_conditions_description)
         )
 
         SettingsCard(
             modifier = Modifier.bringIntoViewRequester(customDelayRequester)
         ) {
             AdvancedToggleRow(
-                title = "Use custom delay",
+                title = stringResource(R.string.use_custom_delay),
                 subtitle = if (customDelayEnabled) {
-                    "Sleep actions will start after ${formatDuration(customDelayMs)}."
+                    stringResource(
+                        R.string.custom_delay_active_description,
+                        formatDuration(customDelayMs)
+                    )
                 } else {
-                    "Choose a longer delay before sleep actions than the standard Grace period options."
+                    stringResource(R.string.custom_delay_description)
                 },
                 checked = customDelayEnabled,
                 onCheckedChange = onCustomDelayEnabledChange
@@ -213,16 +228,16 @@ internal fun AdvancedSettingsPage(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Delay before sleep actions",
+                        stringResource(R.string.delay_before_sleep_actions),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
 
                     val options = listOf(
-                        "1 min" to 60_000L,
-                        "5 min" to 300_000L,
-                        "10 min" to 600_000L,
-                        "30 min" to 1_800_000L
+                        stringResource(R.string.duration_1_minute) to 60_000L,
+                        stringResource(R.string.duration_5_minutes) to 300_000L,
+                        stringResource(R.string.duration_10_minutes) to 600_000L,
+                        stringResource(R.string.duration_30_minutes) to 1_800_000L
                     )
 
                     LazyRow(
@@ -245,16 +260,19 @@ internal fun AdvancedSettingsPage(
         }
 
         SectionTitle(
-            title = "Conditions",
-            subtitle = "All enabled conditions must be true for sleep actions to run."
+            title = stringResource(R.string.conditions),
+            subtitle = stringResource(R.string.conditions_description)
         )
         SettingsCard {
             AdvancedToggleRow(
-                title = "Battery level",
+                title = stringResource(R.string.battery_level),
                 subtitle = if (batteryConditionEnabled) {
-                    "Only when battery is below ${batteryBelowPercent}%"
+                    stringResource(
+                        R.string.battery_below_percent,
+                        batteryBelowPercent
+                    )
                 } else {
-                    "Ignore battery percentage"
+                    stringResource(R.string.ignore_battery_percentage)
                 },
                 checked = batteryConditionEnabled,
                 onCheckedChange = onBatteryConditionEnabledChange
@@ -274,7 +292,14 @@ internal fun AdvancedSettingsPage(
                             FilterChip(
                                 selected = batteryBelowPercent == level,
                                 onClick = feedbackClick { onBatteryBelowPercentChange(level) },
-                                label = { Text("< ${level}%") }
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            R.string.battery_level_chip,
+                                            level
+                                        )
+                                    )
+                                }
                             )
                         }
                     }
@@ -287,12 +312,14 @@ internal fun AdvancedSettingsPage(
             )
 
             AdvancedToggleRow(
-                title = "Not charging",
-                subtitle = if (notChargingOnly) {
-                    "Only when the device is unplugged"
-                } else {
-                    "Ignore charging state"
-                },
+                title = stringResource(R.string.not_charging),
+                subtitle = stringResource(
+                    if (notChargingOnly) {
+                        R.string.only_when_unplugged
+                    } else {
+                        R.string.ignore_charging_state
+                    }
+                ),
                 checked = notChargingOnly,
                 onCheckedChange = onNotChargingOnlyChange
             )
@@ -307,36 +334,50 @@ internal fun AdvancedSettingsPage(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Battery Saver",
+                        stringResource(R.string.battery_saver),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        when (batterySaverMode) {
-                            AppPreferences.BATTERY_SAVER_ON -> "Only when Android Battery Saver is ON"
-                            AppPreferences.BATTERY_SAVER_OFF -> "Only when Android Battery Saver is OFF"
-                            else -> "Ignore Battery Saver state"
-                        },
+                        stringResource(
+                            when (batterySaverMode) {
+                                AppPreferences.BATTERY_SAVER_ON ->
+                                    R.string.battery_saver_only_when_on
+                                AppPreferences.BATTERY_SAVER_OFF ->
+                                    R.string.battery_saver_only_when_off
+                                else ->
+                                    R.string.battery_saver_ignore_state
+                            }
+                        ),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val modes = listOf(
+                        stringResource(R.string.ignore) to
+                            AppPreferences.BATTERY_SAVER_IGNORE,
+                        stringResource(R.string.on) to
+                            AppPreferences.BATTERY_SAVER_ON,
+                        stringResource(R.string.off) to
+                            AppPreferences.BATTERY_SAVER_OFF
                     )
 
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val modes = listOf(
-                            "Ignore" to AppPreferences.BATTERY_SAVER_IGNORE,
-                            "ON" to AppPreferences.BATTERY_SAVER_ON,
-                            "OFF" to AppPreferences.BATTERY_SAVER_OFF
-                        )
                         items(modes.size) { index ->
                             val (label, mode) = modes[index]
+                            val optionContentDescription =
+                                stringResource(
+                                    R.string.battery_saver_option,
+                                    label
+                                )
                             FilterChip(
                                 modifier = Modifier
                                     .testTag("battery_saver_mode_$mode")
                                     .semantics {
                                         contentDescription =
-                                            "Battery Saver $label option"
+                                            optionContentDescription
                                     },
                                 selected = batterySaverMode == mode,
                                 onClick = feedbackClick {
@@ -354,11 +395,15 @@ internal fun AdvancedSettingsPage(
             )
 
             AdvancedToggleRow(
-                title = "Schedule",
+                title = stringResource(R.string.schedule),
                 subtitle = if (scheduleEnabled) {
-                    "Only between ${formatTime(scheduleStartMinutes)} and ${formatTime(scheduleEndMinutes)}"
+                    stringResource(
+                        R.string.schedule_between,
+                        formatTime(scheduleStartMinutes),
+                        formatTime(scheduleEndMinutes)
+                    )
                 } else {
-                    "No time restriction"
+                    stringResource(R.string.no_time_restriction)
                 },
                 checked = scheduleEnabled,
                 onCheckedChange = onScheduleEnabledChange
@@ -375,13 +420,23 @@ internal fun AdvancedSettingsPage(
                         onClick = feedbackClick(onPickScheduleStart),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("From ${formatTime(scheduleStartMinutes)}")
+                        Text(
+                            stringResource(
+                                R.string.schedule_from,
+                                formatTime(scheduleStartMinutes)
+                            )
+                        )
                     }
                     OutlinedButton(
                         onClick = feedbackClick(onPickScheduleEnd),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("To ${formatTime(scheduleEndMinutes)}")
+                        Text(
+                            stringResource(
+                                R.string.schedule_to,
+                                formatTime(scheduleEndMinutes)
+                            )
+                        )
                     }
                 }
             }
@@ -397,6 +452,9 @@ internal fun AdvancedToggleRow(
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val toggleContentDescription =
+        stringResource(R.string.toggle_content_description, title)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -429,7 +487,7 @@ internal fun AdvancedToggleRow(
             onCheckedChange = feedbackChange(onCheckedChange),
             enabled = enabled,
             modifier = Modifier.semantics {
-                contentDescription = "$title toggle"
+                contentDescription = toggleContentDescription
             }
         )
     }

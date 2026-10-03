@@ -50,10 +50,7 @@ class SyncMaintenanceRunner(
     private var networkGate: NetworkReadyGate? = null
     private var completionCallback: ((SyncMaintenanceSnapshot) -> Unit)? = null
     private var trigger: SyncMaintenanceTrigger? = null
-    private var tempWifiOnRequested = false
-    private var cleanupPending = false
-    private var pendingFinalSnapshot: SyncMaintenanceSnapshot? = null
-    private var stopConfirmStartedAtMs: Long? = null
+    private val cleanupState = SyncMaintenanceCleanupState()
     private var helperReceiverRegistered = false
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -76,14 +73,14 @@ class SyncMaintenanceRunner(
     }
 
     private val stopConfirmRunnable = Runnable {
-        val snapshot = pendingFinalSnapshot ?: return@Runnable
+        val snapshot = cleanupState.pendingFinalSnapshot ?: return@Runnable
         finishWithCleanup(snapshot)
     }
 
     private val cleanupTimeoutRunnable = Runnable {
-        if (!cleanupPending) return@Runnable
+        if (!cleanupState.cleanupPending) return@Runnable
         Log.w(TAG, "Temporary Wi-Fi cleanup result timed out")
-        val snapshot = pendingFinalSnapshot ?: return@Runnable
+        val snapshot = cleanupState.pendingFinalSnapshot ?: return@Runnable
         finishNow(snapshot)
     }
 
@@ -112,9 +109,9 @@ class SyncMaintenanceRunner(
                     "success=$success status=$status"
             )
 
-            if (cleanupPending && action == "OFF") {
+            if (cleanupState.cleanupPending && action == "OFF") {
                 handler.removeCallbacks(cleanupTimeoutRunnable)
-                val snapshot = pendingFinalSnapshot ?: return
+                val snapshot = cleanupState.pendingFinalSnapshot ?: return
                 finishNow(snapshot)
             }
         }
@@ -171,7 +168,7 @@ class SyncMaintenanceRunner(
 
         handler.removeCallbacks(pollRunnable)
         handler.removeCallbacks(stopConfirmRunnable)
-        stopConfirmStartedAtMs = null
+        cleanupState.clearStopConfirmation()
         networkGate?.cancel()
         networkGate = null
 
@@ -230,10 +227,11 @@ class SyncMaintenanceRunner(
         }
 
         registerHelperReceiver()
-        tempWifiOnRequested =
+        cleanupState.recordTemporaryWifiRequest(
             HelperController.setTemporaryWifi(appContext, enabled = true)
+        )
 
-        if (tempWifiOnRequested) {
+        if (cleanupState.temporaryWifiOnRequested) {
             Log.i(TAG, "Requested temporary Wi-Fi ON for periodic maintenance")
         }
     }
@@ -245,16 +243,15 @@ class SyncMaintenanceRunner(
 
         if (
             trigger == SyncMaintenanceTrigger.PERIODIC_SLEEP &&
-            tempWifiOnRequested &&
-            !cleanupPending
+            cleanupState.temporaryWifiOnRequested &&
+            !cleanupState.cleanupPending
         ) {
             if (waitForProviderStopsBeforeWifiCleanup(snapshot)) {
                 return
             }
 
             registerHelperReceiver()
-            pendingFinalSnapshot = snapshot
-            cleanupPending = true
+            cleanupState.beginCleanup(snapshot)
 
             if (HelperController.setTemporaryWifi(appContext, enabled = false)) {
                 handler.postDelayed(
@@ -265,8 +262,7 @@ class SyncMaintenanceRunner(
                 return
             }
 
-            cleanupPending = false
-            pendingFinalSnapshot = null
+            cleanupState.clearCleanupPending()
         }
 
         finishNow(snapshot)
@@ -281,19 +277,26 @@ class SyncMaintenanceRunner(
                 .mapNotNull { provider ->
                     val confirmed =
                         runCatching { provider.isStopConfirmed() }
-                            .getOrNull()
+                            .getOrElse { error ->
+                                Log.w(
+                                    TAG,
+                                    "Unable to confirm ${provider.id} STOP before Wi-Fi cleanup",
+                                    error
+                                )
+                                null
+                            }
                     if (confirmed == false) provider.id else null
                 }
 
         if (waitingIds.isEmpty()) {
             handler.removeCallbacks(stopConfirmRunnable)
-            stopConfirmStartedAtMs = null
+            cleanupState.clearStopConfirmation()
             return false
         }
 
         val now = elapsedRealtime()
-        val startedAt = stopConfirmStartedAtMs ?: now.also {
-            stopConfirmStartedAtMs = it
+        val startedAt = cleanupState.stopConfirmationStartedAtMs ?: now.also {
+            cleanupState.startStopConfirmation(it)
             Log.i(
                 TAG,
                 "Waiting for provider STOP confirmation before Wi-Fi cleanup: " +
@@ -303,7 +306,7 @@ class SyncMaintenanceRunner(
 
         if (now - startedAt >= STOP_CONFIRM_TIMEOUT_MS) {
             handler.removeCallbacks(stopConfirmRunnable)
-            stopConfirmStartedAtMs = null
+            cleanupState.clearStopConfirmation()
             Log.w(
                 TAG,
                 "Provider STOP confirmation timed out before Wi-Fi cleanup: " +
@@ -312,7 +315,7 @@ class SyncMaintenanceRunner(
             return false
         }
 
-        pendingFinalSnapshot = snapshot
+        cleanupState.rememberPendingFinalSnapshot(snapshot)
         handler.removeCallbacks(stopConfirmRunnable)
         handler.postDelayed(
             stopConfirmRunnable,
@@ -325,13 +328,11 @@ class SyncMaintenanceRunner(
         handler.removeCallbacks(pollRunnable)
         handler.removeCallbacks(stopConfirmRunnable)
         handler.removeCallbacks(cleanupTimeoutRunnable)
-        stopConfirmStartedAtMs = null
+        cleanupState.clearStopConfirmation()
         networkGate?.cancel()
         networkGate = null
 
-        cleanupPending = false
-        pendingFinalSnapshot = null
-        tempWifiOnRequested = false
+        cleanupState.reset()
         unregisterHelperReceiver()
         releaseWakeLock()
 

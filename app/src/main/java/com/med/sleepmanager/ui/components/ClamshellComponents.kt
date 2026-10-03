@@ -5,6 +5,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.med.sleepmanager.R
 
@@ -24,8 +25,10 @@ internal fun ClamshellOptionsCard(
     SettingsCard {
         SettingRow(
             icon = R.drawable.ic_lid_lock,
-            title = "Closed-lid protection",
-            subtitle = "Return the device to sleep after accidental wake-ups while the lid is still closed. External displays remain usable.",
+            title = stringResource(R.string.clamshell_closed_lid_protection),
+            subtitle = stringResource(
+                R.string.clamshell_closed_lid_protection_description
+            ),
             checked = closedLidProtectionEnabled,
             enabled = true,
             onCheckedChange = onClosedLidProtectionChange
@@ -35,8 +38,10 @@ internal fun ClamshellOptionsCard(
 
         SettingRow(
             icon = R.drawable.ic_lid_lock,
-            title = "Sleep when external display disconnects",
-            subtitle = "With the lid closed, put the device to sleep when an external display is disconnected. Off keeps the device's default behavior.",
+            title = stringResource(R.string.clamshell_sleep_on_display_disconnect),
+            subtitle = stringResource(
+                R.string.clamshell_sleep_on_display_disconnect_description
+            ),
             checked = sleepOnExternalDisplayDisconnect,
             enabled = closedLidProtectionEnabled,
             onCheckedChange = onSleepOnExternalDisplayDisconnectChange
@@ -47,8 +52,10 @@ internal fun ClamshellOptionsCard(
 
             SettingRow(
                 icon = R.drawable.ic_lid_lock,
-                title = "Power button sleeps with lid closed",
-                subtitle = "With the lid closed and the device awake, press Power to put it back to sleep—docked or after disconnecting the external display. Off keeps the device\'s default behavior.",
+                title = stringResource(R.string.clamshell_power_button_sleep),
+                subtitle = stringResource(
+                    R.string.clamshell_power_button_sleep_description
+                ),
                 checked = powerButtonSleepsWithLidClosed,
                 enabled = closedLidProtectionEnabled,
                 onCheckedChange = onPowerButtonSleepsWithLidClosedChange
@@ -60,8 +67,12 @@ internal fun ClamshellOptionsCard(
 
             SettingRow(
                 icon = R.drawable.ic_battery,
-                title = "Disable Charging Separation with lid closed",
-                subtitle = "Temporarily disable Charging Separation while the lid is closed so the battery can charge. External-display mode keeps your original setting.",
+                title = stringResource(
+                    R.string.clamshell_disable_charging_separation
+                ),
+                subtitle = stringResource(
+                    R.string.clamshell_disable_charging_separation_description
+                ),
                 checked = chargingSeparationEnabled,
                 enabled = true,
                 onCheckedChange = onChargingSeparationChange

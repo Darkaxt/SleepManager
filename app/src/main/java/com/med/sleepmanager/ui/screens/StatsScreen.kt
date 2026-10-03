@@ -46,13 +46,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.med.sleepmanager.R
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.ui.feedbackClick
-import com.med.sleepmanager.ui.label
 import java.util.Locale
 
 import kotlinx.coroutines.Dispatchers
@@ -66,119 +67,162 @@ internal fun BatteryStatsPage(
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        StatsCard(title = "Battery") {
+        StatsCard(title = stringResource(R.string.stats_battery)) {
             StatsGrid(
                 metrics = listOf(
-                    "Current" to (
+                    stringResource(R.string.stats_current) to (
                         stats.currentPrecisePercent?.let {
-                            "${formatPercentTwoDecimals(it)}%"
-                        } ?: stats.currentPercent?.let { "$it%" } ?: "—"
+                            stringResource(
+                                R.string.stats_percent_value,
+                                formatPercentTwoDecimals(it)
+                            )
+                        } ?: stats.currentPercent?.let {
+                            stringResource(R.string.stats_percent_int_value, it)
+                        } ?: stringResource(R.string.stats_dash)
                     ),
-                    "Estimated capacity" to (
+                    stringResource(R.string.stats_estimated_capacity) to (
                         stats.estimatedCapacityMah?.let {
-                            "~${formatMah(it)} mAh"
-                        } ?: "Unavailable"
+                            stringResource(
+                                R.string.stats_approx_mah_value,
+                                formatMah(it)
+                            )
+                        } ?: stringResource(R.string.stats_unavailable)
                     ),
-                    "Current charge" to (
+                    stringResource(R.string.stats_current_charge) to (
                         stats.currentChargeMah?.let {
-                            "${formatMah(it)} mAh"
-                        } ?: "Unavailable"
+                            stringResource(
+                                R.string.stats_mah_value,
+                                formatMah(it)
+                            )
+                        } ?: stringResource(R.string.stats_unavailable)
                     )
                 )
             )
         }
 
-        StatsCard(title = "Sleep efficiency") {
+        StatsCard(title = stringResource(R.string.stats_sleep_efficiency)) {
             StatsGrid(
                 metrics = listOf(
-                    "7-day drain" to (
+                    stringResource(R.string.stats_7_day_drain) to (
                         stats.averageDrainPerHour?.let {
-                            "${formatDrainRate(it)}% / h"
-                        } ?: "Not enough data"
+                            stringResource(
+                                R.string.stats_percent_per_hour_value,
+                                formatDrainRate(it)
+                            )
+                        } ?: stringResource(R.string.stats_not_enough_data)
                     ),
-                    "Charge drain" to (
+                    stringResource(R.string.stats_charge_drain) to (
                         stats.averageDrainMahPerHour?.let {
-                            "${formatMahRate(it)} mAh / h"
-                        } ?: "Unavailable"
+                            stringResource(
+                                R.string.stats_mah_per_hour_value,
+                                formatMahRate(it)
+                            )
+                        } ?: stringResource(R.string.stats_unavailable)
                     ),
-                    "Deep sleep" to (
+                    stringResource(R.string.stats_deep_sleep) to (
                         stats.averageDeepSleepPercent?.let {
-                            "${formatPercentTwoDecimals(it)}%"
-                        } ?: "Collecting data"
+                            stringResource(
+                                R.string.stats_percent_value,
+                                formatPercentTwoDecimals(it)
+                            )
+                        } ?: stringResource(R.string.stats_collecting_data)
                     ),
-                    "Measured sleep" to formatSleepSessionDuration(
-                        stats.totalMeasuredSleepMs
-                    )
+                    stringResource(R.string.stats_measured_sleep) to
+                        formatSleepSessionDuration(stats.totalMeasuredSleepMs)
                 )
             )
         }
 
-        StatsCard(title = "Standby estimate") {
+        StatsCard(title = stringResource(R.string.stats_standby_estimate)) {
             StatsGrid(
                 metrics = listOf(
-                    "From current battery" to (
+                    stringResource(R.string.stats_from_current_battery) to (
                         stats.estimatedHoursRemaining?.let {
                             formatStandbyEstimate(it)
-                        } ?: "Not enough data"
+                        } ?: stringResource(R.string.stats_not_enough_data)
                     ),
-                    "From 100%" to (
+                    stringResource(R.string.stats_from_full) to (
                         stats.estimatedHoursFromFull?.let {
                             formatStandbyEstimate(it)
-                        } ?: "Not enough data"
+                        } ?: stringResource(R.string.stats_not_enough_data)
                     ),
-                    "Best drain" to (
+                    stringResource(R.string.stats_best_drain) to (
                         stats.bestDrainPerHour?.let {
-                            "${formatDrainRate(it)}% / h"
-                        } ?: "—"
+                            stringResource(
+                                R.string.stats_percent_per_hour_value,
+                                formatDrainRate(it)
+                            )
+                        } ?: stringResource(R.string.stats_dash)
                     ),
-                    "Worst drain" to (
+                    stringResource(R.string.stats_worst_drain) to (
                         stats.worstDrainPerHour?.let {
-                            "${formatDrainRate(it)}% / h"
-                        } ?: "—"
+                            stringResource(
+                                R.string.stats_percent_per_hour_value,
+                                formatDrainRate(it)
+                            )
+                        } ?: stringResource(R.string.stats_dash)
                     )
                 )
             )
             Text(
-                "Standby estimates use eligible sleep sessions of at least 3 hours from the last 7 days and are only indicative.",
+                stringResource(R.string.stats_standby_estimate_description),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
         stats.lastSession?.let { last ->
-            StatsCard(title = "Last sleep") {
+            StatsCard(title = stringResource(R.string.stats_last_sleep)) {
                 StatsGrid(
                     metrics = listOf(
-                        "Duration" to formatSleepSessionDuration(last.durationMs),
-                        (if (last.chargedDuringSleep) "Battery change" else "Battery used") to
-                            formatBatteryChange(last),
-                        "Charge used" to (
-                            last.drainMah?.let {
-                                "${formatMah(it)} mAh"
-                            } ?: if (last.chargedDuringSleep) {
-                                "Charging during sleep"
+                        stringResource(R.string.stats_duration) to
+                            formatSleepSessionDuration(last.durationMs),
+                        stringResource(
+                            if (last.chargedDuringSleep) {
+                                R.string.stats_battery_change
                             } else {
-                                "Unavailable"
+                                R.string.stats_battery_used
+                            }
+                        ) to formatBatteryChange(last),
+                        stringResource(R.string.stats_charge_used) to (
+                            last.drainMah?.let {
+                                stringResource(
+                                    R.string.stats_mah_value,
+                                    formatMah(it)
+                                )
+                            } ?: if (last.chargedDuringSleep) {
+                                stringResource(R.string.stats_charging_during_sleep)
+                            } else {
+                                stringResource(R.string.stats_unavailable)
                             }
                         ),
-                        "Deep sleep" to (
+                        stringResource(R.string.stats_deep_sleep) to (
                             last.deepSleepPercent?.let {
-                                "${formatPercentTwoDecimals(it)}%"
-                            } ?: "Collecting data"
+                                stringResource(
+                                    R.string.stats_percent_value,
+                                    formatPercentTwoDecimals(it)
+                                )
+                            } ?: stringResource(R.string.stats_collecting_data)
                         )
                     )
                 )
             }
         }
 
-        StatsCard(title = "Measurement") {
+        StatsCard(title = stringResource(R.string.stats_measurement)) {
             Text(
-                "${stats.averageSessionCount} eligible sleep session" +
-                    if (stats.averageSessionCount == 1) "." else "s.",
+                stringResource(
+                    if (stats.averageSessionCount == 1) {
+                        R.string.stats_eligible_session_singular
+                    } else {
+                        R.string.stats_eligible_session_plural
+                    },
+                    stats.averageSessionCount
+                ),
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                "Sessions shorter than 3 hours or containing charging are excluded from battery statistics. Shorter sleeps still appear in Last sleep and history. Capacity is an estimate when Android does not expose a readable full-capacity value.",
+                stringResource(R.string.stats_measurement_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -251,16 +295,22 @@ internal fun formatPercentOneDecimal(value: Double): String =
 internal fun formatPercentTwoDecimals(value: Double): String =
     String.format(Locale.getDefault(), "%.2f", value)
 
+@Composable
 internal fun formatStandbyEstimate(hours: Double): String {
-    if (!hours.isFinite() || hours <= 0.0) return "—"
+    if (!hours.isFinite() || hours <= 0.0) {
+        return stringResource(R.string.stats_dash)
+    }
 
     val totalHours = hours.toLong().coerceAtLeast(1L)
     val days = totalHours / 24L
     val remainderHours = totalHours % 24L
     return when {
-        days > 0L && remainderHours > 0L -> "${days}d ${remainderHours}h"
-        days > 0L -> "${days}d"
-        else -> "${totalHours}h"
+        days > 0L && remainderHours > 0L ->
+            stringResource(R.string.stats_days_hours, days, remainderHours)
+        days > 0L ->
+            stringResource(R.string.stats_days, days)
+        else ->
+            stringResource(R.string.stats_hours, totalHours)
     }
 }
 
@@ -319,7 +369,7 @@ internal fun BatteryDashboardCard(
 
                     if (dashboard.currentCharging) {
                         Text(
-                            "Charging",
+                            stringResource(R.string.stats_charging),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -339,13 +389,13 @@ internal fun BatteryDashboardCard(
                 ) {
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "Last sleep",
-                        value = "—"
+                        label = stringResource(R.string.stats_last_sleep),
+                        value = stringResource(R.string.stats_dash)
                     )
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "Drain",
-                        value = "—"
+                        label = stringResource(R.string.stats_drain),
+                        value = stringResource(R.string.stats_dash)
                     )
                 }
 
@@ -355,18 +405,18 @@ internal fun BatteryDashboardCard(
                 ) {
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "7-day average",
-                        value = "—"
+                        label = stringResource(R.string.stats_7_day_average),
+                        value = stringResource(R.string.stats_dash)
                     )
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "Samples",
+                        label = stringResource(R.string.stats_samples),
                         value = "0"
                     )
                 }
 
                 Text(
-                    "Sleep statistics will appear after your first sleep session of at least 3 hours without charging.",
+                    stringResource(R.string.stats_first_sleep_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -377,20 +427,28 @@ internal fun BatteryDashboardCard(
                 ) {
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "Last sleep",
-                        value =
-                            "${formatBatteryChange(last)} • ${formatSleepSessionDuration(last.durationMs)}"
+                        label = stringResource(R.string.stats_last_sleep),
+                        value = stringResource(
+                            R.string.stats_battery_change_and_duration,
+                            formatBatteryChange(last),
+                            formatSleepSessionDuration(last.durationMs)
+                        )
                     )
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "Drain",
+                        label = stringResource(R.string.stats_drain),
                         value =
                             when {
-                                last.chargedDuringSleep -> "Charging during sleep"
-                                last.durationMs < BatterySleepStore.MIN_AVERAGE_DURATION_MS -> "Short session"
+                                last.chargedDuringSleep ->
+                                    stringResource(R.string.stats_charging_during_sleep)
+                                last.durationMs < BatterySleepStore.MIN_AVERAGE_DURATION_MS ->
+                                    stringResource(R.string.stats_short_session)
                                 else -> last.drainPerHour?.let {
-                                    "${formatDrainRate(it)}% / h"
-                                } ?: "—"
+                                    stringResource(
+                                        R.string.stats_percent_per_hour_value,
+                                        formatDrainRate(it)
+                                    )
+                                } ?: stringResource(R.string.stats_dash)
                             }
                     )
                 }
@@ -401,15 +459,18 @@ internal fun BatteryDashboardCard(
                 ) {
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "7-day average",
+                        label = stringResource(R.string.stats_7_day_average),
                         value =
                             dashboard.averageDrainPerHour?.let {
-                                "${formatDrainRate(it)}% / h"
-                            } ?: "Not enough data"
+                                stringResource(
+                                    R.string.stats_percent_per_hour_value,
+                                    formatDrainRate(it)
+                                )
+                            } ?: stringResource(R.string.stats_not_enough_data)
                     )
                     BatteryMetric(
                         modifier = Modifier.weight(1f),
-                        label = "Samples",
+                        label = stringResource(R.string.stats_samples),
                         value = dashboard.averageSessionCount.toString()
                     )
                 }
@@ -417,18 +478,20 @@ internal fun BatteryDashboardCard(
                 when {
                     last.chargedDuringSleep -> {
                         Text(
-                            "Sessions with charging are excluded from the 7-day drain average.",
+                            stringResource(R.string.stats_charging_excluded),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     last.durationMs < BatterySleepStore.MIN_AVERAGE_DURATION_MS -> {
                         Text(
-                            if (dashboard.averageSessionCount == 0) {
-                                "Complete a sleep session of at least 3 hours to start building sleep averages."
-                            } else {
-                                "This short session is excluded from the 7-day average."
-                            },
+                            stringResource(
+                                if (dashboard.averageSessionCount == 0) {
+                                    R.string.stats_complete_long_sleep
+                                } else {
+                                    R.string.stats_short_session_excluded
+                                }
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -436,7 +499,10 @@ internal fun BatteryDashboardCard(
                     else -> {
                         last.drainMah?.let {
                             Text(
-                                "Measured charge used: ${String.format(Locale.US, "%.0f", it)} mAh",
+                                stringResource(
+                                    R.string.stats_measured_charge_used,
+                                    String.format(Locale.US, "%.0f", it)
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -479,25 +545,38 @@ internal fun InteractiveBatteryGauge(
 
     val chargeText =
         if (currentChargeMah != null && estimatedCapacityMah != null) {
-            "${formatMah(currentChargeMah)} / ~${formatMah(estimatedCapacityMah)} mAh"
+            stringResource(
+                R.string.stats_charge_over_capacity,
+                formatMah(currentChargeMah),
+                formatMah(estimatedCapacityMah)
+            )
         } else {
-            "Charge data unavailable"
+            stringResource(R.string.stats_charge_data_unavailable)
         }
 
     val standbyText =
         estimatedHoursRemaining?.let {
-            "Estimated standby • ${formatStandbyEstimate(it)}"
-        } ?: "Estimated standby • Not enough data"
+            stringResource(
+                R.string.stats_estimated_standby_value,
+                formatStandbyEstimate(it)
+            )
+        } ?: stringResource(R.string.stats_estimated_standby_not_enough)
 
     val sleepDrainText =
         averageDrainPerHour?.let {
-            "Sleep drain • ${formatDrainRate(it)}% / h"
-        } ?: "Sleep drain • Not enough data"
+            stringResource(
+                R.string.stats_sleep_drain_value,
+                formatDrainRate(it)
+            )
+        } ?: stringResource(R.string.stats_sleep_drain_not_enough)
 
     val deepSleepText =
         averageDeepSleepPercent?.let {
-            "Deep sleep • ${formatPercentTwoDecimals(it)}%"
-        } ?: "Deep sleep • Collecting data"
+            stringResource(
+                R.string.stats_deep_sleep_value,
+                formatPercentTwoDecimals(it)
+            )
+        } ?: stringResource(R.string.stats_deep_sleep_collecting)
 
     val infoTexts = listOf(
         chargeText,
@@ -506,6 +585,19 @@ internal fun InteractiveBatteryGauge(
         deepSleepText
     )
     val currentInfo = infoTexts[infoIndex]
+    val gaugeContentDescription =
+        if (percent != null) {
+            stringResource(
+                R.string.stats_battery_gauge_content_description,
+                percent,
+                currentInfo
+            )
+        } else {
+            stringResource(
+                R.string.stats_battery_gauge_unavailable_content_description,
+                currentInfo
+            )
+        }
 
     val onGaugeClick = feedbackClick {
         hasInteracted = true
@@ -540,9 +632,7 @@ internal fun InteractiveBatteryGauge(
             .testTag("battery_gauge")
             .clickable(onClick = onGaugeClick)
             .semantics {
-                contentDescription =
-                    "Battery ${percent?.let { "$it percent" } ?: "level unavailable"}. " +
-                        "$currentInfo. Tap to cycle battery stats."
+                contentDescription = gaugeContentDescription
             },
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
@@ -636,7 +726,7 @@ internal fun InteractiveBatteryGauge(
         ) {
             AnimatedVisibility(visible = !hasInteracted) {
                 Text(
-                    "Tap to cycle stats",
+                    stringResource(R.string.stats_tap_to_cycle),
                     modifier = Modifier.testTag("battery_gauge_hint"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -711,7 +801,7 @@ internal fun PendingRestoreCard(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                "Pending restore needs attention",
+                stringResource(R.string.stats_pending_restore_title),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
@@ -721,14 +811,14 @@ internal fun PendingRestoreCard(
                 color = MaterialTheme.colorScheme.onTertiaryContainer
             )
             Text(
-                "SleepManager keeps the transaction instead of pretending the restore succeeded.",
+                stringResource(R.string.stats_pending_restore_description),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onTertiaryContainer
             )
             OutlinedButton(
                 onClick = feedbackClick(onForget)
             ) {
-                Text("Forget pending restore")
+                Text(stringResource(R.string.stats_forget_pending_restore))
             }
         }
     }
@@ -755,15 +845,20 @@ internal fun formatBatteryChange(
     }
 }
 
+@Composable
 internal fun formatSleepSessionDuration(durationMs: Long): String {
     val totalMinutes = (durationMs / 60_000L).coerceAtLeast(0L)
     val hours = totalMinutes / 60L
     val minutes = totalMinutes % 60L
     return when {
-        hours > 0L && minutes > 0L -> "${hours}h ${minutes}m"
-        hours > 0L -> "${hours}h"
-        totalMinutes > 0L -> "${totalMinutes}m"
-        else -> "<1m"
+        hours > 0L && minutes > 0L ->
+            stringResource(R.string.stats_hours_minutes, hours, minutes)
+        hours > 0L ->
+            stringResource(R.string.stats_hours, hours)
+        totalMinutes > 0L ->
+            stringResource(R.string.stats_minutes, totalMinutes)
+        else ->
+            stringResource(R.string.stats_under_one_minute)
     }
 }
 

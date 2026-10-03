@@ -1,3 +1,5 @@
+import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -37,6 +39,77 @@ if (hasAnyStableSigning && !hasStableSigning) {
             "or the matching SLEEPMANAGER_* environment variables."
     )
 }
+
+val expectedReleaseSigningSha256 =
+    providers.gradleProperty("SLEEPMANAGER_SIGNING_SHA256")
+        .orNull
+        ?.lowercase()
+        ?.replace(":", "")
+        ?.replace(Regex("\\s+"), "")
+        ?.takeIf { it.isNotBlank() }
+
+fun configuredSigningFingerprintSha256(): String {
+    if (!hasStableSigning) {
+        throw GradleException(
+            "Release builds require the permanent SleepManager signing key."
+        )
+    }
+
+    val store = rootProject.file(stableStoreFile!!)
+    if (!store.isFile) {
+        throw GradleException("Signing keystore not found: $store")
+    }
+
+    val password = stableStorePassword!!.toCharArray()
+    val alias = stableKeyAlias!!
+    var lastFailure: Throwable? = null
+
+    for (type in listOf(KeyStore.getDefaultType(), "JKS", "PKCS12").distinct()) {
+        try {
+            val keyStore = KeyStore.getInstance(type)
+            store.inputStream().use { input ->
+                keyStore.load(input, password)
+            }
+            val certificate =
+                keyStore.getCertificate(alias)
+                    ?: throw GradleException(
+                        "Signing alias '$alias' was not found in $store"
+                    )
+            return MessageDigest.getInstance("SHA-256")
+                .digest(certificate.encoded)
+                .joinToString("") { byte -> "%02x".format(byte) }
+        } catch (error: Throwable) {
+            lastFailure = error
+        }
+    }
+
+    throw GradleException(
+        "Unable to read the configured signing certificate.",
+        lastFailure
+    )
+}
+
+val verifyReleaseSigningCertificate =
+    tasks.register("verifyReleaseSigningCertificate") {
+        group = "verification"
+        description =
+            "Refuses release builds unless the configured key matches the pinned release certificate."
+
+        doLast {
+            val expected =
+                expectedReleaseSigningSha256
+                    ?: throw GradleException(
+                        "SLEEPMANAGER_SIGNING_SHA256 is missing."
+                    )
+            val actual = configuredSigningFingerprintSha256()
+            if (actual != expected) {
+                throw GradleException(
+                    "Release signing certificate mismatch. " +
+                        "Expected $expected but configured $actual."
+                )
+            }
+        }
+    }
 
 android {
     namespace = appId
@@ -83,10 +156,18 @@ android {
         buildConfig = true
     }
 
+    sourceSets.getByName("main").java.srcDir(
+        rootProject.file("shared/helper-protocol/src/main/java")
+    )
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn(verifyReleaseSigningCertificate)
 }
 
 dependencies {

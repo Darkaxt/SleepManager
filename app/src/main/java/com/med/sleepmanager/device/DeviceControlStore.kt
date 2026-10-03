@@ -7,6 +7,8 @@ object DeviceControlStore {
 
     private const val KEY_BATTERY_SAVER_OWNED = "battery_saver_owned"
     private const val KEY_BATTERY_SAVER_PREVIOUS = "battery_saver_previous"
+    private const val KEY_BATTERY_SAVER_DEFERRED_FOR_POWER =
+        "battery_saver_deferred_for_external_power"
     private const val KEY_CHARGING_SEPARATION_OWNED = "charging_separation_owned"
     private const val KEY_CHARGING_SEPARATION_PREVIOUS = "charging_separation_previous"
     private const val KEY_LAST_SERVICE_RECOVERY = "last_service_recovery"
@@ -36,6 +38,24 @@ object DeviceControlStore {
         prefs(context).edit()
             .remove(KEY_BATTERY_SAVER_OWNED)
             .remove(KEY_BATTERY_SAVER_PREVIOUS)
+            .commit()
+    }
+
+    fun batterySaverDeferredForExternalPower(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_BATTERY_SAVER_DEFERRED_FOR_POWER, false)
+
+    fun setBatterySaverDeferredForExternalPower(
+        context: Context,
+        deferred: Boolean
+    ) {
+        prefs(context).edit()
+            .apply {
+                if (deferred) {
+                    putBoolean(KEY_BATTERY_SAVER_DEFERRED_FOR_POWER, true)
+                } else {
+                    remove(KEY_BATTERY_SAVER_DEFERRED_FOR_POWER)
+                }
+            }
             .commit()
     }
 

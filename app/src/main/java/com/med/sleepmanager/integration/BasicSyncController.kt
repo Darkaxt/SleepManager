@@ -306,7 +306,8 @@ object BasicSyncController {
                 Log.w(TAG, "Timed out waiting for STATE_CHANGED")
             }
             result.get()
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
+            Log.e(TAG, "Unable to query BasicSync state", t)
             null
         } finally {
             if (registered) {
@@ -319,11 +320,14 @@ object BasicSyncController {
     private fun sendRemoteControl(context: Context, action: String): Boolean {
         if (!isInstalled(context)) return false
 
-        return runCatching {
+        return try {
             context.sendBroadcast(
                 Intent(action).setPackage(PACKAGE)
             )
             true
-        }.getOrDefault(false)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Unable to send BasicSync action=$action", t)
+            false
+        }
     }
 }

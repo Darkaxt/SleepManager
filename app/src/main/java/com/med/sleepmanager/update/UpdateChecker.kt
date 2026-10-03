@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.med.sleepmanager.BuildConfig
 import com.med.sleepmanager.data.AppPreferences
+import com.med.sleepmanager.data.UpdateStateStore
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -53,8 +54,8 @@ object UpdateChecker {
     private val checkGate = UpdateCheckGate()
 
     fun cachedUpdate(context: Context): UpdateInfo? {
-        val version = AppPreferences.latestReleaseVersion(context) ?: return null
-        val url = AppPreferences.latestReleaseUrl(context) ?: return null
+        val version = UpdateStateStore.latestReleaseVersion(context) ?: return null
+        val url = UpdateStateStore.latestReleaseUrl(context) ?: return null
         if (!SleepManagerReleaseOrigin.isExpectedReleaseUrl(url)) return null
 
         if (!BuildConfig.VERSION_NAME.contains("-dev")) {
@@ -66,10 +67,10 @@ object UpdateChecker {
         return if (VersionComparator.isNewer(version, BuildConfig.VERSION_NAME)) {
             UpdateInfo(
                 versionName = version,
-                versionCode = AppPreferences.latestReleaseVersionCode(context),
+                versionCode = UpdateStateStore.latestReleaseVersionCode(context),
                 releaseUrl = url,
-                apkUrl = AppPreferences.latestReleaseApkUrl(context),
-                sha256 = AppPreferences.latestReleaseSha256(context),
+                apkUrl = UpdateStateStore.latestReleaseApkUrl(context),
+                sha256 = UpdateStateStore.latestReleaseSha256(context),
                 helper = cachedHelperRelease(context)
             )
         } else {
@@ -154,14 +155,14 @@ object UpdateChecker {
                 networkReady = trigger == UpdateCheckTrigger.MANUAL ||
                     (automatic && hasValidatedNetwork(context)),
                 now = now,
-                lastAttempt = AppPreferences.lastUpdateCheckAttempt(context),
-                lastSuccess = AppPreferences.lastUpdateCheckSuccess(context)
+                lastAttempt = UpdateStateStore.lastUpdateCheckAttempt(context),
+                lastSuccess = UpdateStateStore.lastUpdateCheckSuccess(context)
             )
         ) {
             UpdateCheckStart.DISABLED -> UpdateCheckResult.Disabled
             UpdateCheckStart.NOT_DUE -> UpdateCheckResult.NotDue
             UpdateCheckStart.READY -> {
-                AppPreferences.setLastUpdateCheckAttempt(context, now)
+                UpdateStateStore.setLastUpdateCheckAttempt(context, now)
                 null
             }
         }
@@ -182,7 +183,7 @@ object UpdateChecker {
             }
 
             cacheRelease(appContext, release)
-            AppPreferences.setLastUpdateCheckSuccess(appContext, System.currentTimeMillis())
+            UpdateStateStore.setLastUpdateCheckSuccess(appContext, System.currentTimeMillis())
 
             val helperUpdate = helperUpdateForRelease(appContext, release.helper)
             if (VersionComparator.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
@@ -224,14 +225,14 @@ object UpdateChecker {
     }.getOrDefault(false)
 
     private fun cachedHelperRelease(context: Context): HelperUpdateInfo? {
-        val version = AppPreferences.latestHelperVersion(context) ?: return null
-        val releaseUrl = AppPreferences.latestReleaseUrl(context) ?: return null
+        val version = UpdateStateStore.latestHelperVersion(context) ?: return null
+        val releaseUrl = UpdateStateStore.latestReleaseUrl(context) ?: return null
         return HelperUpdateInfo(
             versionName = version,
-            versionCode = AppPreferences.latestHelperVersionCode(context),
+            versionCode = UpdateStateStore.latestHelperVersionCode(context),
             releaseUrl = releaseUrl,
-            apkUrl = AppPreferences.latestHelperApkUrl(context),
-            sha256 = AppPreferences.latestHelperSha256(context)
+            apkUrl = UpdateStateStore.latestHelperApkUrl(context),
+            sha256 = UpdateStateStore.latestHelperSha256(context)
         )
     }
 
@@ -266,7 +267,7 @@ object UpdateChecker {
         )
 
     private fun cacheRelease(context: Context, release: UpdateInfo) {
-        AppPreferences.setLatestRelease(
+        UpdateStateStore.setLatestRelease(
             context = context,
             version = release.versionName,
             versionCode = release.versionCode,

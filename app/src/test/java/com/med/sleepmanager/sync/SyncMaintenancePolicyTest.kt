@@ -84,26 +84,51 @@ class SyncMaintenancePolicyTest {
     }
 
     @Test
-    fun periodicAlarmRetriesOnlyForSuppressedThorFalseWake() {
+    fun periodicAlarmRetriesOnlyForSuppressedClosedLidFalseWake() {
         assertEquals(
             PeriodicAlarmDeviceDecision.RUN,
             SyncMaintenancePolicy.periodicAlarmDeviceDecision(
                 interactive = false,
-                thorClosedLidWakeSuppressed = false
+                closedLidWakeSuppressed = false
             )
         )
         assertEquals(
-            PeriodicAlarmDeviceDecision.RETRY_AFTER_THOR_FALSE_WAKE,
+            PeriodicAlarmDeviceDecision.RETRY_AFTER_CLOSED_LID_FALSE_WAKE,
             SyncMaintenancePolicy.periodicAlarmDeviceDecision(
                 interactive = true,
-                thorClosedLidWakeSuppressed = true
+                closedLidWakeSuppressed = true
             )
         )
         assertEquals(
             PeriodicAlarmDeviceDecision.CANCEL_AWAKE,
             SyncMaintenancePolicy.periodicAlarmDeviceDecision(
                 interactive = true,
-                thorClosedLidWakeSuppressed = false
+                closedLidWakeSuppressed = false
+            )
+        )
+    }
+
+    @Test
+    fun periodicCompletionSchedulesNextOnlyWhileStillSleepingAndEnabled() {
+        assertEquals(
+            PeriodicMaintenanceFollowUp.SCHEDULE_NEXT,
+            SyncMaintenancePolicy.periodicCompletionFollowUp(
+                stillSleeping = true,
+                periodicEnabled = true
+            )
+        )
+        assertEquals(
+            PeriodicMaintenanceFollowUp.CANCEL,
+            SyncMaintenancePolicy.periodicCompletionFollowUp(
+                stillSleeping = false,
+                periodicEnabled = true
+            )
+        )
+        assertEquals(
+            PeriodicMaintenanceFollowUp.CANCEL,
+            SyncMaintenancePolicy.periodicCompletionFollowUp(
+                stillSleeping = true,
+                periodicEnabled = false
             )
         )
     }
