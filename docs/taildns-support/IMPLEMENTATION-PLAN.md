@@ -7,7 +7,7 @@ The specification in [SPECIFICATION.md](SPECIFICATION.md) is authoritative.
 
 ## October 3 upstream promotion
 
-Status: **ACTIVE**
+Status: **COMPLETE**
 
 Scope: merge upstream `12db8ed` (0.7.0), preserving TD-1 through TD-9.
 Main/Helper versions: 0.7.0.1 (551) / 1.1.2.1 (1116).
@@ -34,7 +34,18 @@ expired at the next minute during activity relaunch; the production schedule
 correctly rejected the expired window. Only that test fixture was widened to
 opposite half-day windows; checks across every minute/midnight preserve intended
 inside/outside semantics. Publication was skipped, not bypassed. Fresh release
-gates, publication and public-artifact verification remain pending.
+run 37126519756 passed signed build, instrumentation/lifecycle, previous-fork
+Helper compatibility, and real screen-off/screen-on E2E (including both combined
+condition outcomes). Release `v0.7.0.1` publishes both APKs, `update.json` and an
+exact-source/hash build manifest from commit
+`21624055cddf771a784565befb857b407fd09291`. Independent downloads verified Main
+0.7.0.1/code 551, Helper 1.1.2.1/code 1116, expected package IDs, common pinned
+certificate `87c2f2f5d5dac021d3ee26bb6b361f722410122e2dedc465a37e5b9e0276ecec`,
+all artifact hashes, fork-only URLs, tag target and normal public release state.
+
+The emulator E2E suite intentionally skips the physical 60-second custom alarm
+and absent optional third-party integrations; no new physical-device verification
+is claimed or required by this no-device upstream-promotion task.
 Historical device acceptance below is not new device verification.
 
 Blockers: none identified. Tracked deferrals: none.
