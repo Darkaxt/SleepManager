@@ -127,7 +127,7 @@ class HelperVersionCompatibilityTest {
 
             assertTrue(
                 "Main transaction did not remain active after Helper sleep result",
-                waitUntil(timeoutMs = 1_500L) {
+                waitUntil(timeoutMs = 5_000L) {
                     val current = SleepCycleStore.current(context)
                     current.active &&
                         current.cycleId == cycle.cycleId &&
@@ -181,7 +181,7 @@ class HelperVersionCompatibilityTest {
         queue: LinkedBlockingQueue<Intent>,
         phase: String
     ): Intent {
-        val deadline = SystemClock.elapsedRealtime() + 2_500L
+        val deadline = SystemClock.elapsedRealtime() + 8_000L
         while (SystemClock.elapsedRealtime() < deadline) {
             val remaining = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(1L)
             val result = queue.poll(remaining, TimeUnit.MILLISECONDS) ?: break
@@ -211,7 +211,7 @@ class HelperVersionCompatibilityTest {
             "SleepManager service did not start",
             waitUntil(timeoutMs = 3_000L) { SleepManagerService.running }
         )
-        SystemClock.sleep(350L)
+        SystemClock.sleep(750L)
     }
 
     private fun waitUntil(

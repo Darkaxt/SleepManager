@@ -4,6 +4,7 @@ import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.SyncthingController
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
 
 internal data class SleepManagerUiState(
     val activityRefreshToken: Int = 0,
@@ -16,6 +17,7 @@ internal data class SleepManagerUiState(
     val manageTailscaleEnabled: Boolean = false,
     val manageJamesDspEnabled: Boolean = false,
     val manageBasicSyncEnabled: Boolean = false,
+    val manageRaOfflineProxyEnabled: Boolean = false,
     val closedLidProtectionEnabled: Boolean = false,
     val dockDisconnectSleeps: Boolean = false,
     val closedLidPowerSleeps: Boolean = false,
@@ -37,6 +39,8 @@ internal data class SleepManagerUiState(
     val currentSyncthingState: SyncthingController.RuntimeState? = null,
     val currentTailscaleConnected: Boolean? = null,
     val currentBasicSyncState: BasicSyncController.RemoteState? = null,
+    val currentRaOfflineProxyStatus: RaOfflineProxyStatus? = null,
+    val raOfflineProxyStatusProbeComplete: Boolean = false,
     val currentBackgroundReliability: BackgroundReliability.Snapshot? = null,
     val currentDeviceControlCapabilities: DeviceControlController.ControlCapabilities? = null,
     val currentBatterySaverState: Boolean = false,

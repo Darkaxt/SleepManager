@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -182,6 +183,7 @@ internal fun CompactIntegrationRow(
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onOpen: (() -> Unit)? = null,
+    preserveIconColors: Boolean = false,
     secondaryActionLabel: String? = null,
     onSecondaryAction: (() -> Unit)? = null
 ) {
@@ -201,11 +203,16 @@ internal fun CompactIntegrationRow(
             Icon(
                 painter = painterResource(icon),
                 contentDescription = null,
-                tint = when {
-                    checked && enabled -> MaterialTheme.colorScheme.onPrimary
-                    enabled -> MaterialTheme.colorScheme.onSecondaryContainer
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                tint =
+                    if (preserveIconColors) {
+                        Color.Unspecified
+                    } else {
+                        when {
+                            checked && enabled -> MaterialTheme.colorScheme.onPrimary
+                            enabled -> MaterialTheme.colorScheme.onSecondaryContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    },
                 modifier = Modifier
                     .padding(10.dp)
                     .size(22.dp)
@@ -341,6 +348,57 @@ internal fun CompactIntegrationRow(
                 modifier = Modifier.semantics {
                     contentDescription = toggleContentDescription
                 }
+            )
+        }
+    }
+}
+
+
+@Composable
+internal fun CompactSupportedAppRow(
+    @DrawableRes icon: Int,
+    title: String,
+    version: String,
+    preserveIconColors: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint =
+                    if (preserveIconColors) {
+                        Color.Unspecified
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                    },
+                modifier = Modifier
+                    .padding(10.dp)
+                    .size(22.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                modifier = Modifier.testTag("integration_title_$title"),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+            )
+            Text(
+                version,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
             )
         }
     }

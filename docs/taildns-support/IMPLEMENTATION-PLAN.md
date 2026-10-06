@@ -5,7 +5,37 @@ support for TailDNS.
 
 The specification in [SPECIFICATION.md](SPECIFICATION.md) is authoritative.
 
-## October 3 upstream promotion
+## October 6 upstream promotion
+
+Authorization: `already_authorized` by `monitor-taildns-upstream-updates`.
+Authoritative requirements: maintained synchronization and TD-1 through TD-9
+in SPECIFICATION.md; no device deployment or new TD-10 claim.
+
+- Stage 1 — Merge and verify exact upstream: **COMPLETE**. Merge upstream
+  `1118b30e3731b4b1f894fc7b0fe5116a0e744a08` (0.7.1), retain fork contracts,
+  derive monotonic versions, and pass focused tests, both release lint-vital
+  checks, clean paired signed assemblies and source/diff contract checks.
+- Stage 2 — Publish and independently verify: **ACTIVE**. Commit/push
+  verified source, pass repository release regression gates, publish normal
+  paired release, and verify public APK identities, versions, signer, hashes,
+  update URLs and exact source. All TD-8/TD-9 release criteria belong here.
+
+Stage 1 evidence: clean unit tests, both lint-vital checks, signed release
+assemblies and instrumentation compilation passed under Gradle gate ticket 190
+(gate acquired; workers 2; parallel false; observed Gradle heap 3 GB; test fork 1
+with 512 MB heap; requested Kotlin heap 3 GB). No native tasks or memory failure.
+SDK 36 independently verifies Main 0.7.1.1/code 553 and unchanged Helper
+1.1.2.1/code 1116, both signed by the pinned certificate. Artifact/protocol
+tests and diff checks pass. Source review preserves TD-1 through TD-9, existing
+settings keys and the paired Helper implementation; service conflict resolution
+retains package-bound token parsing alongside upstream RAOfflineProxy control.
+The existing opposite-half-day schedule fixture is preserved. No device claim.
+
+Remaining: Stage 2 release regression gates and independent public verification.
+Blockers: none identified.
+Tracked deferrals: none. Historical verification below is not current evidence.
+
+## October 3 upstream promotion record
 
 Status: **COMPLETE**
 

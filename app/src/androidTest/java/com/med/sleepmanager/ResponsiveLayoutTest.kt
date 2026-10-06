@@ -84,7 +84,7 @@ class ResponsiveLayoutTest {
     }
 
     @Test
-    fun shortLandscape_testSleepWakeDialogCanScrollToLastInstruction() {
+    fun shortLandscape_quickSetupGuidanceIsReadable() {
         applyDisplay(
             widthPx = 1280,
             heightPx = 960,
@@ -92,17 +92,12 @@ class ResponsiveLayoutTest {
         )
 
         composeRule.onNodeWithTag("main_list")
-            .performScrollToNode(hasText("How to test sleep / wake"))
-        composeRule.onNodeWithText("How to test sleep / wake")
-            .performClick()
-        composeRule.waitForIdle()
-
-        composeRule.onNodeWithText(
-            "Copy log includes the full transaction details if needed."
-        )
-            .performScrollTo()
+            .performScrollToNode(hasTestTag("quick_setup_card"))
+        composeRule.onNodeWithTag("quick_setup_card")
             .assertIsDisplayed()
-        composeRule.onNodeWithText("Got it")
+        composeRule.onNodeWithText(
+            "Tap “Enable SleepManager”, choose what it should manage while the device sleeps, then tap “Finish setup” at the bottom."
+        )
             .assertIsDisplayed()
     }
 
@@ -205,6 +200,7 @@ class ResponsiveLayoutTest {
         assertTextIsNotCrushed("integration_title_Syncthing‑Fork")
         assertTextIsNotCrushed("integration_title_Tailscale / TailDNS")
         assertTextIsNotCrushed("integration_title_JamesDSP")
+        assertTextIsNotCrushed("integration_title_RAOfflineProxy")
     }
 
     private fun assertTextIsNotCrushed(tag: String) {

@@ -14,6 +14,7 @@ object DiagnosticsTransitionStore {
     const val COMPONENT_HELPER = "helper"
     const val COMPONENT_SYNCTHING = "syncthing"
     const val COMPONENT_BASIC_SYNC = "basicsync"
+    const val COMPONENT_RA_OFFLINE_PROXY = "raofflineproxy"
     const val COMPONENT_TAILSCALE = "tailscale"
     const val COMPONENT_JAMES_DSP = "jamesdsp"
     const val COMPONENT_BATTERY_SAVER = "battery_saver"
@@ -27,6 +28,7 @@ object DiagnosticsTransitionStore {
             COMPONENT_HELPER,
             COMPONENT_SYNCTHING,
             COMPONENT_BASIC_SYNC,
+            COMPONENT_RA_OFFLINE_PROXY,
             COMPONENT_TAILSCALE,
             COMPONENT_JAMES_DSP,
             COMPONENT_BATTERY_SAVER,
@@ -319,6 +321,71 @@ object DiagnosticsTransitionStore {
             }
         }
 
+        if ("raofflineproxy" in lower) {
+            when {
+                "stop accepted" in lower -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    reset = true,
+                    initialState = "RUNNING / intended running",
+                    sleepRequest = "STOP",
+                    sleepResult = event,
+                    sleepState = "STOPPING",
+                    restoreTarget = "START",
+                    note = event
+                )
+                "queue busy" in lower -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    reset = true,
+                    initialState = "RUNNING",
+                    sleepRequest = "WAIT_FOR_QUEUE",
+                    sleepResult = event,
+                    sleepState = "QUEUE_BUSY / NETWORK_PRESERVED",
+                    restoreTarget = "START_AFTER_OWNED_STOP",
+                    note = event
+                )
+                "gate complete" in lower -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    sleepResult = event,
+                    sleepState =
+                        if ("stop confirmed" in lower) {
+                            "STOPPED_CONFIRMED"
+                        } else {
+                            "UNCHANGED"
+                        },
+                    note = event
+                )
+                "restored" in lower -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    restoreResult = event,
+                    finalState = "RUNNING",
+                    note = event
+                )
+                "restore pending" in lower -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    restoreResult = event,
+                    finalState = "RESTORE_PENDING",
+                    note = event
+                )
+                "timed out" in lower -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    sleepResult = event,
+                    sleepState = "STOP_CONFIRM_TIMEOUT",
+                    note = event
+                )
+                else -> record(
+                    context,
+                    COMPONENT_RA_OFFLINE_PROXY,
+                    note = event
+                )
+            }
+        }
+
         if ("tailscale" in lower) {
             when {
                 event.startsWith("Sleep") -> record(
@@ -527,6 +594,7 @@ object DiagnosticsTransitionStore {
             COMPONENT_HELPER -> "Helper Wi-Fi / Bluetooth"
             COMPONENT_SYNCTHING -> "Syncthing-Fork"
             COMPONENT_BASIC_SYNC -> "BasicSync"
+            COMPONENT_RA_OFFLINE_PROXY -> "RAOfflineProxy"
             COMPONENT_TAILSCALE -> "Tailscale"
             COMPONENT_JAMES_DSP -> "JamesDSP"
             COMPONENT_BATTERY_SAVER -> "Battery Saver"

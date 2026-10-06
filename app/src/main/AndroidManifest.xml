@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <uses-permission android:name="com.raofflineproxy.permission.CONTROL_PROXY" />
+
     <queries>
         <package android:name="com.med.sleepmanager.helper" />
         <package android:name="com.github.catfriend1.syncthingfork" />
@@ -26,8 +28,10 @@
         <package android:name="com.tailscale.ipn" />
         <package android:name="io.github.darkaxt.taildns" />
         <package android:name="com.chiller3.basicsync" />
+        <package android:name="com.raofflineproxy" />
         <package android:name="james.dsp" />
         <package android:name="me.timschneeberger.rootlessjamesdsp" />
+        <provider android:authorities="com.raofflineproxy.config" />
     </queries>
 
     <application

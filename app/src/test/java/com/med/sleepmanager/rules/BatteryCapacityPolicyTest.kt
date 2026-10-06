@@ -50,8 +50,60 @@ class BatteryCapacityPolicyTest {
 
         assertTrue(result.learnedFullSuspect)
         assertEquals(5_938_000L, result.selectedFullUah)
-        assertEquals(4_750_400L, result.displayedCurrentUah)
+        assertEquals(4_754_556L, result.displayedCurrentUah)
         assertEquals(BatteryCapacitySource.DESIGN_FULL, result.capacitySource)
+        assertEquals(BatteryCurrentSource.NORMALIZED_COUNTER, result.currentSource)
+    }
+
+    @Test
+    fun normalizedCounter_preservesSubPercentMovementAtSameAndroidPercent() {
+        val start =
+            BatteryCapacityPolicy.select(
+                percent = 80,
+                chargeCounterUah = 6_674_635L,
+                learnedFullUah = 8_336_000L,
+                designFullUah = 5_938_000L
+            )
+        val end =
+            BatteryCapacityPolicy.select(
+                percent = 80,
+                chargeCounterUah = 6_650_000L,
+                learnedFullUah = 8_336_000L,
+                designFullUah = 5_938_000L
+            )
+
+        assertEquals(4_754_556L, start.displayedCurrentUah)
+        assertEquals(4_737_008L, end.displayedCurrentUah)
+        assertEquals(BatteryCurrentSource.NORMALIZED_COUNTER, start.currentSource)
+        assertEquals(BatteryCurrentSource.NORMALIZED_COUNTER, end.currentSource)
+        assertTrue(start.displayedCurrentUah!! > end.displayedCurrentUah!!)
+    }
+
+    @Test
+    fun suspectLearnedCapacity_keepsAlreadyPlausibleRawCounter() {
+        val result =
+            BatteryCapacityPolicy.select(
+                percent = 80,
+                chargeCounterUah = 4_750_000L,
+                learnedFullUah = 8_336_000L,
+                designFullUah = 5_938_000L
+            )
+
+        assertEquals(4_750_000L, result.displayedCurrentUah)
+        assertEquals(BatteryCurrentSource.RAW_COUNTER, result.currentSource)
+    }
+
+    @Test
+    fun normalizedCounterMustRemainConsistentWithAndroidPercent() {
+        val result =
+            BatteryCapacityPolicy.select(
+                percent = 50,
+                chargeCounterUah = 7_500_000L,
+                learnedFullUah = 8_336_000L,
+                designFullUah = 5_938_000L
+            )
+
+        assertEquals(2_969_000L, result.displayedCurrentUah)
         assertEquals(BatteryCurrentSource.PERCENT_DERIVED, result.currentSource)
     }
 
@@ -97,6 +149,46 @@ class BatteryCapacityPolicyTest {
         assertEquals(6_000_000L, result.selectedFullUah)
         assertEquals(BatteryCapacitySource.COUNTER_DERIVED, result.capacitySource)
         assertEquals(4_800_000L, result.displayedCurrentUah)
+    }
+
+    @Test
+    fun batteryHealth_usesReportedFullAgainstDesign() {
+        val health =
+            BatteryCapacityPolicy.batteryHealthPercent(
+                learnedFullUah = 5_886_000L,
+                designFullUah = 5_938_000L
+            )
+
+        assertEquals(99.1242842708, health!!, 0.0000001)
+    }
+
+    @Test
+    fun batteryHealth_isUnavailableWhenReportedFullIsSuspect() {
+        val health =
+            BatteryCapacityPolicy.batteryHealthPercent(
+                learnedFullUah = 8_336_000L,
+                designFullUah = 5_938_000L
+            )
+
+        assertEquals(null, health)
+    }
+
+    @Test
+    fun batteryHealth_requiresBothReportedAndDesignCapacity() {
+        assertEquals(
+            null,
+            BatteryCapacityPolicy.batteryHealthPercent(
+                learnedFullUah = null,
+                designFullUah = 5_938_000L
+            )
+        )
+        assertEquals(
+            null,
+            BatteryCapacityPolicy.batteryHealthPercent(
+                learnedFullUah = 5_886_000L,
+                designFullUah = null
+            )
+        )
     }
 
     @Test

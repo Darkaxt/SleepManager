@@ -13,6 +13,7 @@ object AppPreferences {
     private const val KEY_TAILSCALE = "tailscale"
     private const val KEY_JAMES_DSP = "james_dsp"
     private const val KEY_BASICSYNC = "basicsync"
+    private const val KEY_RA_OFFLINE_PROXY = "raofflineproxy"
     private const val KEY_PERIODIC_SYNC_WHILE_SLEEPING = "periodic_sync_while_sleeping"
     private const val KEY_SYNC_THEN_STOP_ON_SLEEP_WAKE = "sync_then_stop_on_sleep_wake"
     // Keep the original persisted key names so existing 0.6.x installs retain
@@ -89,6 +90,12 @@ object AppPreferences {
 
     fun setManageBasicSync(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_BASICSYNC, value).apply()
+
+    fun manageRaOfflineProxy(context: Context) =
+        prefs(context).getBoolean(KEY_RA_OFFLINE_PROXY, false)
+
+    fun setManageRaOfflineProxy(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_RA_OFFLINE_PROXY, value).apply()
 
     fun periodicSyncWhileSleeping(context: Context) =
         prefs(context).getBoolean(KEY_PERIODIC_SYNC_WHILE_SLEEPING, false)

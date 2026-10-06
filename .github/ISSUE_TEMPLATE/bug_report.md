@@ -19,7 +19,7 @@ Describe what you expected, what happened instead, and whether it is reproducibl
 
 ### SleepManager settings involved
 
-Which actions/integrations were enabled? For example Wi-Fi, Bluetooth, Battery Saver, Syncthing-Fork, BasicSync, Tailscale, JamesDSP, clamshell options or Advanced conditions.
+Which actions/integrations were enabled? For example Wi-Fi, Bluetooth, Battery Saver, Syncthing-Fork, BasicSync, RAOfflineProxy, Tailscale, JamesDSP, clamshell options or Advanced conditions.
 
 ### Diagnostics
 

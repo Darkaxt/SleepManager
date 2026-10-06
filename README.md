@@ -15,7 +15,7 @@ It can temporarily turn off Wi-Fi, Bluetooth and supported background services w
 
 - Turn **Wi-Fi** and **Bluetooth** off during sleep and restore them safely on wake.
 - Enable **Android Battery Saver** during sleep on supported devices and restore its previous state on wake.
-- Manage **Syncthing-Fork, BasicSync, Tailscale / TailDNS and JamesDSP** during sleep and wake.
+- Manage **Syncthing-Fork, BasicSync, RAOfflineProxy, Tailscale / TailDNS and JamesDSP** during sleep and wake.
 - Run optional syncs **before sleep, after wake or periodically while sleeping** with supported providers.
 - Track sleep battery drain, measured mAh use, deep sleep, drain rate and standby estimates.
 - Protect compatible **clamshell handhelds** from closed-lid false wakes.
@@ -98,6 +98,16 @@ In BasicSync, enable:
 
 See [Advanced Sync Behavior](#advanced-sync-behavior) for the additional sync modes.
 
+### RAOfflineProxy
+
+SleepManager can automatically stop **RAOfflineProxy** during sleep and restore it on wake. If RAOfflineProxy is still caching games or waiting for its next cache window, SleepManager keeps the proxy and Wi-Fi available until it is safe to stop them.
+
+For reliable background restart on Android 12+, set RAOfflineProxy battery usage to **Unrestricted**:
+
+**Settings → Apps → RAOfflineProxy → App battery usage → Unrestricted**
+
+RAOfflineProxy **v2.0.0-alpha1 or newer** is required for SleepManager integration.
+
 ### Tailscale / TailDNS
 
 SleepManager can disconnect Tailscale or TailDNS during sleep and reconnect it
@@ -147,6 +157,7 @@ SleepManager tracks battery behavior during sleep sessions and provides both rec
 
 - **Last Sleep** — shows the battery change during the most recent sleep session, along with its duration and drain rate.
 - **Measured mAh** — when Android exposes charge-counter data, SleepManager can estimate the actual amount of battery used during sleep.
+- **Battery Health** — compares reported full-charge capacity with battery design capacity when Android exposes trustworthy values; suspect readings are shown as unavailable rather than as a misleading percentage.
 - **Deep Sleep** — shows how much of the sleep session the device spent in deep sleep.
 - **7-Day Average** — calculates the average sleep drain rate from eligible recent sleep sessions.
 - **Estimated Standby** — estimates how long the device could remain in standby based on the measured average drain.
@@ -169,6 +180,7 @@ Use **Copy log** to generate a detailed diagnostic report that includes:
 - Active sleep/wake transaction and pending restore information
 - Recent Wi-Fi toggle results and Airplane mode state
 - BasicSync runtime state and sync counters when available
+- RAOfflineProxy runtime, queue and restore state when available
 - Recent SleepManager activity
 - Recent Android process-exit information on Android 11+ when available
 
@@ -203,6 +215,7 @@ The optional **SleepManager Helper** handles Wi-Fi and Bluetooth control. It has
 ## Compatibility
 
 - Android **9 / API 28 or newer**
+- RAOfflineProxy **v2.0.0-alpha1 or newer** for SleepManager integration
 - Main package: `com.med.sleepmanager`
 - Helper package: `com.med.sleepmanager.helper`
 - Clamshell-specific controls appear only when a compatible lid sensor and the required hardware support are detected
@@ -228,6 +241,14 @@ Then confirm **Syncthing-Fork** is enabled in SleepManager.
 Make sure **Allow remote control** is enabled in BasicSync.
 
 For state-aware sleep/wake control, use **BasicSync 3.18+**. Advanced completion-aware sync features require **BasicSync 3.19+**.
+
+### RAOfflineProxy Does Not Start on Wake
+
+Confirm that RAOfflineProxy **v2.0.0-alpha1 or newer** is installed and that its Android battery usage is set to **Unrestricted** under **Settings → Apps → RAOfflineProxy → App battery usage**.
+
+If SleepManager shows **Control permission missing**, install/update RAOfflineProxy first and then reinstall/update SleepManager so Android can grant RAOfflineProxy's control permission.
+
+Use **Activity → Copy log** to check the proxy state, queue state, pending ownership and any background-start error.
 
 ### Tailscale / TailDNS Does Not Reconnect
 

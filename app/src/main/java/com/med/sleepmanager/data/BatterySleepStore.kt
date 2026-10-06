@@ -58,6 +58,13 @@ object BatterySleepStore {
         val chargeMah: Double?
             get() = capacitySelection.displayedCurrentUah?.div(1000.0)
 
+        val batteryHealthPercent: Double?
+            get() =
+                BatteryCapacityPolicy.batteryHealthPercent(
+                    learnedFullUah = fullChargeUah,
+                    designFullUah = designChargeUah
+                )
+
         val precisePercent: Double?
             get() {
                 val current =
@@ -127,6 +134,7 @@ object BatterySleepStore {
         val currentPrecisePercent: Double?,
         val currentChargeMah: Double?,
         val estimatedCapacityMah: Double?,
+        val batteryHealthPercent: Double?,
         val lastSession: SleepSession?,
         val averageDrainPerHour: Double?,
         val averageDrainMahPerHour: Double?,
@@ -460,6 +468,7 @@ object BatterySleepStore {
             currentPrecisePercent = current.precisePercent,
             currentChargeMah = current.chargeMah,
             estimatedCapacityMah = estimateCapacityMah(current),
+            batteryHealthPercent = current.batteryHealthPercent,
             lastSession = sessions.maxByOrNull { it.endedAt },
             averageDrainPerHour = averageDrainPerHour,
             averageDrainMahPerHour = averageDrainMahPerHour,

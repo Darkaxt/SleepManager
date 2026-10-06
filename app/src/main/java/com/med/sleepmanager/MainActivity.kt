@@ -42,6 +42,8 @@ import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.diagnostics.DiagnosticsBuilder
 import com.med.sleepmanager.integration.BasicSyncController
+import com.med.sleepmanager.integration.RaOfflineProxyController
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
 import com.med.sleepmanager.integration.connector.BasicSyncConnector
 import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
@@ -131,6 +133,14 @@ class MainActivity : ComponentActivity() {
         get() = uiState.manageBasicSyncEnabled
         set(value) {
             uiViewModel.update { it.copy(manageBasicSyncEnabled = value) }
+        }
+
+    internal var manageRaOfflineProxyEnabledState: Boolean
+        get() = uiState.manageRaOfflineProxyEnabled
+        set(value) {
+            uiViewModel.update {
+                it.copy(manageRaOfflineProxyEnabled = value)
+            }
         }
 
     internal var closedLidProtectionEnabledState: Boolean
@@ -259,6 +269,22 @@ class MainActivity : ComponentActivity() {
             uiViewModel.update { it.copy(currentBasicSyncState = value) }
         }
 
+    internal var currentRaOfflineProxyStatus: RaOfflineProxyStatus?
+        get() = uiState.currentRaOfflineProxyStatus
+        set(value) {
+            uiViewModel.update {
+                it.copy(currentRaOfflineProxyStatus = value)
+            }
+        }
+
+    internal var raOfflineProxyStatusProbeComplete: Boolean
+        get() = uiState.raOfflineProxyStatusProbeComplete
+        set(value) {
+            uiViewModel.update {
+                it.copy(raOfflineProxyStatusProbeComplete = value)
+            }
+        }
+
     internal var currentBackgroundReliability: BackgroundReliability.Snapshot?
         get() = uiState.currentBackgroundReliability
         set(value) {
@@ -279,6 +305,8 @@ class MainActivity : ComponentActivity() {
 
     @Volatile
     private var syncthingStateProbeRunning = false
+    @Volatile
+    private var raOfflineProxyStateProbeRunning = false
     @Volatile
     private var backgroundReliabilityProbeRunning = false
     @Volatile
@@ -359,6 +387,34 @@ class MainActivity : ComponentActivity() {
             } else {
                 null
             }
+
+        if (!RaOfflineProxyController.isInstalled(this)) {
+            currentRaOfflineProxyStatus = null
+            raOfflineProxyStatusProbeComplete = true
+        } else if (!raOfflineProxyStateProbeRunning) {
+            raOfflineProxyStateProbeRunning = true
+            val appContext = applicationContext
+            Thread {
+                val status =
+                    if (
+                        RaOfflineProxyController
+                            .providerAvailable(appContext)
+                    ) {
+                        RaOfflineProxyController.status(appContext)
+                    } else {
+                        null
+                    }
+                runOnUiThread {
+                    currentRaOfflineProxyStatus = status
+                    raOfflineProxyStatusProbeComplete = true
+                    raOfflineProxyStateProbeRunning = false
+                }
+            }.apply {
+                name = "SleepManagerRAOfflineProxy"
+                isDaemon = true
+                start()
+            }
+        }
 
         if (SyncthingController.selectedTarget(this) == null) {
             currentSyncthingState = null
@@ -464,6 +520,8 @@ class MainActivity : ComponentActivity() {
         manageTailscaleEnabledState = AppPreferences.manageTailscale(this)
         manageJamesDspEnabledState = AppPreferences.manageJamesDsp(this)
         manageBasicSyncEnabledState = AppPreferences.manageBasicSync(this)
+        manageRaOfflineProxyEnabledState =
+            AppPreferences.manageRaOfflineProxy(this)
     }
 
     private fun refreshManagedClamshellSettingsState() {
@@ -587,6 +645,16 @@ class MainActivity : ComponentActivity() {
                         AppPreferences.setManageBasicSync(this@MainActivity, enabled)
                         manageBasicSyncEnabledState = enabled
                     },
+                    onManageRaOfflineProxyChange = { enabled ->
+                        AppPreferences.setManageRaOfflineProxy(
+                            this@MainActivity,
+                            enabled
+                        )
+                        manageRaOfflineProxyEnabledState = enabled
+                        if (managerEnabledState) {
+                            refreshRunningService()
+                        }
+                    },
                     onPeriodicSyncWhileSleepingChange = { enabled ->
                         AppPreferences.setPeriodicSyncWhileSleeping(
                             this@MainActivity,
@@ -703,6 +771,18 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenBatteryOptimizationRequested = {
                         openBatteryOptimizationSettings()
+                    },
+                    onOpenRaOfflineProxySettingsRequested = {
+                        if (
+                            !RaOfflineProxyController
+                                .openAppSettings(this@MainActivity)
+                        ) {
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Unable to open RAOfflineProxy app settings",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
                     },
                     onOpenUnusedAppRestrictionsRequested = {
                         openUnusedAppRestrictionsSettings()

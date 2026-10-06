@@ -32,6 +32,7 @@ import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.ClamshellStateStore
 import com.med.sleepmanager.data.SleepCycleStore
+import com.med.sleepmanager.data.RaOfflineProxySleepStore
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.integration.BasicSyncController
@@ -39,7 +40,9 @@ import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
 import com.med.sleepmanager.integration.TailscaleTransactionToken
+import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.integration.connector.BasicSyncConnector
+import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
@@ -144,6 +147,8 @@ class SleepManagerService : Service() {
     private val sleepStopWaitState = SleepStopWaitState()
     private val syncStopProbeExecutor = Executors.newSingleThreadExecutor()
     private val diagnosticsExecutor = Executors.newSingleThreadExecutor()
+    private var raOfflineProxyCoordinator: RaOfflineProxyCoordinator? = null
+    private var raOfflineProxyRestoreInFlight = false
     private val sleepDelayState = SleepDelayState()
     private var sleepTransitionWakeLock: PowerManager.WakeLock? = null
     private var networkReadyGate: NetworkReadyGate? = null
@@ -167,6 +172,49 @@ class SleepManagerService : Service() {
     private val ownedDeviceControlRestoreRunnable = Runnable {
         continueOwnedDeviceControlRestoreForDisable()
     }
+
+    private fun raOfflineProxyCoordinator(): RaOfflineProxyCoordinator =
+        raOfflineProxyCoordinator
+            ?: RaOfflineProxyCoordinator(
+                context = this,
+                handler = handler,
+                canContinueSleepGate = { cycleId ->
+                    val cycle = SleepCycleStore.current(this)
+                    cycle.active &&
+                        cycle.cycleId == cycleId &&
+                        isEffectivelySleepingNow() &&
+                        AppPreferences.isEnabled(this)
+                },
+                onSleepGateReady = { cycleId, wifi, bluetooth ->
+                    val cycle = SleepCycleStore.current(this)
+                    if (
+                        cycle.active &&
+                        cycle.cycleId == cycleId &&
+                        isEffectivelySleepingNow() &&
+                        AppPreferences.isEnabled(this)
+                    ) {
+                        Log.i(
+                            TAG,
+                            "RAOfflineProxy gate complete -> applying sleep connectivity"
+                        )
+                        applySleepConnectivity(
+                            wifi = wifi,
+                            bluetooth = bluetooth
+                        )
+                        // Safe no-op while Helper or connector ownership is
+                        // still pending. Clears an otherwise empty transaction.
+                        SleepCycleStore.completeIfRestored(this)
+                    } else {
+                        Log.i(
+                            TAG,
+                            "Ignoring stale RAOfflineProxy sleep-gate completion for cycle=" +
+                                cycleId
+                        )
+                    }
+                }
+            ).also {
+                raOfflineProxyCoordinator = it
+            }
 
     private fun syncRunner(): SyncMaintenanceRunner =
         syncMaintenanceRunner
@@ -571,6 +619,7 @@ class SleepManagerService : Service() {
         registerHelperResultReceiver()
         refreshBasicSyncObserver()
         maybeRestoreOwnedBasicSyncState()
+        maybeRestoreDisabledRaOfflineProxyState()
         refreshLidMonitor()
         recoverOwnedDeviceControls()
         recoverInterruptedSleepWifiMaintenance()
@@ -726,6 +775,20 @@ class SleepManagerService : Service() {
         val cycle = SleepCycleStore.current(this)
         if (
             cycle.active &&
+            RaOfflineProxySleepStore.isPendingForCycle(
+                this,
+                cycle.cycleId
+            )
+        ) {
+            Log.i(
+                TAG,
+                "Service recovery -> resuming RAOfflineProxy pre-sleep gate"
+            )
+            raOfflineProxyCoordinator().resumeSleepGate(cycle.cycleId)
+            return
+        }
+        if (
+            cycle.active &&
             cycle.helperExpected &&
             cycle.wifiManaged &&
             !cycle.helperRestored &&
@@ -769,6 +832,9 @@ class SleepManagerService : Service() {
         }
 
         if (intent?.action == ACTION_DISABLE_AND_RESTORE) {
+            raOfflineProxyCoordinator?.cancelSleepGate(
+                clearPersistedState = true
+            )
             beginDisableAndRestore()
             return START_NOT_STICKY
         }
@@ -810,6 +876,68 @@ class SleepManagerService : Service() {
         }
 
         return START_STICKY
+    }
+
+    private fun maybeRestoreDisabledRaOfflineProxyState() {
+        if (AppPreferences.manageRaOfflineProxy(this)) return
+        restorePendingRaOfflineProxyImmediately()
+    }
+
+    private fun restorePendingRaOfflineProxyImmediately() {
+        if (raOfflineProxyRestoreInFlight) return
+        if (!disableRestoreState.isRequested && !isRealWakeNow()) return
+
+        val change =
+            SleepCycleStore.connectorChange(
+                this,
+                RaOfflineProxyConnector.id
+            )
+        if (
+            change?.restoreToken !=
+            RaOfflineProxyConnector.TOKEN_RESTART
+        ) {
+            return
+        }
+
+        raOfflineProxyRestoreInFlight = true
+        Log.i(
+            TAG,
+            "RAOfflineProxy restore starting immediately; network is not required"
+        )
+
+        raOfflineProxyCoordinator().restoreOwned { success, detail ->
+            raOfflineProxyRestoreInFlight = false
+
+            if (success) {
+                DiagnosticsStateStore.recordEvent(
+                    this,
+                    if (disableRestoreState.isRequested) {
+                        "Disable → RAOfflineProxy restored"
+                    } else {
+                        "Wake → RAOfflineProxy restored"
+                    }
+                )
+            } else {
+                SleepCycleStore.markRestoreProblem(
+                    this,
+                    "RAOfflineProxy restore is still pending: $detail."
+                )
+                DiagnosticsStateStore.recordEvent(
+                    this,
+                    if (disableRestoreState.isRequested) {
+                        "Disable → RAOfflineProxy restore pending · $detail"
+                    } else {
+                        "Wake → RAOfflineProxy restore pending · $detail"
+                    }
+                )
+            }
+
+            SleepCycleStore.completeIfRestored(this)
+            finishDisableRestoreIfRequested(
+                forceStop =
+                    disableRestoreState.isRequested && !success
+            )
+        }
     }
 
     private fun startOwnedDeviceControlRestoreForDisable() {
@@ -895,6 +1023,10 @@ class SleepManagerService : Service() {
         wakeTransitionSyncState.clear()
         SyncTransitionStore.clear(this)
         syncthingPreSleepState.invalidate()
+        raOfflineProxyCoordinator?.cancelSleepGate(
+            clearPersistedState = true
+        )
+        RaOfflineProxySleepStore.clear(this)
 
         cancelNetworkReadyWait()
 
@@ -910,6 +1042,7 @@ class SleepManagerService : Service() {
         prepareTailscaleVerificationForWake()
         restorePendingJamesDsp()
         restorePendingBasicSync()
+        restorePendingRaOfflineProxyImmediately()
 
         var cycle = SleepCycleStore.current(this)
         if (
@@ -1048,6 +1181,21 @@ class SleepManagerService : Service() {
                 )
             val tailscaleVerificationPending =
                 isTailscaleSleepVerificationPending()
+
+            if (
+                RaOfflineProxySleepStore.isPendingForCycle(
+                    this,
+                    existingCycle.cycleId
+                )
+            ) {
+                Log.i(
+                    TAG,
+                    "Recovered pending sleep transaction; resuming RAOfflineProxy gate"
+                )
+                raOfflineProxyCoordinator()
+                    .resumeSleepGate(existingCycle.cycleId)
+                return
+            }
 
             val waitForManagedStops =
                 SleepWakePolicy
@@ -1705,7 +1853,7 @@ class SleepManagerService : Service() {
                 scheduleTailscaleSleepVerification(resetAttempts = true)
             }
 
-            applySleepConnectivity(
+            applySleepConnectivityAfterRaOfflineProxyGate(
                 wifi = wifi,
                 bluetooth = bluetooth
             )
@@ -1972,7 +2120,7 @@ class SleepManagerService : Service() {
             TAG,
             "Sync STOP gate complete -> applying sleep device controls and radios"
         )
-        applySleepConnectivity(
+        applySleepConnectivityAfterRaOfflineProxyGate(
             wifi = wifi,
             bluetooth = bluetooth
         )
@@ -1981,6 +2129,70 @@ class SleepManagerService : Service() {
     private fun clearPendingSleepStopWait() {
         handler.removeCallbacks(sleepRadioRunnable)
         sleepStopWaitState.clear()
+    }
+
+    private fun applySleepConnectivityAfterRaOfflineProxyGate(
+        wifi: Boolean,
+        bluetooth: Boolean
+    ) {
+        if (!AppPreferences.manageRaOfflineProxy(this)) {
+            applySleepConnectivity(wifi, bluetooth)
+            return
+        }
+
+        if (!RaOfflineProxyController.isInstalled(this)) {
+            DiagnosticsStateStore.recordEvent(
+                this,
+                "Sleep → RAOfflineProxy not installed · gate skipped"
+            )
+            applySleepConnectivity(wifi, bluetooth)
+            return
+        }
+
+        val availability =
+            RaOfflineProxyConnector.availability(this)
+        if (
+            availability !is
+            com.med.sleepmanager.integration.connector.ConnectorAvailability.Available
+        ) {
+            val reason =
+                (
+                    availability as?
+                        com.med.sleepmanager.integration.connector.ConnectorAvailability.Unavailable
+                    )?.reason ?: "unavailable"
+            Log.w(
+                TAG,
+                "RAOfflineProxy integration unavailable: " + reason
+            )
+            DiagnosticsStateStore.recordEvent(
+                this,
+                "Sleep → RAOfflineProxy unavailable · " + reason
+            )
+
+            // Never stop RAOfflineProxy when SleepManager cannot safely
+            // restore it. Preserve managed Wi-Fi for this sleep instead.
+            applySleepConnectivity(
+                wifi = false,
+                bluetooth = bluetooth
+            )
+            return
+        }
+
+        val cycle = SleepCycleStore.current(this)
+        if (!cycle.active) {
+            Log.w(
+                TAG,
+                "RAOfflineProxy gate skipped: no active sleep cycle"
+            )
+            applySleepConnectivity(wifi, bluetooth)
+            return
+        }
+
+        raOfflineProxyCoordinator().beginSleepGate(
+            cycleId = cycle.cycleId,
+            wifi = wifi,
+            bluetooth = bluetooth
+        )
     }
 
     private fun applySleepConnectivity(
@@ -2651,7 +2863,10 @@ class SleepManagerService : Service() {
 
     private fun hasPendingNetworkConnectorRestore(): Boolean {
         val syncthingPending =
-            SleepCycleStore.hasConnectorChange(this, SyncthingConnector.id)
+            SleepCycleStore.hasConnectorChange(
+                this,
+                SyncthingConnector.id
+            )
         val tailscalePending =
             TailscaleTransactionToken.restoreTarget(
                 SleepCycleStore.connectorChange(this, TailscaleConnector.id)?.restoreToken
@@ -2975,6 +3190,10 @@ class SleepManagerService : Service() {
         sleepCycleRuntimeState.clearFalseWakeResleepPending()
         cancelNetworkReadyWait()
         cancelActiveBasicSyncWait()
+        raOfflineProxyCoordinator?.cancelSleepGate(
+            clearPersistedState = true
+        )
+        RaOfflineProxySleepStore.clear(this)
 
         DeviceControlStore.setBatterySaverDeferredForExternalPower(
             this,
@@ -3019,6 +3238,7 @@ class SleepManagerService : Service() {
         }
 
         restorePendingJamesDsp()
+        restorePendingRaOfflineProxyImmediately()
 
         if (wakeTransitionSyncState.isPending) {
             SleepCycleStore.clearConnectorChange(
@@ -3996,6 +4216,10 @@ class SleepManagerService : Service() {
         releaseSleepTransitionWakeLock()
         syncStopProbeExecutor.shutdownNow()
         diagnosticsExecutor.shutdownNow()
+        raOfflineProxyCoordinator?.shutdown(
+            preservePersistedState = true
+        )
+        raOfflineProxyCoordinator = null
         BasicSyncController.stopStateObserver()
         stopLidMonitor()
 

@@ -65,6 +65,8 @@ import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.integration.BasicSyncController
+import com.med.sleepmanager.integration.RaOfflineProxyController
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueState
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.JamesDspController
@@ -82,6 +84,7 @@ import com.med.sleepmanager.ui.AppSection
 import com.med.sleepmanager.ui.components.BehaviorCard
 import com.med.sleepmanager.ui.components.ClamshellOptionsCard
 import com.med.sleepmanager.ui.components.CompactIntegrationRow
+import com.med.sleepmanager.ui.components.CompactSupportedAppRow
 import com.med.sleepmanager.ui.components.CompactSideRail
 import com.med.sleepmanager.ui.components.LastActivityCard
 import com.med.sleepmanager.ui.components.OnboardingCard
@@ -106,6 +109,14 @@ import kotlinx.coroutines.withContext
 import com.med.sleepmanager.ui.feedbackChange
 import com.med.sleepmanager.ui.state.SleepManagerUiState
 
+private class IntegrationUiRow(
+    val installed: Boolean,
+    val icon: Int,
+    val title: String,
+    val preserveIconColors: Boolean = false,
+    val content: @Composable () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     internal fun SleepManagerScreen(
@@ -124,6 +135,7 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
         onManageTailscaleChange: (Boolean) -> Unit,
         onManageJamesDspChange: (Boolean) -> Unit,
         onManageBasicSyncChange: (Boolean) -> Unit,
+        onManageRaOfflineProxyChange: (Boolean) -> Unit,
         onPeriodicSyncWhileSleepingChange: (Boolean) -> Unit,
         onSyncThenStopOnSleepWakeChange: (Boolean) -> Unit,
         onSleepGraceChange: (Long) -> Unit,
@@ -147,6 +159,7 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
         onOpenExternalUrlRequested: (String) -> Unit,
         onOpenAppInfoRequested: () -> Unit,
         onOpenBatteryOptimizationRequested: () -> Unit,
+        onOpenRaOfflineProxySettingsRequested: () -> Unit,
         onOpenUnusedAppRestrictionsRequested: () -> Unit,
         onRequestUpdateNotificationPermissionRequested: () -> Unit,
         onInstallVerifiedUpdateRequested: (String) -> Unit,
@@ -160,7 +173,6 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
     ) {
         val refreshToken = uiState.activityRefreshToken
         var showTargetDialog by remember { mutableStateOf(false) }
-        var showTestDialog by remember { mutableStateOf(false) }
         var currentSection by rememberSaveable {
             mutableStateOf(
                 if (openUpdatesOnLaunch) AppSection.ABOUT else AppSection.HOME
@@ -230,6 +242,8 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
         val tailscaleEnabled = uiState.manageTailscaleEnabled
         val jamesDspEnabled = uiState.manageJamesDspEnabled
         val basicSyncEnabled = uiState.manageBasicSyncEnabled
+        val raOfflineProxyEnabled =
+            uiState.manageRaOfflineProxyEnabled
         val periodicSyncWhileSleeping = uiState.periodicSyncWhileSleeping
         val syncThenStopOnSleepWake = uiState.syncThenStopOnSleepWake
         val closedLidProtectionEnabled = uiState.closedLidProtectionEnabled
@@ -282,6 +296,37 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
         val basicSyncVersion = remember(refreshToken) {
             BasicSyncController.versionName(context)
         }
+        val raOfflineProxyInstalled = remember(refreshToken) {
+            RaOfflineProxyController.isInstalled(context)
+        }
+        val raOfflineProxyVersion = remember(refreshToken) {
+            RaOfflineProxyController.versionName(context)
+        }
+        val raOfflineProxyProviderAvailable =
+            remember(refreshToken) {
+                RaOfflineProxyController.providerAvailable(context)
+            }
+        val raOfflineProxyControlPermission =
+            remember(refreshToken) {
+                RaOfflineProxyController.hasControlPermission(context)
+            }
+        val raOfflineProxyBatteryUnrestricted =
+            remember(refreshToken) {
+                RaOfflineProxyController.isBatteryUnrestricted(context)
+            }
+        val raOfflineProxyStatus =
+            uiState.currentRaOfflineProxyStatus
+        val raOfflineProxyStatusProbeComplete =
+            uiState.raOfflineProxyStatusProbeComplete
+        val raOfflineProxyApiCompatible =
+            raOfflineProxyStatus?.version ==
+                RaOfflineProxyController.SUPPORTED_API_VERSION
+        val raOfflineProxyReady =
+            raOfflineProxyInstalled &&
+                raOfflineProxyProviderAvailable &&
+                raOfflineProxyControlPermission &&
+                raOfflineProxyBatteryUnrestricted &&
+                raOfflineProxyApiCompatible
         val closedLidProtectionSupported = remember(refreshToken) {
             LidMonitor.isSupported()
         }
@@ -325,41 +370,6 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
         }
         val updateNotificationsAllowed = remember(refreshToken) {
             UpdateNotifier.notificationsAllowed(context)
-        }
-
-        if (showTestDialog) {
-            AlertDialog(
-                onDismissRequest = { showTestDialog = false },
-                title = { Text(stringResource(R.string.test_sleep_wake_title)) },
-                text = {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(stringResource(R.string.test_sleep_wake_step_1))
-                        Text(stringResource(R.string.test_sleep_wake_step_2))
-                        Text(stringResource(R.string.test_sleep_wake_step_3))
-                        Text(
-                            if (effectiveSleepDelayMs > 0L) {
-                                stringResource(
-                                    R.string.test_sleep_wake_step_4_with_delay,
-                                    formatDuration(effectiveSleepDelayMs)
-                                )
-                            } else {
-                                stringResource(R.string.test_sleep_wake_step_4_no_delay)
-                            }
-                        )
-                        Text(stringResource(R.string.test_sleep_wake_step_5))
-                        Text(stringResource(R.string.test_sleep_wake_step_6))
-                        Text(stringResource(R.string.test_sleep_wake_copy_log_hint))
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = feedbackClick { showTestDialog = false }) {
-                        Text(stringResource(R.string.got_it))
-                    }
-                }
-            )
         }
 
         if (showTargetDialog) {
@@ -601,20 +611,11 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
                 if (!setupComplete) {
                     item {
                         OnboardingCard(
-                            helperInstalled = helperInstalled,
-                            helperVersion = helperVersion,
                             syncthingTarget = selectedTarget,
-                            syncthingEnabled = syncthingEnabled,
                             tailscaleInstalled = tailscaleInstalled,
-                            tailscaleVersion = tailscaleVersion,
                             jamesDspTarget = jamesDspTarget,
                             basicSyncInstalled = basicSyncInstalled,
-                            basicSyncVersion = basicSyncVersion,
-                            managerEnabled = managerEnabled,
-                            onGetHelper = {
-                                navigateToAbout(AboutScrollTarget.HELPER)
-                            },
-                            onShowTest = { showTestDialog = true }
+                            raOfflineProxyInstalled = raOfflineProxyInstalled
                         )
                     }
                 }
@@ -886,142 +887,6 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
                     ) {
                         val syncthingBroadcastReminder =
                             stringResource(R.string.home_syncthing_broadcast_reminder)
-                        CompactIntegrationRow(
-                            icon = R.drawable.ic_syncthing,
-                            title = stringResource(R.string.home_syncthing_fork),
-                            version = selectedTarget?.displayName
-                                ?.substringAfter("•")
-                                ?.trim()
-                                ?: stringResource(
-                                    if (selectedTarget != null) {
-                                        R.string.installed
-                                    } else {
-                                        R.string.not_detected
-                                    }
-                                ),
-                            status = if (selectedTarget != null) {
-                                stringResource(
-                                    when (uiState.currentSyncthingState) {
-                                        SyncthingController.RuntimeState.RUNNING ->
-                                            R.string.running
-                                        SyncthingController.RuntimeState.STOPPED ->
-                                            R.string.stopped
-                                        SyncthingController.RuntimeState.UNKNOWN ->
-                                            R.string.unknown
-                                        null ->
-                                            R.string.checking
-                                    }
-                                )
-                            } else {
-                                null
-                            },
-                            checked = syncthingEnabled && selectedTarget != null,
-                            enabled = selectedTarget != null,
-                            onCheckedChange = {
-                                onManageSyncthingChange(it)
-
-                                if (it) {
-                                    Toast.makeText(
-                                        context,
-                                        syncthingBroadcastReminder,
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                } else if (managerEnabled) {
-                                    onRestoreSyncthingRequested()
-                                    SleepCycleStore.completeIfRestored(context)
-                                }
-                            },
-                            onOpen = if (selectedTarget != null) {
-                                { SyncthingController.open(context) }
-                            } else {
-                                null
-                            },
-                            secondaryActionLabel =
-                                if (targets.size > 1) {
-                                    stringResource(R.string.change_target)
-                                } else {
-                                    null
-                                },
-                            onSecondaryAction =
-                                if (targets.size > 1) {
-                                    { showTargetDialog = true }
-                                } else {
-                                    null
-                                }
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 64.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-
-                        CompactIntegrationRow(
-                            icon = R.drawable.ic_tailscale,
-                            title = stringResource(R.string.integration_tailscale),
-                            version = if (tailscaleInstalled) {
-                                tailscaleVersion?.substringBefore("-")
-                                    ?: stringResource(R.string.installed)
-                            } else {
-                                stringResource(R.string.not_detected)
-                            },
-                            status = if (tailscaleInstalled) {
-                                uiState.currentTailscaleConnected?.let {
-                                    stringResource(
-                                        if (it) {
-                                            R.string.connected
-                                        } else {
-                                            R.string.disconnected
-                                        }
-                                    )
-                                } ?: stringResource(R.string.checking)
-                            } else {
-                                null
-                            },
-                            checked = tailscaleEnabled && tailscaleInstalled,
-                            enabled = tailscaleInstalled,
-                            onCheckedChange = {
-                                onManageTailscaleChange(it)
-                            },
-                            onOpen = if (tailscaleInstalled) {
-                                { TailscaleController.open(context) }
-                            } else {
-                                null
-                            }
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 64.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-
-                        CompactIntegrationRow(
-                            icon = R.drawable.ic_equalizer,
-                            title = stringResource(R.string.integration_jamesdsp),
-                            version = jamesDspTarget?.versionName
-                                ?: stringResource(R.string.not_detected),
-                            status = null,
-                            checked = jamesDspEnabled && jamesDspTarget != null,
-                            enabled = jamesDspTarget != null,
-                            onCheckedChange = {
-                                onManageJamesDspChange(it)
-
-                                if (!it && managerEnabled) {
-                                    onRestoreJamesDspRequested()
-                                    SleepCycleStore.completeIfRestored(context)
-                                }
-                            },
-                            onOpen = if (jamesDspTarget != null) {
-                                { JamesDspController.open(context) }
-                            } else {
-                                null
-                            }
-                        )
-
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 64.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-
                         val basicSyncRemoteControlReminder =
                             stringResource(
                                 if (BasicSyncController.supportsStateApi(context)) {
@@ -1030,106 +895,395 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
                                     R.string.home_basicsync_remote_control_legacy
                                 }
                             )
-                        CompactIntegrationRow(
-                            icon = R.drawable.ic_sync,
-                            title = stringResource(R.string.integration_basicsync),
-                            version = if (basicSyncInstalled) {
-                                basicSyncVersion ?: stringResource(R.string.installed)
-                            } else {
-                                stringResource(R.string.not_detected)
-                            },
-                            status = if (basicSyncInstalled) {
-                                if (BasicSyncController.supportsStateApi(context)) {
-                                    uiState.currentBasicSyncState?.let { state ->
-                                        val mode = stringResource(
-                                            when (state.mode) {
-                                                BasicSyncController.Mode.AUTO_MODE ->
-                                                    R.string.auto_mode
-                                                BasicSyncController.Mode.MANUAL_MODE_STARTED ->
-                                                    R.string.manual_mode
-                                                BasicSyncController.Mode.MANUAL_MODE_STOPPED ->
-                                                    R.string.manual_mode
-                                            }
-                                        )
-                                        val runState = stringResource(
-                                            when (state.runState) {
-                                                BasicSyncController.RunState.RUNNING ->
-                                                    R.string.running
-                                                BasicSyncController.RunState.NOT_RUNNING ->
-                                                    R.string.stopped
-                                                BasicSyncController.RunState.PAUSED ->
-                                                    R.string.paused
-                                                BasicSyncController.RunState.STARTING ->
-                                                    R.string.starting
-                                                BasicSyncController.RunState.STOPPING ->
-                                                    R.string.stopping
-                                                BasicSyncController.RunState.IMPORTING ->
-                                                    R.string.importing
-                                                BasicSyncController.RunState.EXPORTING ->
-                                                    R.string.exporting
-                                            }
-                                        )
-                                        val syncState =
+                        val raOfflineProxyStatusText =
+                            when {
+                                !raOfflineProxyInstalled ->
+                                    null
+                                !raOfflineProxyProviderAvailable ->
+                                    stringResource(
+                                        R.string.raofflineproxy_api_unavailable
+                                    )
+                                !raOfflineProxyControlPermission ->
+                                    stringResource(
+                                        R.string.raofflineproxy_permission_missing
+                                    )
+                                !raOfflineProxyBatteryUnrestricted ->
+                                    stringResource(
+                                        R.string.raofflineproxy_needs_unrestricted
+                                    )
+                                raOfflineProxyStatus == null ->
+                                    stringResource(
+                                        if (raOfflineProxyStatusProbeComplete) {
+                                            R.string.raofflineproxy_api_unavailable
+                                        } else {
+                                            R.string.checking
+                                        }
+                                    )
+                                !raOfflineProxyApiCompatible ->
+                                    stringResource(
+                                        R.string.raofflineproxy_api_unsupported,
+                                        raOfflineProxyStatus.version
+                                    )
+                                else -> {
+                                    val runtime =
+                                        stringResource(
                                             if (
-                                                BasicSyncController.supportsSyncCounters(
-                                                    context
-                                                )
+                                                raOfflineProxyStatus.running ||
+                                                raOfflineProxyStatus.shouldBeRunning
                                             ) {
-                                                when (basicSyncCompletionState(state)) {
-                                                    SyncCompletionState.SYNCING ->
-                                                        stringResource(R.string.syncing)
-                                                    SyncCompletionState.SYNCED ->
-                                                        stringResource(R.string.synced)
-                                                    SyncCompletionState.UNKNOWN ->
-                                                        null
+                                                R.string.running
+                                            } else {
+                                                R.string.stopped
+                                            }
+                                        )
+                                    when (raOfflineProxyStatus.queue.state) {
+                                        RaOfflineProxyQueueState.CACHING ->
+                                            runtime + " · " +
+                                                stringResource(
+                                                    R.string.raofflineproxy_queue_caching,
+                                                    raOfflineProxyStatus.queue.count
+                                                )
+                                        RaOfflineProxyQueueState.WAITING ->
+                                            runtime + " · " +
+                                                stringResource(
+                                                    R.string.raofflineproxy_queue_waiting,
+                                                    raOfflineProxyStatus.queue.count
+                                                )
+                                        RaOfflineProxyQueueState.BLOCKED ->
+                                            runtime + " · " +
+                                                stringResource(
+                                                    R.string.raofflineproxy_queue_blocked
+                                                )
+                                        RaOfflineProxyQueueState.IDLE ->
+                                            runtime
+                                        RaOfflineProxyQueueState.UNKNOWN ->
+                                            runtime + " · " +
+                                                stringResource(R.string.unknown)
+                                    }
+                                }
+                            }
+
+                        val integrationRows =
+                            listOf(
+                                IntegrationUiRow(
+                                    installed = selectedTarget != null,
+                                    icon = R.drawable.ic_syncthing,
+                                    title = stringResource(R.string.home_syncthing_fork)
+                                ) {
+                                    CompactIntegrationRow(
+                                        icon = R.drawable.ic_syncthing,
+                                        title = stringResource(R.string.home_syncthing_fork),
+                                        version = selectedTarget?.displayName
+                                            ?.substringAfter("•")
+                                            ?.trim()
+                                            ?: stringResource(R.string.installed),
+                                        status =
+                                            stringResource(
+                                                when (uiState.currentSyncthingState) {
+                                                    SyncthingController.RuntimeState.RUNNING ->
+                                                        R.string.running
+                                                    SyncthingController.RuntimeState.STOPPED ->
+                                                        R.string.stopped
+                                                    SyncthingController.RuntimeState.UNKNOWN ->
+                                                        R.string.unknown
+                                                    null ->
+                                                        R.string.checking
+                                                }
+                                            ),
+                                        checked = syncthingEnabled,
+                                        enabled = true,
+                                        onCheckedChange = {
+                                            onManageSyncthingChange(it)
+
+                                            if (it) {
+                                                Toast.makeText(
+                                                    context,
+                                                    syncthingBroadcastReminder,
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            } else if (managerEnabled) {
+                                                onRestoreSyncthingRequested()
+                                                SleepCycleStore.completeIfRestored(context)
+                                            }
+                                        },
+                                        onOpen = { SyncthingController.open(context) },
+                                        secondaryActionLabel =
+                                            if (targets.size > 1) {
+                                                stringResource(R.string.change_target)
+                                            } else {
+                                                null
+                                            },
+                                        onSecondaryAction =
+                                            if (targets.size > 1) {
+                                                { showTargetDialog = true }
+                                            } else {
+                                                null
+                                            }
+                                    )
+                                },
+                                IntegrationUiRow(
+                                    installed = tailscaleInstalled,
+                                    icon = R.drawable.ic_tailscale,
+                                    title = stringResource(R.string.integration_tailscale)
+                                ) {
+                                    CompactIntegrationRow(
+                                        icon = R.drawable.ic_tailscale,
+                                        title = stringResource(R.string.integration_tailscale),
+                                        version =
+                                            tailscaleVersion?.substringBefore("-")
+                                                ?: stringResource(R.string.installed),
+                                        status =
+                                            uiState.currentTailscaleConnected?.let {
+                                                stringResource(
+                                                    if (it) {
+                                                        R.string.connected
+                                                    } else {
+                                                        R.string.disconnected
+                                                    }
+                                                )
+                                            } ?: stringResource(R.string.checking),
+                                        checked = tailscaleEnabled,
+                                        enabled = true,
+                                        onCheckedChange = {
+                                            onManageTailscaleChange(it)
+                                        },
+                                        onOpen = { TailscaleController.open(context) }
+                                    )
+                                },
+                                IntegrationUiRow(
+                                    installed = jamesDspTarget != null,
+                                    icon = R.drawable.ic_equalizer,
+                                    title = stringResource(R.string.integration_jamesdsp)
+                                ) {
+                                    CompactIntegrationRow(
+                                        icon = R.drawable.ic_equalizer,
+                                        title = stringResource(R.string.integration_jamesdsp),
+                                        version =
+                                            jamesDspTarget?.versionName
+                                                ?: stringResource(R.string.installed),
+                                        status = null,
+                                        checked = jamesDspEnabled,
+                                        enabled = true,
+                                        onCheckedChange = {
+                                            onManageJamesDspChange(it)
+
+                                            if (!it && managerEnabled) {
+                                                onRestoreJamesDspRequested()
+                                                SleepCycleStore.completeIfRestored(context)
+                                            }
+                                        },
+                                        onOpen = { JamesDspController.open(context) }
+                                    )
+                                },
+                                IntegrationUiRow(
+                                    installed = basicSyncInstalled,
+                                    icon = R.drawable.ic_sync,
+                                    title = stringResource(R.string.integration_basicsync)
+                                ) {
+                                    CompactIntegrationRow(
+                                        icon = R.drawable.ic_sync,
+                                        title = stringResource(R.string.integration_basicsync),
+                                        version =
+                                            basicSyncVersion
+                                                ?: stringResource(R.string.installed),
+                                        status =
+                                            if (BasicSyncController.supportsStateApi(context)) {
+                                                uiState.currentBasicSyncState?.let { state ->
+                                                    val mode =
+                                                        stringResource(
+                                                            when (state.mode) {
+                                                                BasicSyncController.Mode.AUTO_MODE ->
+                                                                    R.string.auto_mode
+                                                                BasicSyncController.Mode.MANUAL_MODE_STARTED ->
+                                                                    R.string.manual_mode
+                                                                BasicSyncController.Mode.MANUAL_MODE_STOPPED ->
+                                                                    R.string.manual_mode
+                                                            }
+                                                        )
+                                                    val runState =
+                                                        stringResource(
+                                                            when (state.runState) {
+                                                                BasicSyncController.RunState.RUNNING ->
+                                                                    R.string.running
+                                                                BasicSyncController.RunState.NOT_RUNNING ->
+                                                                    R.string.stopped
+                                                                BasicSyncController.RunState.PAUSED ->
+                                                                    R.string.paused
+                                                                BasicSyncController.RunState.STARTING ->
+                                                                    R.string.starting
+                                                                BasicSyncController.RunState.STOPPING ->
+                                                                    R.string.stopping
+                                                                BasicSyncController.RunState.IMPORTING ->
+                                                                    R.string.importing
+                                                                BasicSyncController.RunState.EXPORTING ->
+                                                                    R.string.exporting
+                                                            }
+                                                        )
+                                                    val syncState =
+                                                        if (
+                                                            BasicSyncController
+                                                                .supportsSyncCounters(context)
+                                                        ) {
+                                                            when (
+                                                                basicSyncCompletionState(state)
+                                                            ) {
+                                                                SyncCompletionState.SYNCING ->
+                                                                    stringResource(R.string.syncing)
+                                                                SyncCompletionState.SYNCED ->
+                                                                    stringResource(R.string.synced)
+                                                                SyncCompletionState.UNKNOWN ->
+                                                                    null
+                                                            }
+                                                        } else {
+                                                            null
+                                                        }
+                                                    listOfNotNull(
+                                                        mode,
+                                                        runState,
+                                                        syncState
+                                                    ).joinToString(" · ")
+                                                } ?: stringResource(R.string.checking)
+                                            } else {
+                                                stringResource(
+                                                    R.string.home_basicsync_legacy_status
+                                                )
+                                            },
+                                        checked = basicSyncEnabled,
+                                        enabled = true,
+                                        onCheckedChange = {
+                                            onManageBasicSyncChange(it)
+
+                                            if (it) {
+                                                Toast.makeText(
+                                                    context,
+                                                    basicSyncRemoteControlReminder,
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            } else if (managerEnabled) {
+                                                onRestoreBasicSyncRequested()
+                                                SleepCycleStore.completeIfRestored(context)
+                                                SyncMaintenanceScheduler.cancel(context)
+                                                onServiceRefreshRequested()
+                                            }
+
+                                            if (it && managerEnabled) {
+                                                onServiceRefreshRequested()
+                                            }
+                                        },
+                                        onOpen = { BasicSyncController.open(context) }
+                                    )
+                                },
+                                IntegrationUiRow(
+                                    installed = raOfflineProxyInstalled,
+                                    icon = R.drawable.ic_raofflineproxy_mono,
+                                    title = stringResource(
+                                        R.string.integration_raofflineproxy
+                                    )
+                                ) {
+                                    CompactIntegrationRow(
+                                        icon = R.drawable.ic_raofflineproxy_mono,
+                                        title = stringResource(
+                                            R.string.integration_raofflineproxy
+                                        ),
+                                        version =
+                                            raOfflineProxyVersion
+                                                ?: stringResource(R.string.installed),
+                                        status = raOfflineProxyStatusText,
+                                        checked =
+                                            raOfflineProxyEnabled &&
+                                                raOfflineProxyReady,
+                                        enabled = raOfflineProxyReady,
+                                        onCheckedChange = {
+                                            onManageRaOfflineProxyChange(it)
+                                            if (it && managerEnabled) {
+                                                onServiceRefreshRequested()
+                                            }
+                                        },
+                                        onOpen = {
+                                            RaOfflineProxyController.open(context)
+                                        },
+                                        secondaryActionLabel =
+                                            if (!raOfflineProxyBatteryUnrestricted) {
+                                                stringResource(
+                                                    R.string.raofflineproxy_app_settings
+                                                )
+                                            } else {
+                                                null
+                                            },
+                                        onSecondaryAction =
+                                            if (!raOfflineProxyBatteryUnrestricted) {
+                                                {
+                                                    Toast.makeText(
+                                                        context,
+                                                        context.getString(
+                                                            R.string
+                                                                .raofflineproxy_unrestricted_hint
+                                                        ),
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                    onOpenRaOfflineProxySettingsRequested()
                                                 }
                                             } else {
                                                 null
                                             }
-                                        listOfNotNull(mode, runState, syncState)
-                                            .joinToString(" · ")
-                                    } ?: stringResource(R.string.checking)
-                                } else {
-                                    stringResource(R.string.home_basicsync_legacy_status)
-                                }
-                            } else {
-                                null
-                            },
-                            checked = basicSyncEnabled && basicSyncInstalled,
-                            enabled = basicSyncInstalled,
-                            onCheckedChange = {
-                                onManageBasicSyncChange(it)
-
-                                if (it) {
-                                    Toast.makeText(
-                                        context,
-                                        basicSyncRemoteControlReminder,
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                } else if (managerEnabled) {
-                                    onRestoreBasicSyncRequested()
-                                    SleepCycleStore.completeIfRestored(context)
-                                    // BasicSync is the only completion-aware
-                                    // provider, so no periodic alarm should
-                                    // remain armed while its integration is off.
-                                    SyncMaintenanceScheduler.cancel(
-                                        context
                                     )
-                                    // Also let the running service restore the
-                                    // original state owned by Sync then stop.
-                                    onServiceRefreshRequested()
                                 }
+                            )
 
-                                if (it && managerEnabled) {
-                                    onServiceRefreshRequested()
-                                }
-                            },
-                            onOpen = if (basicSyncInstalled) {
-                                { BasicSyncController.open(context) }
-                            } else {
-                                null
+                        val installedRows = integrationRows.filter { it.installed }
+                        val supportedRows = integrationRows.filterNot { it.installed }
+
+                        installedRows.forEachIndexed { index, row ->
+                            if (index > 0) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 64.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
                             }
-                        )
+                            row.content()
+                        }
+
+                        if (supportedRows.isNotEmpty()) {
+                            if (installedRows.isNotEmpty()) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant
+                                )
+                            }
+
+                            Text(
+                                text = stringResource(
+                                    if (installedRows.isEmpty()) {
+                                        R.string.home_supported_apps
+                                    } else {
+                                        R.string.home_also_supported
+                                    }
+                                ),
+                                modifier = Modifier.padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 14.dp,
+                                    bottom = 4.dp
+                                ),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            supportedRows.forEachIndexed { index, row ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 64.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                }
+                                CompactSupportedAppRow(
+                                    icon = row.icon,
+                                    title = row.title,
+                                    version = stringResource(R.string.not_installed),
+                                    preserveIconColors = row.preserveIconColors
+                                )
+                            }
+                        }
                     }
                 }
                 item {
@@ -1160,6 +1314,9 @@ import com.med.sleepmanager.ui.state.SleepManagerUiState
                         tailscale = tailscaleEnabled && tailscaleInstalled,
                         jamesDsp = jamesDspEnabled && jamesDspTarget != null,
                         basicSync = basicSyncEnabled && basicSyncInstalled,
+                        raOfflineProxy =
+                            raOfflineProxyEnabled &&
+                                raOfflineProxyReady,
                         closedLidProtection = closedLidProtectionEnabled && closedLidAdminActive,
                         chargingSeparationWithLid =
                             chargingSeparationWithLidEnabled && chargingSeparationSupported,

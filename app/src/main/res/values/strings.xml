@@ -17,6 +17,8 @@
     <string name="section_about_subtitle">App information</string>
 
     <string name="quick_setup">Quick setup</string>
+    <string name="quick_setup_description">Tap “Enable SleepManager”, choose what it should manage while the device sleeps, then tap “Finish setup” at the bottom.</string>
+    <string name="quick_setup_supported_apps_detected">✓ Supported apps detected</string>
     <string name="quick_setup_helper_installed">✓ Compatibility helper installed</string>
     <string name="quick_setup_helper_installed_with_version">✓ Compatibility helper installed • %1$s</string>
     <string name="quick_setup_helper_not_installed">• Compatibility helper not installed — only needed for Wi-Fi / Bluetooth.</string>
@@ -25,6 +27,16 @@
     <string name="integration_tailscale">Tailscale / TailDNS</string>
     <string name="integration_jamesdsp">JamesDSP</string>
     <string name="integration_basicsync">BasicSync</string>
+    <string name="integration_raofflineproxy">RAOfflineProxy</string>
+    <string name="raofflineproxy_api_unavailable">Automation API unavailable</string>
+    <string name="raofflineproxy_permission_missing">Control permission missing · reinstall SleepManager after RAOfflineProxy</string>
+    <string name="raofflineproxy_needs_unrestricted">Battery usage must be Unrestricted</string>
+    <string name="raofflineproxy_api_unsupported">Unsupported automation API v%1$d</string>
+    <string name="raofflineproxy_queue_caching">Caching · %1$d queued</string>
+    <string name="raofflineproxy_queue_waiting">Waiting · %1$d queued</string>
+    <string name="raofflineproxy_queue_blocked">Queue blocked</string>
+    <string name="raofflineproxy_app_settings">App settings</string>
+    <string name="raofflineproxy_unrestricted_hint">Open Battery in RAOfflineProxy app info and set battery usage to Unrestricted.</string>
     <string name="quick_setup_integration_detected">✓ %1$s detected</string>
     <string name="quick_setup_named_integration_detected">✓ %1$s detected</string>
     <string name="quick_setup_named_integration_detected_with_version">✓ %1$s • %2$s detected</string>
@@ -189,6 +201,7 @@
     <string name="stats_current">Current</string>
     <string name="stats_estimated_capacity">Estimated capacity</string>
     <string name="stats_current_charge">Current charge</string>
+    <string name="stats_battery_health">Battery health</string>
     <string name="stats_sleep_efficiency">Sleep efficiency</string>
     <string name="stats_7_day_drain">7-day drain</string>
     <string name="stats_charge_drain">Charge drain</string>
@@ -275,6 +288,7 @@
     <string name="behavior_disconnect_tailscale">Disconnect Tailscale</string>
     <string name="behavior_power_off_jamesdsp">Power off JamesDSP</string>
     <string name="behavior_stop_basicsync">Stop BasicSync when active</string>
+    <string name="behavior_stop_raofflineproxy">Stop RAOfflineProxy after its cache queue is safe</string>
     <string name="behavior_enable_battery_saver">Enable Battery Saver</string>
     <string name="behavior_wifi_off">Wi‑Fi off</string>
     <string name="behavior_bluetooth_off">Bluetooth off</string>
@@ -286,6 +300,7 @@
     <string name="behavior_restore_tailscale">Restore Tailscale if SleepManager disconnected it</string>
     <string name="behavior_restore_jamesdsp">Restore JamesDSP</string>
     <string name="behavior_restore_basicsync">Restore BasicSync previous mode</string>
+    <string name="behavior_restore_raofflineproxy">Restore RAOfflineProxy if SleepManager stopped it</string>
     <string name="behavior_sync_after_wake">Sync supported clients after wake, then stop them</string>
     <string name="behavior_closed_lid_return_to_sleep">Return accidental closed-lid wake-ups to sleep</string>
     <string name="behavior_disable_charging_separation">Disable Charging Separation while lid is closed</string>
@@ -370,6 +385,8 @@
     <string name="home_clamshell_options_description">Extra controls for devices with a compatible lid sensor.</string>
     <string name="home_app_integrations">App integrations</string>
     <string name="home_app_integrations_description">Pause background services that don’t need to run while your device sleeps.</string>
+    <string name="home_also_supported">Also supported</string>
+    <string name="home_supported_apps">Supported apps</string>
 
     <string name="home_syncthing_fork">Syncthing‑Fork</string>
     <string name="home_syncthing_broadcast_reminder">Enable Settings → Behaviour → Service control by broadcast in Syncthing-Fork.</string>

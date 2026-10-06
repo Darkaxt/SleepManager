@@ -2,6 +2,48 @@
 
 Release notes are organized by version and focus on user-visible behavior first.
 
+## 0.7.1.1 — 2026-10-06
+
+- Incorporated the complete upstream 0.7.1 history and its RAOfflineProxy,
+  battery-health, diagnostics and UI changes.
+- Preserved TailDNS and official Tailscale package-bound transactions, fork-only
+  updates, settings identities and the permanent paired signing certificate.
+- Main: **0.7.1.1 / versionCode 553**. Unchanged Helper: **1.1.2.1 / 1116**.
+
+## 0.7.1 — 2026-10-04
+
+### RAOfflineProxy integration
+
+- Added optional **RAOfflineProxy** sleep/wake management using its official Automation API v1.
+- SleepManager checks the proxy's real state before changing it and restores it only when SleepManager performed the stop.
+- When RAOfflineProxy is **caching** or **waiting** for its next cache window, SleepManager leaves the proxy and Wi-Fi available while the device can remain asleep.
+- Once the queue reaches a safe state, SleepManager stops the proxy, confirms that it is no longer running, and only then allows managed Wi-Fi to turn off.
+- Queue waiting is event-driven through RAOfflineProxy's ContentProvider notifications; there is no permanent polling or long wake lock.
+- Real wake restores network first and then restarts RAOfflineProxy only when SleepManager owns that restore. Closed-lid false wakes never restart it.
+- Process/service recovery preserves the pending queue/stop transaction and restore ownership.
+- Android 12+ background restoration requires RAOfflineProxy battery usage to be set to **Unrestricted**; SleepManager checks and surfaces this prerequisite before enabling the integration.
+- Added RAOfflineProxy status, queue, ownership and failure information to Diagnostics 2.0.
+
+### UI polish
+
+- Quick Setup is now a compact amber first-run guide with a softer dark-mode treatment, clearer **Finish setup** guidance, and RAOfflineProxy when detected.
+- App integrations now keep installed apps first; when none are installed, compatible integrations are listed under **Supported apps**, and once at least one is installed the remaining ones move to **Also supported**.
+- RAOfflineProxy now uses a simplified monochrome shield mark in App integrations for a consistent icon style.
+- Home **Update** and **Install Helper** shortcuts now land directly on their relevant **About → Updates** controls instead of stopping just above them.
+
+### Battery precision
+
+- When a device reports an implausibly high full-charge capacity but its charge counter follows the same scale, SleepManager now normalizes the counter against the trusted design capacity instead of falling back to Android's integer battery percentage.
+- This preserves sub-percent battery movement so long sleep sessions can still report measured mAh and precise drain even when the Android percentage does not change.
+- Stats now shows **Battery health** from reported full-charge capacity versus design capacity; it shows **Unavailable** when the reported full-charge value is detected as suspect.
+
+### Compatibility
+
+- Main app: **0.7.1 / versionCode 552**.
+- Helper remains **1.1.2 / versionCode 1115**.
+- RAOfflineProxy automation requires a build exposing **Automation API v1** (first released in **v2.0.0-alpha1**).
+
+---
 ## 0.7.0.1 — 2026-10-03
 
 - Merged the complete upstream 0.7.0 history, including the sleep/wake engine,

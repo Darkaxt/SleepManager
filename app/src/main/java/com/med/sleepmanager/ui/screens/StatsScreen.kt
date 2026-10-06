@@ -95,6 +95,14 @@ internal fun BatteryStatsPage(
                                 formatMah(it)
                             )
                         } ?: stringResource(R.string.stats_unavailable)
+                    ),
+                    stringResource(R.string.stats_battery_health) to (
+                        stats.batteryHealthPercent?.let {
+                            stringResource(
+                                R.string.stats_percent_value,
+                                formatPercentOneDecimal(it)
+                            )
+                        } ?: stringResource(R.string.stats_unavailable)
                     )
                 )
             )

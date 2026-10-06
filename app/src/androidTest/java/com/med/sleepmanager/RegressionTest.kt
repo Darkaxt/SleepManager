@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -21,6 +22,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
+import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
@@ -207,6 +209,17 @@ class RegressionTest {
         assertIntegrationToggleMatchesAvailability(
             contentDescription = "BasicSync toggle",
             available = BasicSyncController.isInstalled(targetContext)
+        )
+        assertIntegrationToggleMatchesAvailability(
+            contentDescription = "RAOfflineProxy toggle",
+            available =
+                RaOfflineProxyController.isInstalled(targetContext) &&
+                    RaOfflineProxyController.providerAvailable(targetContext) &&
+                    RaOfflineProxyController.hasControlPermission(targetContext) &&
+                    RaOfflineProxyController.isBatteryUnrestricted(targetContext) &&
+                    composeRule.activity.currentRaOfflineProxyStatus
+                        ?.version ==
+                    RaOfflineProxyController.SUPPORTED_API_VERSION
         )
 
         composeRule.activityRule.scenario.recreate()
@@ -536,6 +549,7 @@ class RegressionTest {
         AppPreferences.setManageTailscale(targetContext, false)
         AppPreferences.setManageJamesDsp(targetContext, false)
         AppPreferences.setManageBasicSync(targetContext, false)
+        AppPreferences.setManageRaOfflineProxy(targetContext, false)
         AppPreferences.setPeriodicSyncWhileSleeping(targetContext, false)
         AppPreferences.setSyncThenStopOnSleepWake(targetContext, false)
         AppPreferences.setManageClosedLidProtection(targetContext, false)
@@ -568,7 +582,12 @@ class RegressionTest {
         if (available) {
             node.assertIsEnabled()
         } else {
-            node.assertIsNotEnabled()
+            assertTrue(
+                "Unavailable integration must not expose an active toggle: $contentDescription",
+                composeRule.onAllNodesWithContentDescription(contentDescription)
+                    .fetchSemanticsNodes()
+                    .isEmpty()
+            )
         }
     }
 

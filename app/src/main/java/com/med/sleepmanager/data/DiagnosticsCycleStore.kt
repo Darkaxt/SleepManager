@@ -59,6 +59,7 @@ object DiagnosticsCycleStore {
         val tailscale: Boolean,
         val jamesDsp: Boolean,
         val basicSync: Boolean,
+        val raOfflineProxy: Boolean,
         val closedLidProtection: Boolean
     )
 
@@ -710,6 +711,8 @@ object DiagnosticsCycleStore {
             tailscale = AppPreferences.manageTailscale(context),
             jamesDsp = AppPreferences.manageJamesDsp(context),
             basicSync = AppPreferences.manageBasicSync(context),
+            raOfflineProxy =
+                AppPreferences.manageRaOfflineProxy(context),
             closedLidProtection =
                 AppPreferences.manageClosedLidProtection(context)
         )
@@ -796,6 +799,7 @@ object DiagnosticsCycleStore {
             .put("tailscale", tailscale)
             .put("jamesDsp", jamesDsp)
             .put("basicSync", basicSync)
+            .put("raOfflineProxy", raOfflineProxy)
             .put("closedLidProtection", closedLidProtection)
 
     private fun ConnectorOwnership.toJson() =
@@ -894,6 +898,9 @@ object DiagnosticsCycleStore {
                 tailscale = settingsJson?.optBoolean("tailscale", false) ?: false,
                 jamesDsp = settingsJson?.optBoolean("jamesDsp", false) ?: false,
                 basicSync = settingsJson?.optBoolean("basicSync", false) ?: false,
+                raOfflineProxy =
+                    settingsJson?.optBoolean("raOfflineProxy", false)
+                        ?: false,
                 closedLidProtection =
                     settingsJson?.optBoolean("closedLidProtection", false)
                         ?: false

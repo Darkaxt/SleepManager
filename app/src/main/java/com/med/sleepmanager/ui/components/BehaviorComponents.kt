@@ -50,6 +50,7 @@ internal fun BehaviorCard(
     tailscale: Boolean,
     jamesDsp: Boolean,
     basicSync: Boolean,
+    raOfflineProxy: Boolean,
     closedLidProtection: Boolean,
     chargingSeparationWithLid: Boolean,
     sleepOnExternalDisplayDisconnect: Boolean,
@@ -62,7 +63,8 @@ internal fun BehaviorCard(
     var expanded by remember { mutableStateOf(false) }
     val hasSleepAction =
         wifi || bluetooth || batterySaver || syncthing || tailscale ||
-            jamesDsp || basicSync || syncThenStopOnSleepWake
+            jamesDsp || basicSync || raOfflineProxy ||
+            syncThenStopOnSleepWake
     val hasClamshellBehavior =
         closedLidProtection ||
             chargingSeparationWithLid ||
@@ -85,6 +87,8 @@ internal fun BehaviorCard(
     val disconnectTailscale = stringResource(R.string.behavior_disconnect_tailscale)
     val powerOffJamesDsp = stringResource(R.string.behavior_power_off_jamesdsp)
     val stopBasicSync = stringResource(R.string.behavior_stop_basicsync)
+    val stopRaOfflineProxy =
+        stringResource(R.string.behavior_stop_raofflineproxy)
     val enableBatterySaver = stringResource(R.string.behavior_enable_battery_saver)
     val wifiOff = stringResource(R.string.behavior_wifi_off)
     val bluetoothOff = stringResource(R.string.behavior_bluetooth_off)
@@ -96,6 +100,8 @@ internal fun BehaviorCard(
     val restoreTailscale = stringResource(R.string.behavior_restore_tailscale)
     val restoreJamesDsp = stringResource(R.string.behavior_restore_jamesdsp)
     val restoreBasicSync = stringResource(R.string.behavior_restore_basicsync)
+    val restoreRaOfflineProxy =
+        stringResource(R.string.behavior_restore_raofflineproxy)
     val syncAfterWake = stringResource(R.string.behavior_sync_after_wake)
     val closedLidReturnToSleep =
         stringResource(R.string.behavior_closed_lid_return_to_sleep)
@@ -112,6 +118,8 @@ internal fun BehaviorCard(
     val tailscaleLabel = stringResource(R.string.integration_tailscale)
     val jamesDspLabel = stringResource(R.string.integration_jamesdsp)
     val basicSyncLabel = stringResource(R.string.integration_basicsync)
+    val raOfflineProxyLabel =
+        stringResource(R.string.integration_raofflineproxy)
     val sleepWakeSyncLabel = stringResource(R.string.behavior_sleep_wake_sync)
     val periodicSyncLabel = stringResource(R.string.behavior_periodic_sync_short)
     val conditionSummary =
@@ -141,6 +149,7 @@ internal fun BehaviorCard(
         if (tailscale) add(disconnectTailscale)
         if (jamesDsp) add(powerOffJamesDsp)
         if (basicSync && !syncThenStopOnSleepWake) add(stopBasicSync)
+        if (raOfflineProxy) add(stopRaOfflineProxy)
         if (batterySaver) add(enableBatterySaver)
         if (wifi) add(wifiOff)
         if (bluetooth) add(bluetoothOff)
@@ -155,6 +164,7 @@ internal fun BehaviorCard(
         if (tailscale) add(restoreTailscale)
         if (jamesDsp) add(restoreJamesDsp)
         if (basicSync && !syncThenStopOnSleepWake) add(restoreBasicSync)
+        if (raOfflineProxy) add(restoreRaOfflineProxy)
         if (syncThenStopOnSleepWake) add(syncAfterWake)
     }
 
@@ -178,6 +188,7 @@ internal fun BehaviorCard(
         if (tailscale) add(tailscaleLabel)
         if (jamesDsp) add(jamesDspLabel)
         if (basicSync) add(basicSyncLabel)
+        if (raOfflineProxy) add(raOfflineProxyLabel)
         if (syncThenStopOnSleepWake) add(sleepWakeSyncLabel)
         if (periodicSyncWhileSleeping) add(periodicSyncLabel)
         conditionSummary?.let(::add)

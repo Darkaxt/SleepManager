@@ -20,6 +20,7 @@ class SleepManagerUiStateTest {
         assertFalse(state.manageTailscaleEnabled)
         assertFalse(state.manageJamesDspEnabled)
         assertFalse(state.manageBasicSyncEnabled)
+        assertFalse(state.manageRaOfflineProxyEnabled)
         assertFalse(state.closedLidProtectionEnabled)
         assertFalse(state.dockDisconnectSleeps)
         assertFalse(state.closedLidPowerSleeps)
@@ -41,6 +42,8 @@ class SleepManagerUiStateTest {
         assertNull(state.currentSyncthingState)
         assertNull(state.currentTailscaleConnected)
         assertNull(state.currentBasicSyncState)
+        assertNull(state.currentRaOfflineProxyStatus)
+        assertFalse(state.raOfflineProxyStatusProbeComplete)
         assertNull(state.currentBackgroundReliability)
         assertNull(state.currentDeviceControlCapabilities)
         assertFalse(state.currentBatterySaverState)
@@ -62,6 +65,7 @@ class SleepManagerUiStateTest {
                     manageTailscaleEnabled = true,
                     manageJamesDspEnabled = true,
                     manageBasicSyncEnabled = true,
+                    manageRaOfflineProxyEnabled = true,
                     closedLidProtectionEnabled = true,
                     dockDisconnectSleeps = true,
                     closedLidPowerSleeps = true,
@@ -91,6 +95,7 @@ class SleepManagerUiStateTest {
         assertEquals(true, updated.manageTailscaleEnabled)
         assertEquals(true, updated.manageJamesDspEnabled)
         assertEquals(true, updated.manageBasicSyncEnabled)
+        assertEquals(true, updated.manageRaOfflineProxyEnabled)
         assertEquals(true, updated.closedLidProtectionEnabled)
         assertEquals(true, updated.dockDisconnectSleeps)
         assertEquals(true, updated.closedLidPowerSleeps)
