@@ -15,7 +15,7 @@ in SPECIFICATION.md; no device deployment or new TD-10 claim.
   `1118b30e3731b4b1f894fc7b0fe5116a0e744a08` (0.7.1), retain fork contracts,
   derive monotonic versions, and pass focused tests, both release lint-vital
   checks, clean paired signed assemblies and source/diff contract checks.
-- Stage 2 — Publish and independently verify: **ACTIVE**. Commit/push
+- Stage 2 — Publish and independently verify: **COMPLETE**. Commit/push
   verified source, pass repository release regression gates, publish normal
   paired release, and verify public APK identities, versions, signer, hashes,
   update URLs and exact source. All TD-8/TD-9 release criteria belong here.
@@ -31,8 +31,17 @@ settings keys and the paired Helper implementation; service conflict resolution
 retains package-bound token parsing alongside upstream RAOfflineProxy control.
 The existing opposite-half-day schedule fixture is preserved. No device claim.
 
-Remaining: Stage 2 release regression gates and independent public verification.
-Blockers: none identified.
+Stage 2 evidence: merge commit `7cf9f8e9279d01de81082924395b38ba5149e58c`
+contains exact upstream ancestry. GitHub run `37424918383` passed signed build,
+Helper compatibility, instrumentation, responsive UI and real emulator sleep/wake
+E2E, then published normal public `v0.7.1.1`. Independent public downloads passed
+stable build-manifest/source/update-URL/hash verification and SDK package,
+version/code and common pinned signer checks. Main SHA-256:
+`b9f63b83c83989583399569c1ec3fc07e9fd11fa451542a1eb154181c68445ac`;
+Helper: `410db70510b6b93b72951efeaa942b24ce39151c703354a45b3acdc6a9be1bef`.
+The tag resolves to the exact merge. No device was controlled or installed.
+
+Remaining: none. Blockers: none identified.
 Tracked deferrals: none. Historical verification below is not current evidence.
 
 ## October 3 upstream promotion record
