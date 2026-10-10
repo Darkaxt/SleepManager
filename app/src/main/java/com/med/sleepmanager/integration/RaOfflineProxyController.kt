@@ -9,14 +9,14 @@ import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import java.net.InetSocketAddress
+import java.net.Socket
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyCommandResult
-import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueState
-import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueStatus
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
-import org.json.JSONObject
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatusParser
 
 /**
- * Thin Android adapter around RAOfflineProxy's documented Automation API v1.
+ * Thin Android adapter around RAOfflineProxy's documented Automation API.
  *
  * ContentResolver.call() can block. status/start/stop must therefore be invoked
  * from a worker thread by service orchestration; UI callers should only use the
@@ -30,12 +30,17 @@ object RaOfflineProxyController {
     const val CONTROL_PERMISSION =
         "com.raofflineproxy.permission.CONTROL_PROXY"
     const val SUPPORTED_API_VERSION = 1
+    const val MAX_SUPPORTED_API_VERSION = 2
+
+    fun isSupportedApiVersion(version: Int?): Boolean =
+        version != null && version in SUPPORTED_API_VERSION..MAX_SUPPORTED_API_VERSION
 
     private const val METHOD_STATUS = "status"
     private const val METHOD_START = "start"
     private const val METHOD_STOP = "stop"
     private const val EXTRA_RESULT = "result"
     private const val EXTRA_STATUS = "status"
+    private const val COLUMN_PROXY_PORT = "proxy_port"
 
     val URI: Uri = Uri.parse("content://$AUTHORITY")
 
@@ -67,11 +72,11 @@ object RaOfflineProxyController {
         }.getOrDefault(false)
     }
 
-    fun openAppSettings(context: Context): Boolean {
+    fun openBatteryOptimizationSettings(context: Context): Boolean {
         val intent =
             Intent(
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:" + PACKAGE)
+                Uri.parse("package:$PACKAGE")
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return runCatching {
             context.startActivity(intent)
@@ -111,6 +116,51 @@ object RaOfflineProxyController {
         }.getOrNull()?.also {
             cachedStatus = it
         }
+
+    fun proxyPort(context: Context): Int? =
+        runCatching {
+            context.contentResolver
+                .query(
+                    URI,
+                    arrayOf(COLUMN_PROXY_PORT),
+                    null,
+                    null,
+                    null
+                )
+                ?.use { cursor ->
+                    if (!cursor.moveToFirst()) {
+                        null
+                    } else {
+                        val index = cursor.getColumnIndex(COLUMN_PROXY_PORT)
+                        if (index < 0) {
+                            null
+                        } else {
+                            cursor.getInt(index)
+                                .takeIf { it in 1..65_535 }
+                        }
+                    }
+                }
+        }.onFailure {
+            Log.w(TAG, "proxy port query failed", it)
+        }.getOrNull()
+
+    fun isProxyEndpointReachable(
+        context: Context,
+        timeoutMs: Int = 350
+    ): Boolean {
+        val port = proxyPort(context) ?: return false
+        val safeTimeoutMs = timeoutMs.coerceIn(50, 2_000)
+
+        return runCatching {
+            Socket().use { socket ->
+                socket.connect(
+                    InetSocketAddress("127.0.0.1", port),
+                    safeTimeoutMs
+                )
+            }
+            true
+        }.getOrDefault(false)
+    }
 
     fun start(context: Context): RaOfflineProxyCommandResult =
         command(context, METHOD_START)
@@ -155,39 +205,8 @@ object RaOfflineProxyController {
         }
     }
 
-    internal fun parseStatus(raw: String?): RaOfflineProxyStatus? {
-        if (raw.isNullOrBlank()) return null
-
-        return runCatching {
-            val json = JSONObject(raw)
-            val queue = json.optJSONObject("queue") ?: JSONObject()
-            val nextWindowAt =
-                if (queue.isNull("nextWindowAt")) {
-                    null
-                } else {
-                    queue.optLong("nextWindowAt")
-                }
-
-            RaOfflineProxyStatus(
-                version = json.optInt("version", -1),
-                running = json.optBoolean("running", false),
-                shouldBeRunning =
-                    json.optBoolean("shouldBeRunning", false),
-                online = json.optBoolean("online", false),
-                queue =
-                    RaOfflineProxyQueueStatus(
-                        count = queue.optInt("count", 0),
-                        state =
-                            RaOfflineProxyQueueState.fromWire(
-                                queue.optString("state", null)
-                            ),
-                        nextWindowAt = nextWindowAt
-                    )
-            )
-        }.onFailure {
-            Log.w(TAG, "Invalid RAOfflineProxy status payload", it)
-        }.getOrNull()
-    }
+    internal fun parseStatus(raw: String?): RaOfflineProxyStatus? =
+        RaOfflineProxyStatusParser.parse(raw)
 
     private fun command(
         context: Context,

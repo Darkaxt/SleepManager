@@ -11,6 +11,7 @@ import android.widget.Toast
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.integration.HelperController
+import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.protection.ClosedLidAdmin
 import com.med.sleepmanager.protection.LidMonitor
 import com.med.sleepmanager.service.SleepManagerService
@@ -48,12 +49,14 @@ class SleepManagerTileService : TileService() {
 
     private fun enableManager() {
         val helperNeeded =
-            AppPreferences.manageWifi(this) || AppPreferences.manageBluetooth(this)
+            (AppPreferences.manageWifi(this) ||
+                AppPreferences.manageBluetooth(this)) &&
+                !RadioController.directAvailable()
 
         if (helperNeeded && !HelperController.isInstalled(this)) {
             Toast.makeText(
                 this,
-                "SleepManager helper required for Wi-Fi / Bluetooth",
+                "Helper required for Wi-Fi / Bluetooth.",
                 Toast.LENGTH_SHORT
             ).show()
             return

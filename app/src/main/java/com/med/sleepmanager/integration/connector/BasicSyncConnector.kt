@@ -149,6 +149,27 @@ object BasicSyncConnector : AppConnector {
             else -> "UNKNOWN"
         }
 
+    fun restoreConfirmed(
+        restoreToken: String?,
+        state: BasicSyncController.RemoteState?
+    ): Boolean =
+        when (restoreToken) {
+            TOKEN_AUTO_MODE ->
+                state?.mode == Mode.AUTO_MODE
+
+            TOKEN_MANUAL_MODE_STARTED ->
+                state?.mode == Mode.MANUAL_MODE_STARTED
+
+            TOKEN_MANUAL_MODE_STOPPED ->
+                state?.mode == Mode.MANUAL_MODE_STOPPED &&
+                    (
+                        state.runState == RunState.NOT_RUNNING ||
+                            state.runState == RunState.PAUSED
+                    )
+
+            else -> false
+        }
+
     private fun shouldStop(runState: RunState): Boolean =
         when (runState) {
             RunState.RUNNING,

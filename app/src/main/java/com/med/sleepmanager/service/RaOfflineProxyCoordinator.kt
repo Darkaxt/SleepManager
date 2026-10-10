@@ -138,17 +138,10 @@ internal class RaOfflineProxyCoordinator(
             val result = RaOfflineProxyController.start(appContext)
             when (result.code) {
                 RaOfflineProxyCommandResult.RESULT_OK -> {
-                    val status =
-                        result.status
-                            ?: RaOfflineProxyController.status(appContext)
-                    if (RaOfflineProxyPolicy.restoreConfirmed(status)) {
-                        finishRestore(
-                            success = true,
-                            detail = "START confirmed"
-                        )
-                    } else {
-                        scheduleRestoreConfirmation()
-                    }
+                    // RAOfflineProxy can report running=true from Service.onCreate()
+                    // before startForeground() and the proxy socket are actually ready.
+                    // Always wait for a delayed confirmation of the real endpoint.
+                    scheduleRestoreConfirmation()
                 }
 
                 RaOfflineProxyCommandResult
@@ -489,6 +482,23 @@ internal class RaOfflineProxyCoordinator(
         )
     }
 
+    private fun restoreActuallyConfirmed(): Boolean {
+        val status = RaOfflineProxyController.status(appContext)
+        if (!RaOfflineProxyPolicy.restoreConfirmed(status)) {
+            return false
+        }
+
+        val endpointReady =
+            RaOfflineProxyController.isProxyEndpointReachable(appContext)
+        if (!endpointReady) {
+            Log.i(
+                TAG,
+                "RAOfflineProxy reports running but its loopback endpoint is not ready"
+            )
+        }
+        return endpointReady
+    }
+
     private fun scheduleRestoreConfirmation() {
         handler.postDelayed(
             {
@@ -496,15 +506,10 @@ internal class RaOfflineProxyCoordinator(
                 executor.execute {
                     if (!restorePending) return@execute
 
-                    val status =
-                        RaOfflineProxyController.status(appContext)
-                    if (
-                        RaOfflineProxyPolicy
-                            .restoreConfirmed(status)
-                    ) {
+                    if (restoreActuallyConfirmed()) {
                         finishRestore(
                             success = true,
-                            detail = "START confirmed"
+                            detail = "START and proxy endpoint confirmed"
                         )
                         return@execute
                     }
@@ -516,7 +521,7 @@ internal class RaOfflineProxyCoordinator(
                         finishRestore(
                             success = false,
                             detail =
-                                "START was accepted but running=true was not confirmed"
+                                "START was accepted but the proxy endpoint was not confirmed"
                         )
                     } else {
                         scheduleRestoreConfirmation()
@@ -629,17 +634,11 @@ internal class RaOfflineProxyCoordinator(
                     if (restorePending) {
                         executor.execute {
                             if (!restorePending) return@execute
-                            val status =
-                                RaOfflineProxyController
-                                    .status(appContext)
-                            if (
-                                RaOfflineProxyPolicy
-                                    .restoreConfirmed(status)
-                            ) {
+                            if (restoreActuallyConfirmed()) {
                                 finishRestore(
                                     success = true,
                                     detail =
-                                        "START confirmed by status change"
+                                        "START and proxy endpoint confirmed by status change"
                                 )
                             }
                         }

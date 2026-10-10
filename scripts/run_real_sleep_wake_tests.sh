@@ -529,6 +529,12 @@ install_bundle_apks() {
   # runner. The instrumentation package is disposable, so replace it cleanly
   # instead of using install -r and leave the already validated Main/Helper
   # untouched during harness-only iterations.
+  # The real app gates Helper usage on Unrestricted battery access. The
+  # emulator must grant the equivalent allowlist before exercising Android 12+
+  # background sleep/wake transitions.
+  adb_target shell dumpsys deviceidle whitelist +"$HELPER_PACKAGE" \
+    >/dev/null 2>&1 || true
+
   adb_target uninstall "$TEST_PACKAGE" >/dev/null 2>&1 || true
   adb_target install -t "$test_apk" >/dev/null || fail "Unable to install bundled instrumentation APK"
 

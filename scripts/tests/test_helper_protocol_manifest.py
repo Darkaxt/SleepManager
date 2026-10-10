@@ -38,6 +38,8 @@ class HelperProtocolManifestTest(unittest.TestCase):
         required = {
             "HELPER_PACKAGE",
             "PERMISSION",
+            "PERMISSION_V2",
+            "HELPER_COMMAND_SERVICE_V2_CLASS",
             "ACTION_SLEEP",
             "ACTION_WAKE",
             "ACTION_RESTORE",
@@ -63,24 +65,47 @@ class HelperProtocolManifestTest(unittest.TestCase):
 
         self.assertIn(self.contract["PERMISSION"], declared_permissions)
         self.assertIn(self.contract["PERMISSION"], used_permissions)
+        self.assertIn(self.contract["PERMISSION_V2"], used_permissions)
         self.assertIn(self.contract["HELPER_PACKAGE"], queried_packages)
 
+
+    def test_helper_v2_command_service_is_signature_protected(self):
+        services = {
+            node.get(ANDROID_NAME): node
+            for node in self.helper.findall("./application/service")
+        }
+        service = services[".HelperCommandServiceV2"]
+        self.assertEqual(
+            service.get(ANDROID_PERMISSION),
+            self.contract["PERMISSION_V2"],
+        )
+
     def test_helper_receiver_permission_and_actions_match_protocol(self):
+        declared_permissions = {
+            node.get(ANDROID_NAME)
+            for node in self.helper.findall("permission")
+        }
         used_permissions = {
             node.get(ANDROID_NAME)
             for node in self.helper.findall("uses-permission")
         }
+        self.assertIn(self.contract["PERMISSION_V2"], declared_permissions)
         self.assertIn(self.contract["PERMISSION"], used_permissions)
+        self.assertIn(self.contract["PERMISSION_V2"], used_permissions)
 
-        receivers = self.helper.findall("./application/receiver")
-        self.assertEqual(len(receivers), 1)
-        receiver = receivers[0]
-        self.assertEqual(receiver.get(ANDROID_PERMISSION), self.contract["PERMISSION"])
-
-        declared_actions = {
-            node.get(ANDROID_NAME)
-            for node in receiver.findall("./intent-filter/action")
+        receivers = {
+            node.get(ANDROID_NAME): node
+            for node in self.helper.findall("./application/receiver")
         }
+        self.assertEqual(
+            receivers[".SleepManagerHelperReceiver"].get(ANDROID_PERMISSION),
+            self.contract["PERMISSION"],
+        )
+        self.assertEqual(
+            receivers[".SleepManagerHelperReceiverV2"].get(ANDROID_PERMISSION),
+            self.contract["PERMISSION_V2"],
+        )
+
         expected_actions = {
             self.contract["ACTION_SLEEP"],
             self.contract["ACTION_WAKE"],
@@ -89,7 +114,13 @@ class HelperProtocolManifestTest(unittest.TestCase):
             self.contract["ACTION_FORGET_STATE"],
             self.contract["ACTION_SET_TEMP_WIFI"],
         }
-        self.assertEqual(declared_actions, expected_actions)
+        for receiver in receivers.values():
+            declared_actions = {
+                node.get(ANDROID_NAME)
+                for node in receiver.findall("./intent-filter/action")
+            }
+            self.assertEqual(declared_actions, expected_actions)
+
 
 
 if __name__ == "__main__":

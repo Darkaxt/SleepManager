@@ -157,8 +157,10 @@ object SleepCycleStore {
 
         val helperDone = !snapshot.helperExpected || snapshot.helperRestored
         val connectorsDone = !hasPendingConnectorChanges(context)
+        val directRadiosDone =
+            !DirectRadioStore.isPendingForCycle(context, snapshot.cycleId)
 
-        if (helperDone && connectorsDone) {
+        if (helperDone && connectorsDone && directRadiosDone) {
             DiagnosticsCycleStore.markRestorationComplete(
                 context = context,
                 transactionCycleId = snapshot.cycleId

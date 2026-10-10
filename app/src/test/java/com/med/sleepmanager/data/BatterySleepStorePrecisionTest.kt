@@ -2,6 +2,7 @@ package com.med.sleepmanager.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BatterySleepStorePrecisionTest {
@@ -46,6 +47,13 @@ class BatterySleepStorePrecisionTest {
 
         assertNull(BatterySleepStore.effectiveDrainPercent(session))
         assertNull(session.drainPerHour)
+        assertTrue(
+            BatterySleepStore.sessionAnalyticsEligible(session)
+        )
+        assertEquals(
+            "no measurable battery decrease",
+            BatterySleepStore.drainSampleExclusionReason(session)
+        )
     }
 
     @Test

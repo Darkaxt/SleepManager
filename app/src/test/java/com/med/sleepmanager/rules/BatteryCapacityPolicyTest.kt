@@ -163,6 +163,61 @@ class BatteryCapacityPolicyTest {
     }
 
     @Test
+    fun batteryHealth_capsUserFacingValueAtOneHundred() {
+        val health =
+            BatteryCapacityPolicy.batteryHealthPercent(
+                learnedFullUah = 5_361_000L,
+                designFullUah = 5_097_000L
+            )
+        val raw =
+            BatteryCapacityPolicy.rawBatteryHealthPercent(
+                learnedFullUah = 5_361_000L,
+                designFullUah = 5_097_000L
+            )
+
+        assertEquals(100.0, health!!, 0.0000001)
+        assertEquals(105.1795173632, raw!!, 0.0000001)
+    }
+
+    @Test
+    fun konkrDecimalScaleDesign_isCorrectedOnlyWithConsistentEvidence() {
+        val result =
+            BatteryCapacityPolicy.select(
+                percent = 62,
+                chargeCounterUah = 2_493_640L,
+                learnedFullUah = 4_022_000L,
+                designFullUah = 402_000L
+            )
+
+        assertTrue(result.designScaleAdjusted)
+        assertEquals(4_020_000L, result.effectiveDesignUah)
+        assertFalse(result.learnedFullSuspect)
+        assertEquals(4_022_000L, result.selectedFullUah)
+        assertEquals(2_493_640L, result.displayedCurrentUah)
+        assertEquals(BatteryCurrentSource.RAW_COUNTER, result.currentSource)
+    }
+
+    @Test
+    fun oppositeTimesTenCase_doesNotRescaleAlreadyPlausibleDesign() {
+        val result =
+            BatteryCapacityPolicy.select(
+                percent = 80,
+                chargeCounterUah = 40_000_000L,
+                learnedFullUah = 50_000_000L,
+                designFullUah = 5_000_000L
+            )
+
+        assertFalse(result.designScaleAdjusted)
+        assertEquals(5_000_000L, result.effectiveDesignUah)
+        assertTrue(result.learnedFullSuspect)
+        assertEquals(5_000_000L, result.selectedFullUah)
+        // The design value itself must stay untouched, but the counter can
+        // still be normalized from the suspect learned-capacity scale.
+        assertEquals(4_000_000L, result.displayedCurrentUah)
+        assertEquals(BatteryCurrentSource.NORMALIZED_COUNTER, result.currentSource)
+    }
+
+    @Test
     fun batteryHealth_isUnavailableWhenReportedFullIsSuspect() {
         val health =
             BatteryCapacityPolicy.batteryHealthPercent(

@@ -19,10 +19,35 @@ enum class RaOfflineProxyQueueState {
     }
 }
 
+enum class RaOfflineProxyPendingAwardState {
+    IDLE,
+    WAITING,
+    SYNCING,
+    BLOCKED,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): RaOfflineProxyPendingAwardState =
+            when (value?.lowercase()) {
+                "idle" -> IDLE
+                "waiting" -> WAITING
+                "syncing" -> SYNCING
+                "blocked" -> BLOCKED
+                else -> UNKNOWN
+            }
+    }
+}
+
 data class RaOfflineProxyQueueStatus(
     val count: Int,
     val state: RaOfflineProxyQueueState,
     val nextWindowAt: Long?
+)
+
+data class RaOfflineProxyPendingAwardsStatus(
+    val count: Int,
+    val state: RaOfflineProxyPendingAwardState,
+    val error: String?
 )
 
 data class RaOfflineProxyStatus(
@@ -30,7 +55,8 @@ data class RaOfflineProxyStatus(
     val running: Boolean,
     val shouldBeRunning: Boolean,
     val online: Boolean,
-    val queue: RaOfflineProxyQueueStatus
+    val queue: RaOfflineProxyQueueStatus,
+    val pendingAwards: RaOfflineProxyPendingAwardsStatus? = null
 )
 
 data class RaOfflineProxyCommandResult(

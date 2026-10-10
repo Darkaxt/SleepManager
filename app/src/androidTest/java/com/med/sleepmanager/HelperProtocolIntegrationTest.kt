@@ -51,7 +51,7 @@ class HelperProtocolIntegrationTest {
     }
 
     @Test
-    fun helperReceiver_rejectsMismatchedCycles_andKeepsDuplicatesIdempotent() {
+    fun helperReceiver_rejectsOlderMismatchedCycles_andKeepsDuplicatesIdempotent() {
         assertTrue(
             "Helper APK must be installed for protocol integration",
             HelperController.isInstalled(context)
@@ -61,7 +61,7 @@ class HelperProtocolIntegrationTest {
         val receiver =
             object : BroadcastReceiver() {
                 override fun onReceive(receiverContext: Context?, intent: Intent?) {
-                    if (intent?.action == HelperController.ACTION_RESULT) {
+                    if (intent?.action == HelperController.resultAction(context)) {
                         results.offer(Intent(intent))
                     }
                 }
@@ -70,15 +70,15 @@ class HelperProtocolIntegrationTest {
         ContextCompat.registerReceiver(
             context,
             receiver,
-            IntentFilter(HelperController.ACTION_RESULT),
-            HelperController.PERMISSION,
+            IntentFilter(HelperController.resultAction(context)),
+            HelperController.responsePermission(context),
             null,
             ContextCompat.RECEIVER_EXPORTED
         )
 
         try {
             val cycleId = 7_001L
-            val otherCycleId = 7_002L
+            val otherCycleId = 7_000L
 
             assertTrue(
                 HelperController.sendSleep(

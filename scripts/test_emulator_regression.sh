@@ -104,6 +104,12 @@ adb_target shell pm grant   com.med.sleepmanager   android.permission.POST_NOTIF
 # disposable emulator so the real Advanced-settings toggle can be exercised.
 adb_target shell cmd appops set   com.med.sleepmanager   SCHEDULE_EXACT_ALARM   allow >/dev/null 2>&1 || true
 
+# Production requires Helper battery usage to be Unrestricted. Mirror that
+# prerequisite on the disposable emulator so Android 12+ permits the explicit
+# cross-package command service while SleepManager is in the background.
+adb_target shell dumpsys deviceidle whitelist +com.med.sleepmanager.helper \
+  >/dev/null 2>&1 || true
+
 EXPECTED_MAIN_VERSION="$(sed -n 's/^SLEEPMANAGER_VERSION_NAME=//p' gradle.properties)"
 EXPECTED_HELPER_VERSION="$(sed -n 's/^SLEEPMANAGER_HELPER_VERSION_NAME=//p' gradle.properties)"
 ACTUAL_MAIN_VERSION="$(adb_target shell dumpsys package com.med.sleepmanager   | sed -n 's/.*versionName=//p' | head -n 1 | tr -d '\r')"

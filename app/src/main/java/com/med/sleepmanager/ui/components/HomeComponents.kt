@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -84,7 +85,9 @@ internal fun CompactSideRail(
             header = {
                 IconButton(
                     onClick = feedbackClick(onMenuClick),
-                    modifier = Modifier.offset(y = (-4).dp)
+                    modifier = Modifier
+                        .offset(y = (-4).dp)
+                        .focusProperties { canFocus = false }
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_menu),
@@ -95,7 +98,9 @@ internal fun CompactSideRail(
         ) {
             AppSection.values().forEach { section ->
                 NavigationRailItem(
-                    modifier = Modifier.height(48.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .focusProperties { canFocus = false },
                     selected = currentSection == section,
                     onClick = feedbackClick { onSectionSelected(section) },
                     icon = {

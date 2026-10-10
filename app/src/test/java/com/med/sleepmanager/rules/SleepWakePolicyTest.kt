@@ -94,7 +94,7 @@ class SleepWakePolicyTest {
         assertTrue(
             SleepWakePolicy.shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
                 wifiManaged = false,
-                helperAvailable = false,
+                radioControlAvailable = false,
                 batterySaverWillEnable = true,
                 syncthingStopRequested = true,
                 basicSyncStopRequested = false
@@ -107,7 +107,7 @@ class SleepWakePolicyTest {
         assertTrue(
             SleepWakePolicy.shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
                 wifiManaged = false,
-                helperAvailable = false,
+                radioControlAvailable = false,
                 batterySaverWillEnable = true,
                 syncthingStopRequested = false,
                 basicSyncStopRequested = true
@@ -116,11 +116,11 @@ class SleepWakePolicyTest {
     }
 
     @Test
-    fun wifiWithHelper_keepsExistingStopGate() {
+    fun wifiWithRadioControl_keepsExistingStopGate() {
         assertTrue(
             SleepWakePolicy.shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
                 wifiManaged = true,
-                helperAvailable = true,
+                radioControlAvailable = true,
                 batterySaverWillEnable = false,
                 syncthingStopRequested = true,
                 basicSyncStopRequested = false
@@ -129,11 +129,11 @@ class SleepWakePolicyTest {
     }
 
     @Test
-    fun wifiWithoutHelper_doesNotPretendItCanDisruptNetworking() {
+    fun wifiWithoutRadioControl_doesNotPretendItCanDisruptNetworking() {
         assertFalse(
             SleepWakePolicy.shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
                 wifiManaged = true,
-                helperAvailable = false,
+                radioControlAvailable = false,
                 batterySaverWillEnable = false,
                 syncthingStopRequested = true,
                 basicSyncStopRequested = false
@@ -146,7 +146,7 @@ class SleepWakePolicyTest {
         assertFalse(
             SleepWakePolicy.shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
                 wifiManaged = false,
-                helperAvailable = true,
+                radioControlAvailable = true,
                 batterySaverWillEnable = false,
                 syncthingStopRequested = true,
                 basicSyncStopRequested = false
@@ -155,10 +155,24 @@ class SleepWakePolicyTest {
     }
 
     @Test
+    fun pendingPostStopActions_preserveFreshSleepTransaction() {
+        assertFalse(
+            SleepWakePolicy.shouldCompleteSleepCycleAfterFreshActions(
+                postStopActionsPending = true
+            )
+        )
+        assertTrue(
+            SleepWakePolicy.shouldCompleteSleepCycleAfterFreshActions(
+                postStopActionsPending = false
+            )
+        )
+    }
+
+    @Test
     fun batterySaver_waitsForPendingTailscaleDisconnectVerification() {
         assertTrue(
             SleepWakePolicy.shouldWaitForTailscaleBeforeDisruptiveSleepAction(
-                helperAvailable = false,
+                radioControlAvailable = false,
                 batterySaverWillEnable = true,
                 tailscaleVerificationPending = true
             )

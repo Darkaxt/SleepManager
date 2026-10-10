@@ -1,6 +1,7 @@
 package com.med.sleepmanager.protection
 
 import android.os.Build
+import com.med.sleepmanager.device.SysfsAccessCache
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -100,16 +101,7 @@ class LidMonitor(
 
         fun findLidDevice(): LidDevice? {
             val eventDirs =
-                try {
-                    File("/sys/class/input")
-                        .listFiles()
-                        ?.asSequence()
-                        ?.filter { it.name.startsWith("event") }
-                        ?.toList()
-                        .orEmpty()
-                } catch (_: Throwable) {
-                    emptyList()
-                }
+                SysfsAccessCache.inputEventDirectories()
 
             eventDirs.firstOrNull { eventDir ->
                 readInputName(eventDir) == "hall_switch"

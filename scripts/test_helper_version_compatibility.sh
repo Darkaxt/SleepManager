@@ -8,13 +8,13 @@ ADB_BIN="${ADB:-$SDK_ROOT/platform-tools/adb}"
 STABLE_HELPER_APK="${STABLE_HELPER_APK:-}"
 STABLE_MAIN_APK="${STABLE_MAIN_APK:-}"
 CURRENT_HELPER_APK="$ROOT_DIR/helper/build/outputs/apk/debug/helper-debug.apk"
-CURRENT_HELPER_VERSION=$(sed -n 's/^SLEEPMANAGER_HELPER_VERSION_NAME=//p' "$ROOT_DIR/gradle.properties")
+CURRENT_HELPER_VERSION="$(sed -n 's/^SLEEPMANAGER_HELPER_VERSION_NAME=//p' "$ROOT_DIR/gradle.properties" | head -n 1 | tr -d '\r')"
 STABLE_HELPER_VERSION="${STABLE_HELPER_VERSION:-1.1.1}"
 STABLE_MAIN_VERSION="${STABLE_MAIN_VERSION:-0.6.1}"
 TEST_RUNNER="com.med.sleepmanager.test/androidx.test.runner.AndroidJUnitRunner"
 LEGACY_TEST="com.med.sleepmanager.HelperVersionCompatibilityTest#legacyHelper111_realRoundTripWithoutCycleId_isAcceptedByMain"
-CURRENT_TEST="com.med.sleepmanager.HelperVersionCompatibilityTest#helper112_realRoundTripEchoesCycleId_andCompletesMain"
-STABLE_MAIN_TEST="com.med.sleepmanager.StableMainHelperCompatibilityTest#stableMain061_acceptsHelper112CorrelatedResults"
+CURRENT_TEST="com.med.sleepmanager.HelperVersionCompatibilityTest#currentHelper_realRoundTripEchoesCycleId_andCompletesMain"
+STABLE_MAIN_TEST="com.med.sleepmanager.StableMainHelperCompatibilityTest#stableMain061_acceptsCurrentHelperCorrelatedResults"
 REPORT_DIR="$ROOT_DIR/build/helper-compatibility"
 
 mkdir -p "$REPORT_DIR"
@@ -52,6 +52,7 @@ run_case() {
   local test_name="$1"
   local log_name="$2"
   local mode_key="${3:-helperCompatibility}"
+  local expected_helper_version="${4:-}"
 
   ensure_awake || fail "Emulator did not reach awake state before $test_name"
   sleep 1
@@ -59,9 +60,9 @@ run_case() {
   set +e
   adb_target shell am instrument -w -r \
     -e "$mode_key" true \
-    -e expectedCurrentHelperVersion "$CURRENT_HELPER_VERSION" \
     -e expectedStableHelperVersion "$STABLE_HELPER_VERSION" \
     -e expectedStableMainVersion "$STABLE_MAIN_VERSION" \
+    ${expected_helper_version:+-e expectedHelperVersion "$expected_helper_version"} \
     -e class "$test_name" "$TEST_RUNNER" \
     | tee "$REPORT_DIR/$log_name"
   local status=${PIPESTATUS[0]}
@@ -78,6 +79,7 @@ run_case() {
 [ -n "$STABLE_MAIN_APK" ] || { echo "STABLE_MAIN_APK is required" >&2; exit 1; }
 [ -f "$STABLE_MAIN_APK" ] || { echo "Stable Main APK not found: $STABLE_MAIN_APK" >&2; exit 1; }
 [ -f "$CURRENT_HELPER_APK" ] || { echo "Current Helper APK not found: $CURRENT_HELPER_APK" >&2; exit 1; }
+[ -n "$CURRENT_HELPER_VERSION" ] || { echo "Unable to read current Helper version" >&2; exit 1; }
 
 adb_target wait-for-device
 adb_target shell pm path com.med.sleepmanager >/dev/null 2>&1 \
@@ -90,20 +92,24 @@ adb_target shell am force-stop com.med.sleepmanager >/dev/null 2>&1 || true
 adb_target uninstall com.med.sleepmanager.helper >/dev/null 2>&1 || true
 adb_target install -t "$STABLE_HELPER_APK" >/dev/null \
   || fail "Unable to install stable Helper 1.1.1"
+adb_target shell dumpsys deviceidle whitelist +com.med.sleepmanager.helper \
+  >/dev/null 2>&1 || true
 
 [ "$(helper_version)" = "$STABLE_HELPER_VERSION" ] \
   || fail "Expected Helper $STABLE_HELPER_VERSION, got $(helper_version)"
 run_case "$LEGACY_TEST" "helper-1.1.1.txt"
 
-echo "=== Upgrade Helper 1.1.1 -> 1.1.2 in place ==="
+echo "=== Upgrade Helper 1.1.1 -> $CURRENT_HELPER_VERSION in place ==="
 adb_target install -r -t "$CURRENT_HELPER_APK" >/dev/null \
-  || fail "Unable to upgrade Helper to 1.1.2"
+  || fail "Unable to upgrade Helper to $CURRENT_HELPER_VERSION"
+adb_target shell dumpsys deviceidle whitelist +com.med.sleepmanager.helper \
+  >/dev/null 2>&1 || true
 
 [ "$(helper_version)" = "$CURRENT_HELPER_VERSION" ] \
   || fail "Expected Helper $CURRENT_HELPER_VERSION after upgrade, got $(helper_version)"
-run_case "$CURRENT_TEST" "helper-1.1.2.txt"
+run_case "$CURRENT_TEST" "helper-current.txt" "helperCompatibility" "$CURRENT_HELPER_VERSION"
 
-echo "=== Stable Main 0.6.1 + Helper 1.1.2 ==="
+echo "=== Stable Main 0.6.1 + Helper $CURRENT_HELPER_VERSION ==="
 adb_target shell am force-stop com.med.sleepmanager >/dev/null 2>&1 || true
 adb_target install -r -d -t "$STABLE_MAIN_APK" >/dev/null \
   || fail "Unable to downgrade debug Main to stable 0.6.1 in place"
@@ -115,6 +121,6 @@ MAIN_VERSION=$(adb_target shell dumpsys package com.med.sleepmanager \
 [ "$MAIN_VERSION" = "$STABLE_MAIN_VERSION" ] \
   || fail "Expected Main $STABLE_MAIN_VERSION after downgrade, got $MAIN_VERSION"
 
-run_case "$STABLE_MAIN_TEST" "stable-main-0.6.1-helper-1.1.2.txt" "stableMainHelperCompatibility"
+run_case "$STABLE_MAIN_TEST" "stable-main-0.6.1-helper-current.txt" "stableMainHelperCompatibility" "$CURRENT_HELPER_VERSION"
 
-echo "PASS: Main 0.7 accepts Helper 1.1.1/1.1.2 and stable Main 0.6.1 accepts Helper 1.1.2"
+echo "PASS: Main 0.7 accepts Helper 1.1.1/$CURRENT_HELPER_VERSION and stable Main 0.6.1 accepts Helper $CURRENT_HELPER_VERSION"

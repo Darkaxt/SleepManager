@@ -70,4 +70,13 @@ object SyncMaintenancePolicy {
         } else {
             PeriodicMaintenanceFollowUp.CANCEL
         }
+
+    fun shouldContinueSleepAfterPreSleepMaintenance(
+        stillSleeping: Boolean,
+        managerEnabled: Boolean,
+        actionsApplied: Boolean
+    ): Boolean =
+        stillSleeping &&
+            managerEnabled &&
+            actionsApplied
 }

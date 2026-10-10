@@ -84,6 +84,23 @@ class BatterySaverPolicyTest {
 
 
     @Test
+    fun transientDisconnectThatStillReportsExternalPower_doesNothing() {
+        assertEquals(
+            BatterySaverPowerEventDecision.NOTHING,
+            BatterySaverPolicy.powerEventDecision(
+                manageEnabled = true,
+                controlSupported = true,
+                effectivelySleeping = true,
+                externalPowerConnected = true,
+                deferredForExternalPower = true,
+                owned = false,
+                previous = false,
+                currentlyEnabled = false
+            )
+        )
+    }
+
+    @Test
     fun unplugWithoutDeferredSleepAction_doesNothing() {
         assertEquals(
             BatterySaverPowerEventDecision.NOTHING,

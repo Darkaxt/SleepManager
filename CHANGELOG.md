@@ -2,6 +2,62 @@
 
 Release notes are organized by version and focus on user-visible behavior first.
 
+## 0.7.2.1 — 2026-10-10
+
+- Incorporated the complete upstream 0.7.2 history, including direct radio
+  control, Helper v2 recovery, RAOfflineProxy v2 and diagnostics improvements.
+- Preserved TailDNS and official Tailscale package-bound transactions, fork-only
+  updates, settings identities and the permanent paired signing certificate.
+- Main: **0.7.2.1 / versionCode 561**. Helper: **1.1.7.1 / 1122**.
+
+## 0.7.2 — 2026-10-07
+
+### Direct radio control and Compatibility Helper
+
+- SleepManager now uses direct Wi-Fi/Bluetooth control automatically when compatible system radio control is available.
+- Supported recent AYN and Retroid devices no longer require the Compatibility Helper.
+- On other devices, the Compatibility Helper remains the fallback for Wi-Fi/Bluetooth control.
+- Helper battery-optimization exemption is required on Helper-based devices; Wi-Fi control special access is requested only when Android explicitly reports it as denied.
+- Direct-radio devices no longer surface unnecessary Helper installation or update prompts.
+- Radio ownership and restoration remain state-aware so SleepManager restores only what it changed.
+
+### Sleep/wake reliability
+
+- Strengthened recovery after interrupted sleep/wake cycles and process restarts.
+- Improved closed-lid false-wake preservation so pending ownership survives until a real wake.
+- Hardened Syncthing STOP ordering before disruptive radio changes.
+- Added a short external-power disconnect recheck to avoid false Battery Saver failures caused by transient Charging Separation power events.
+- Improved structured diagnostics for direct PServer radio restoration.
+
+### Diagnostics 2.0
+
+- Expanded multi-cycle history with per-cycle sleep/wake timing and false-wake tracking.
+- Added optional system and memory snapshots for diagnostic cycles.
+- Added Android ApplicationExitInfo/process-exit context when available.
+- Improved Activity chronology and transition reporting.
+
+### RAOfflineProxy
+
+- Added Automation API v2 pending-award handling so SleepManager keeps RAOfflineProxy and network access available until cached work and pending RetroAchievements awards are safe.
+- Restored the reliable App info path for setting **Battery usage → Unrestricted**.
+- SleepManager re-checks the prerequisite after returning from Android settings.
+
+### BasicSync and integration readiness
+
+- BasicSync readiness distinguishes Android package STOPPED state from unavailable remote control.
+- Returning from BasicSync triggers a fresh REQUEST_STATE / STATE_CHANGED readiness probe.
+- Existing completion-aware Advanced Sync behavior remains unchanged.
+
+### Compatibility
+
+- Main app: **0.7.2 / versionCode 560**.
+- Helper: **1.1.7 / versionCode 1121**.
+- Android **9 / API 28 or newer**.
+- Existing settings are preserved during update.
+- No root, Shizuku or ADB is required for normal use.
+
+---
+
 ## 0.7.1.1 — 2026-10-06
 
 - Incorporated the complete upstream 0.7.1 history and its RAOfflineProxy,

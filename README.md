@@ -28,14 +28,23 @@ SleepManager is designed mainly for Android gaming handhelds such as **AYN**, **
 
 ## Quick Start
 
-1. Download and install the latest **SleepManager APK** from [Releases](https://github.com/Darkaxt/SleepManager/releases).
-2. If you want Wi-Fi or Bluetooth control, download and install the optional **SleepManager Helper** from [Releases](https://github.com/Darkaxt/SleepManager/releases).
-3. Open SleepManager and choose what you want it to manage during sleep.
+1. Install the latest **SleepManager APK** from [Releases](https://github.com/Darkaxt/SleepManager/releases).
+2. Open SleepManager and choose what you want it to manage.
+3. If needed, SleepManager will guide you through installing and setting up the **Compatibility Helper**.
 4. Enable **SleepManager**, then tap **Finish setup**.
 
 SleepManager always tries to **restore only what it changed**. For example, if Wi-Fi was already off before sleep, it stays off after wake.
 
+Recent compatible **AYN and Retroid** handhelds can control Wi-Fi and Bluetooth directly and do **not** require the Helper. Other devices use the Compatibility Helper for radio control.
+
 Depending on the features you use, Android may ask for additional permissions. See [Permissions](#permissions) for details.
+
+> [!WARNING]
+> **AYANEO / KONKR devices — disable DuraSpeed.**
+>
+> On devices with **DuraSpeed**, turn it **OFF** in Android Settings. DuraSpeed may restrict SleepManager, its Compatibility Helper and sync integrations in the background, preventing Wi-Fi/Bluetooth restoration after long standby.
+>
+> **Battery usage → Unrestricted is not enough:** DuraSpeed must be disabled separately. This resolved overnight restoration failures on a KONKR Pocket Advance.
 
 > **Note:** The Helper has no launcher icon or separate interface.
 
@@ -43,8 +52,8 @@ Depending on the features you use, Android may ask for additional permissions. S
 
 SleepManager can manage several Android system features during sleep.
 
-- **Wi-Fi** — turns Wi-Fi off during sleep and restores it on wake only if SleepManager changed it. Requires the optional SleepManager Helper.
-- **Bluetooth** — uses the same state-aware behavior as Wi-Fi: it is restored only if SleepManager turned it off. Requires the optional SleepManager Helper.
+- **Wi-Fi** — turns Wi-Fi off during sleep and restores it on wake only if SleepManager changed it. SleepManager uses direct radio control automatically on supported recent AYN and Retroid devices; other devices use the Compatibility Helper.
+- **Bluetooth** — uses the same state-aware behavior as Wi-Fi and the same automatic direct-control / Compatibility Helper fallback.
 - **Battery Saver** — enables Android Battery Saver during sleep on supported devices and restores the previous state on wake.
 
 SleepManager tracks ownership of these changes so it does not overwrite a state that was already set by the user before sleep.
@@ -100,11 +109,11 @@ See [Advanced Sync Behavior](#advanced-sync-behavior) for the additional sync mo
 
 ### RAOfflineProxy
 
-SleepManager can automatically stop **RAOfflineProxy** during sleep and restore it on wake. If RAOfflineProxy is still caching games or waiting for its next cache window, SleepManager keeps the proxy and Wi-Fi available until it is safe to stop them.
+SleepManager can automatically stop **RAOfflineProxy** during sleep and restore it on wake. If RAOfflineProxy is still caching, waiting for its next cache window or has pending RetroAchievements awards to process, SleepManager keeps the proxy and Wi-Fi available until it is safe to stop them.
 
-For reliable background restart on Android 12+, set RAOfflineProxy battery usage to **Unrestricted**:
+For reliable background restart on Android 12+, set RAOfflineProxy **Battery usage** to **Unrestricted**:
 
-**Settings → Apps → RAOfflineProxy → App battery usage → Unrestricted**
+**Settings → Apps → RAOfflineProxy → Battery usage → Unrestricted**
 
 RAOfflineProxy **v2.0.0-alpha1 or newer** is required for SleepManager integration.
 
@@ -171,6 +180,8 @@ When more precise battery data is available, SleepManager uses it automatically.
 
 The **Activity** page shows recent SleepManager actions with timestamps, making it easier to see what happened during sleep and wake transitions.
 
+Optional **Advanced diagnostics** adds deeper multi-cycle troubleshooting while keeping normal operation lightweight. When enabled, SleepManager can retain per-cycle system and memory snapshots, false-wake counts, sleep/wake timings and Android process-exit information when available.
+
 Use **Copy log** to generate a detailed diagnostic report that includes:
 
 - SleepManager version, enabled state and service status
@@ -178,9 +189,10 @@ Use **Copy log** to generate a detailed diagnostic report that includes:
 - Enabled system controls, clamshell options and app integrations
 - Current Wi-Fi, Bluetooth, Battery Saver and integration states
 - Active sleep/wake transaction and pending restore information
-- Recent Wi-Fi toggle results and Airplane mode state
+- Multi-cycle sleep/wake history and false-wake information
+- System and memory snapshots captured for diagnostic cycles
 - BasicSync runtime state and sync counters when available
-- RAOfflineProxy runtime, queue and restore state when available
+- RAOfflineProxy runtime, queue, pending-award and restore state when available
 - Recent SleepManager activity
 - Recent Android process-exit information on Android 11+ when available
 
@@ -192,7 +204,7 @@ SleepManager includes a built-in updater for both the main app and the optional 
 
 - **Automatic Checks** — when enabled, SleepManager checks for new stable releases when you open the app and periodically in the background.
 - **Manual Checks** — use **About → Updates → Check for updates** at any time.
-- **Main and Helper Updates** — SleepManager tracks the main app and Helper independently and can also offer the Helper for installation if it is not installed.
+- **Main and Helper Updates** — SleepManager tracks the main app and Compatibility Helper independently. On devices with direct radio control, Helper installation and update prompts are not shown because the Helper is not needed.
 - **Update Notifications** — SleepManager can notify you when a new stable version is available.
 - **Release Notes** — available directly from the update section before installing a new version.
 - **Secure Installation** — downloaded APKs are verified before Android's installer opens, including the SHA-256 digest, package identity, version information and SleepManager signing certificate.
@@ -210,11 +222,13 @@ SleepManager requests only the permissions needed for the features you choose to
 
 SleepManager also checks Android's **Battery Optimization** and **Unused App Restrictions** under **About → Background Reliability**. These are not required for every device, but restrictive Android background settings can prevent SleepManager from running reliably during long sleep periods.
 
-The optional **SleepManager Helper** handles Wi-Fi and Bluetooth control. It has no launcher icon or separate interface and communicates only with the signed SleepManager app.
+On devices that need it, the **SleepManager Compatibility Helper** handles Wi-Fi and Bluetooth control. Grant its battery-optimization exemption when requested. If SleepManager reports that Wi-Fi control access is required, enable **Settings → Apps → Special app access → Wi-Fi control → SleepManager Helper**. The Helper has no launcher icon or separate interface and communicates only with the signed SleepManager app.
 
 ## Compatibility
 
 - Android **9 / API 28 or newer**
+- Recent compatible **AYN and Retroid** devices use direct Wi-Fi/Bluetooth control automatically and do **not** require the Helper
+- Other devices use the **SleepManager Compatibility Helper** for Wi-Fi and Bluetooth control
 - RAOfflineProxy **v2.0.0-alpha1 or newer** for SleepManager integration
 - Main package: `com.med.sleepmanager`
 - Helper package: `com.med.sleepmanager.helper`
@@ -224,7 +238,11 @@ The optional **SleepManager Helper** handles Wi-Fi and Bluetooth control. It has
 
 ### Wi-Fi or Bluetooth Does Not Change
 
-Make sure the **SleepManager Helper** is installed and up to date.
+On **AYANEO / KONKR devices that have DuraSpeed**, switch **DuraSpeed OFF** in Android Settings first. DuraSpeed may interfere with background sleep/wake restoration even when the app's Android battery setting says **Unrestricted**.
+
+SleepManager uses direct radio control automatically on supported recent AYN and Retroid devices.
+
+If your device requires the **Compatibility Helper**, make sure it is installed, up to date and exempt from battery optimization. If SleepManager reports that Wi-Fi control access is required, enable **Settings → Apps → Special app access → Wi-Fi control → SleepManager Helper**.
 
 Then check **Activity** for the latest sleep/wake actions and use **Copy log** if you need more details.
 

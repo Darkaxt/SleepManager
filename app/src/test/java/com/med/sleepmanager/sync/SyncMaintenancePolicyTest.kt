@@ -134,6 +134,24 @@ class SyncMaintenancePolicyTest {
     }
 
     @Test
+    fun wakeBeforePreSleepCompletion_doesNotContinueSleepTransition() {
+        assertTrue(
+            SyncMaintenancePolicy.shouldContinueSleepAfterPreSleepMaintenance(
+                stillSleeping = true,
+                managerEnabled = true,
+                actionsApplied = true
+            )
+        )
+        assertFalse(
+            SyncMaintenancePolicy.shouldContinueSleepAfterPreSleepMaintenance(
+                stillSleeping = false,
+                managerEnabled = true,
+                actionsApplied = true
+            )
+        )
+    }
+
+    @Test
     fun transitionRequiresManagerFeatureAndCompletionCapability() {
         assertTrue(
             SyncMaintenancePolicy.transitionCanRun(

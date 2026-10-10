@@ -8,9 +8,20 @@ class HelperProtocolContractTest {
     @Test
     fun helperControllerCompatibilityAliasesUseSharedProtocol() {
         assertEquals(HelperProtocol.HELPER_PACKAGE, HelperController.PACKAGE)
+        assertEquals(
+            "com.med.sleepmanager.helper.SleepManagerHelperReceiver",
+            HelperProtocol.HELPER_RECEIVER_CLASS
+        )
+        assertEquals(
+            "com.med.sleepmanager.helper.HelperActivationActivity",
+            HelperProtocol.HELPER_ACTIVATION_ACTIVITY_CLASS
+        )
         assertEquals(HelperProtocol.PERMISSION, HelperController.PERMISSION)
+        assertEquals(HelperProtocol.PERMISSION_V2, HelperController.PERMISSION_V2)
         assertEquals(HelperProtocol.ACTION_STATE, HelperController.ACTION_STATE)
         assertEquals(HelperProtocol.ACTION_RESULT, HelperController.ACTION_RESULT)
+        assertEquals(HelperProtocol.ACTION_STATE_V2, HelperController.ACTION_STATE_V2)
+        assertEquals(HelperProtocol.ACTION_RESULT_V2, HelperController.ACTION_RESULT_V2)
         assertEquals(HelperProtocol.EXTRA_PHASE, HelperController.EXTRA_PHASE)
         assertEquals(HelperProtocol.EXTRA_CYCLE_ID, HelperController.EXTRA_CYCLE_ID)
         assertEquals(HelperProtocol.EXTRA_WIFI_MANAGED, HelperController.EXTRA_WIFI_MANAGED)
@@ -57,6 +68,11 @@ class HelperProtocolContractTest {
             "com.med.sleepmanager.permission.CONTROL_HELPER",
             HelperProtocol.PERMISSION
         )
+        assertEquals(
+            "com.med.sleepmanager.helper.permission.CONTROL",
+            HelperProtocol.PERMISSION_V2
+        )
+        assertEquals(1117L, HelperProtocol.HELPER_PROTOCOL_V2_MIN_VERSION_CODE)
         assertEquals(
             "com.med.sleepmanager.helper.action.SLEEP",
             HelperProtocol.ACTION_SLEEP

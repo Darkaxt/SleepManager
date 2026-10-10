@@ -12,7 +12,14 @@ import android.util.Log
 import com.med.sleepmanager.protocol.HelperCyclePolicy
 import com.med.sleepmanager.protocol.HelperProtocol
 
-class SleepManagerHelperReceiver : BroadcastReceiver() {
+open class SleepManagerHelperReceiver : BroadcastReceiver() {
+    protected open val responsePermission: String
+        get() = HelperProtocol.PERMISSION
+    protected open val stateAction: String
+        get() = HelperProtocol.ACTION_STATE
+    protected open val resultAction: String
+        get() = HelperProtocol.ACTION_RESULT
+
     companion object {
         private const val TAG = "SleepManagerHelper"
         private const val PREFS = "helper_state"
@@ -62,12 +69,12 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         val wifiOn = safeWifiState(wifiManager)
         val bluetoothOn = safeBluetoothState(bluetooth)
 
-        val response = Intent(HelperProtocol.ACTION_STATE)
+        val response = Intent(stateAction)
             .setPackage(HelperProtocol.MAIN_PACKAGE)
             .putExtra(HelperProtocol.EXTRA_WIFI_STATE, wifiOn)
             .putExtra(HelperProtocol.EXTRA_BLUETOOTH_STATE, bluetoothOn)
 
-        context.sendBroadcast(response, HelperProtocol.PERMISSION)
+        context.sendBroadcast(response, responsePermission)
         Log.i(TAG, "Current state reported: wifi=$wifiOn bluetooth=$bluetoothOn")
     }
 
@@ -88,10 +95,66 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
                 cycleId
             )
         ) {
+            HelperCyclePolicy.SleepDecision.RECONCILE_STALE_ACTIVE -> {
+                Log.w(
+                    TAG,
+                    "Newer sleep cycle=$cycleId arrived while stale Helper cycle=" +
+                        "$activeCycleId is active; reconciling stale ownership first"
+                )
+
+                // A previous Main/Helper acknowledgement can be lost even after
+                // the radios have physically returned to their pre-sleep state.
+                // Reconcile only when the incoming correlated cycle is newer.
+                // The old wake result is cycle-correlated, so the newer Main
+                // transaction safely ignores it as stale.
+                restore(
+                    context = context,
+                    requestedCycleId = activeCycleId
+                )
+
+                if (
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .getBoolean(KEY_CYCLE_ACTIVE, false)
+                ) {
+                    Log.w(
+                        TAG,
+                        "Stale Helper cycle could not be reconciled; " +
+                            "rejecting new sleep cycle=$cycleId"
+                    )
+                    sendResult(
+                        context = context,
+                        phase = HelperProtocol.PHASE_SLEEP,
+                        cycleId = cycleId,
+                        wifiManaged = false,
+                        wifiPrevious = false,
+                        wifiChanged = false,
+                        bluetoothManaged = false,
+                        bluetoothPrevious = false,
+                        bluetoothChanged = false,
+                        status = HelperProtocol.STATUS_CYCLE_MISMATCH
+                    )
+                    return
+                }
+
+                Log.i(
+                    TAG,
+                    "Stale Helper cycle=$activeCycleId reconciled; " +
+                        "starting new cycle=$cycleId"
+                )
+                enterSleep(
+                    context = context,
+                    manageWifi = manageWifi,
+                    manageBluetooth = manageBluetooth,
+                    cycleId = cycleId
+                )
+                return
+            }
+
             HelperCyclePolicy.SleepDecision.CYCLE_MISMATCH -> {
                 Log.w(
                     TAG,
-                    "Sleep cycle mismatch: requested=$cycleId active=$activeCycleId"
+                    "Rejecting stale sleep cycle=$cycleId because newer Helper " +
+                        "cycle=$activeCycleId is active"
                 )
                 sendResult(
                     context = context,
@@ -343,10 +406,70 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
                 return
             }
 
+            HelperCyclePolicy.RestoreDecision.RECONCILE_STALE_ACTIVE -> {
+                Log.w(
+                    TAG,
+                    "Newer restore cycle=$requestedCycleId arrived while stale Helper " +
+                        "cycle=$activeCycleId is active; reconciling stale ownership first"
+                )
+
+                restore(
+                    context = context,
+                    requestedCycleId = activeCycleId
+                )
+
+                val staleStillActive =
+                    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .getBoolean(KEY_CYCLE_ACTIVE, false)
+
+                if (staleStillActive) {
+                    Log.w(
+                        TAG,
+                        "Stale Helper cycle=$activeCycleId could not be restored; " +
+                            "preserving ownership"
+                    )
+                    sendResult(
+                        context = context,
+                        phase = HelperProtocol.PHASE_WAKE,
+                        cycleId = requestedCycleId,
+                        wifiManaged = false,
+                        wifiPrevious = false,
+                        wifiChanged = false,
+                        bluetoothManaged = false,
+                        bluetoothPrevious = false,
+                        bluetoothChanged = false,
+                        restoreSuccess = false,
+                        status = HelperProtocol.STATUS_CYCLE_MISMATCH
+                    )
+                    return
+                }
+
+                Log.i(
+                    TAG,
+                    "Stale Helper cycle=$activeCycleId reconciled; newer Main cycle=" +
+                        "$requestedCycleId has no remaining Helper-owned radio state"
+                )
+                sendResult(
+                    context = context,
+                    phase = HelperProtocol.PHASE_WAKE,
+                    cycleId = requestedCycleId,
+                    wifiManaged = false,
+                    wifiPrevious = false,
+                    wifiChanged = false,
+                    bluetoothManaged = false,
+                    bluetoothPrevious = false,
+                    bluetoothChanged = false,
+                    restoreSuccess = true,
+                    status = HelperProtocol.STATUS_ALREADY_RESTORED
+                )
+                return
+            }
+
             HelperCyclePolicy.RestoreDecision.CYCLE_MISMATCH -> {
                 Log.w(
                     TAG,
-                    "Restore cycle mismatch: requested=$requestedCycleId active=$activeCycleId"
+                    "Rejecting stale restore cycle=$requestedCycleId because newer " +
+                        "Helper cycle=$activeCycleId is active"
                 )
                 sendResult(
                     context = context,
@@ -384,16 +507,29 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         val wifiRestoreRequired = wifiChanged && wifiPrevious
         val bluetoothRestoreRequired = bluetoothChanged && bluetoothPrevious
 
-        val wifiRestored = if (wifiRestoreRequired) {
-            setWifi(wifiManager, true)
-        } else {
-            false
-        }
-        val bluetoothRestored = if (bluetoothRestoreRequired) {
-            setBluetooth(bluetooth, true)
-        } else {
-            false
-        }
+        val wifiAlreadyRestored =
+            wifiRestoreRequired && safeWifiState(wifiManager) == wifiPrevious
+        val bluetoothAlreadyRestored =
+            bluetoothRestoreRequired &&
+                safeBluetoothState(bluetooth) == bluetoothPrevious
+
+        val wifiRestoreAttempted =
+            wifiRestoreRequired && !wifiAlreadyRestored
+        val bluetoothRestoreAttempted =
+            bluetoothRestoreRequired && !bluetoothAlreadyRestored
+
+        val wifiRestored =
+            when {
+                !wifiRestoreRequired -> false
+                wifiAlreadyRestored -> true
+                else -> setWifi(wifiManager, wifiPrevious)
+            }
+        val bluetoothRestored =
+            when {
+                !bluetoothRestoreRequired -> false
+                bluetoothAlreadyRestored -> true
+                else -> setBluetooth(bluetooth, bluetoothPrevious)
+            }
 
         val wifiRestoreSuccess = !wifiRestoreRequired || wifiRestored
         val bluetoothRestoreSuccess = !bluetoothRestoreRequired || bluetoothRestored
@@ -414,9 +550,10 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         Log.i(
             TAG,
             "Wake restore result: success=$restoreSuccess " +
-                "wifi=$wifiPrevious (attempted=$wifiRestoreRequired restored=$wifiRestored) " +
+                "wifi=$wifiPrevious (attempted=$wifiRestoreAttempted restored=$wifiRestored) " +
                 "airplaneMode=$airplaneModeOn " +
-                "bluetooth=$bluetoothPrevious (restored=$bluetoothRestored)"
+                "bluetooth=$bluetoothPrevious " +
+                "(attempted=$bluetoothRestoreAttempted restored=$bluetoothRestored)"
         )
 
         if (wifiRestoreRequired && !wifiRestored) {
@@ -433,7 +570,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             wifiManaged = wifiManaged,
             wifiPrevious = wifiPrevious,
             wifiChanged = wifiRestored,
-            wifiAttempted = wifiRestoreRequired,
+            wifiAttempted = wifiRestoreAttempted,
             wifiAction = "ON",
             wifiToggleSuccess = !wifiRestoreRequired || wifiRestored,
             airplaneMode = airplaneModeOn,
@@ -462,7 +599,7 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
         restoreSuccess: Boolean = true,
         status: String = HelperProtocol.STATUS_OK
     ) {
-        val response = Intent(HelperProtocol.ACTION_RESULT)
+        val response = Intent(resultAction)
             .setPackage(HelperProtocol.MAIN_PACKAGE)
             .putExtra(HelperProtocol.EXTRA_PHASE, phase)
             .putExtra(HelperProtocol.EXTRA_CYCLE_ID, cycleId)
@@ -479,7 +616,12 @@ class SleepManagerHelperReceiver : BroadcastReceiver() {
             .putExtra(HelperProtocol.EXTRA_RESTORE_SUCCESS, restoreSuccess)
             .putExtra(HelperProtocol.EXTRA_STATUS, status)
 
-        context.sendBroadcast(response, HelperProtocol.PERMISSION)
+        context.sendBroadcast(response, responsePermission)
+        Log.i(
+            TAG,
+            "Result reported: phase=$phase cycle=$cycleId status=$status " +
+                "restoreSuccess=$restoreSuccess"
+        )
     }
 
     private fun isAirplaneModeOn(context: Context): Boolean =

@@ -34,6 +34,9 @@ object UpdateInstaller {
     private const val CONNECT_TIMEOUT_MS = 10_000
     private const val READ_TIMEOUT_MS = 30_000
     private const val MAX_APK_BYTES = 100L * 1024L * 1024L
+    private const val NETWORK_WAIT_MS = 15_000L
+    private const val DOWNLOAD_ATTEMPTS = 3
+    private const val DOWNLOAD_RETRY_DELAY_MS = 750L
 
     fun downloadAndVerify(
         context: Context,
@@ -93,6 +96,12 @@ object UpdateInstaller {
             return UpdateDownloadResult.Failure("Unexpected update download URL.")
         }
 
+        if (!ValidatedNetworkAwaiter.await(context, NETWORK_WAIT_MS)) {
+            return UpdateDownloadResult.Failure(
+                "No validated Internet connection yet. Connect to a network and retry."
+            )
+        }
+
         val updateDir = File(context.cacheDir, "updates")
         if (!updateDir.exists() && !updateDir.mkdirs()) {
             return UpdateDownloadResult.Failure(
@@ -105,7 +114,7 @@ object UpdateInstaller {
         partialFile.delete()
 
         return try {
-            val actualSha = downloadApk(apkUrl, partialFile)
+            val actualSha = downloadApkWithRetry(apkUrl, partialFile)
             if (!actualSha.equals(expectedSha, ignoreCase = true)) {
                 partialFile.delete()
                 return UpdateDownloadResult.Failure(
@@ -146,6 +155,38 @@ object UpdateInstaller {
                 cause = t
             )
         }
+    }
+
+    private fun downloadApkWithRetry(
+        url: String,
+        destination: File
+    ): String {
+        var lastFailure: Throwable? = null
+        repeat(DOWNLOAD_ATTEMPTS) { attempt ->
+            destination.delete()
+            try {
+                return downloadApk(url, destination)
+            } catch (error: Throwable) {
+                lastFailure = error
+                if (
+                    attempt + 1 >= DOWNLOAD_ATTEMPTS ||
+                    !isTransientDownloadFailure(error)
+                ) {
+                    throw error
+                }
+                Thread.sleep(DOWNLOAD_RETRY_DELAY_MS)
+            }
+        }
+        throw lastFailure
+            ?: IllegalStateException("Unable to download the update.")
+    }
+
+    private fun isTransientDownloadFailure(error: Throwable): Boolean {
+        if (error is java.io.IOException) return true
+        val message = error.message.orEmpty()
+        return message.contains("HTTP 408") ||
+            message.contains("HTTP 429") ||
+            Regex("HTTP 5\\d\\d").containsMatchIn(message)
     }
 
     private fun downloadApk(url: String, destination: File): String {

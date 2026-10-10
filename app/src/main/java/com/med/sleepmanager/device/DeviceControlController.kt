@@ -17,10 +17,14 @@ object DeviceControlController {
     private const val PSERVER_SERVICE = "PServerBinder"
     private const val CHARGING_SEPARATION_KEY = "is_charging_separation"
 
+    @Volatile
+    private var directRadioControlCached: Boolean? = null
+
     data class ControlCapabilities(
         val pServerAvailable: Boolean,
         val batterySaverControl: Boolean,
-        val chargingSeparationControl: Boolean
+        val chargingSeparationControl: Boolean,
+        val pServerRadioControl: Boolean = false
     )
 
     fun capabilities(context: Context): ControlCapabilities {
@@ -51,11 +55,61 @@ object DeviceControlController {
             batterySaverControl = privilegedBatterySaverRead != null,
             chargingSeparationControl =
                 privilegedChargingRead != null &&
-                    chargingSeparationState(context) != null
+                    chargingSeparationState(context) != null,
+            pServerRadioControl = supportsDirectRadioControl()
         )
     }
 
     fun isPServerAvailable(): Boolean = findPServerBinder() != null
+
+    /**
+     * Harmless capability probe for the OEM PServer backend. Brand/model names
+     * are intentionally not used: if the binder can execute as uid 0, the
+     * documented radio commands validated by SleepManager are available.
+     */
+    fun supportsDirectRadioControl(): Boolean {
+        directRadioControlCached?.let { return it }
+
+        val ready =
+            executePrivileged("id -u")
+                .getOrNull()
+                ?.lineSequence()
+                ?.map(String::trim)
+                ?.any { it == "0" } == true
+
+        directRadioControlCached = ready
+        return ready
+    }
+
+    internal fun wifiEnabledPrivileged(): Boolean? =
+        executePrivileged("cmd wifi status")
+            .getOrNull()
+            ?.lineSequence()
+            ?.map(String::trim)
+            ?.firstNotNullOfOrNull { line ->
+                when {
+                    line.equals("Wifi is enabled", ignoreCase = true) -> true
+                    line.equals("Wifi is disabled", ignoreCase = true) -> false
+                    else -> null
+                }
+            }
+
+    internal fun bluetoothEnabledPrivileged(): Boolean? =
+        executePrivileged("settings get global bluetooth_on")
+            .getOrNull()
+            ?.let(::parseBooleanSetting)
+
+    internal fun setWifiEnabledPrivileged(enabled: Boolean): Boolean =
+        executePrivileged(
+            "cmd wifi set-wifi-enabled " +
+                if (enabled) "enabled" else "disabled"
+        ).isSuccess
+
+    internal fun setBluetoothEnabledPrivileged(enabled: Boolean): Boolean =
+        executePrivileged(
+            "cmd bluetooth_manager " +
+                if (enabled) "enable" else "disable"
+        ).isSuccess
 
     fun supportsBatterySaverControl(context: Context): Boolean =
         capabilities(context).batterySaverControl
@@ -170,7 +224,7 @@ object DeviceControlController {
             getService.invoke(null, PSERVER_SERVICE) as? IBinder
         }.getOrNull()
 
-    private fun executePrivileged(command: String): Result<String?> {
+    internal fun executePrivileged(command: String): Result<String?> {
         val binder =
             findPServerBinder()
                 ?: return Result.failure(

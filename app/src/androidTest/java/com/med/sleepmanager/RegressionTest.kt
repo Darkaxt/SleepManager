@@ -217,9 +217,9 @@ class RegressionTest {
                     RaOfflineProxyController.providerAvailable(targetContext) &&
                     RaOfflineProxyController.hasControlPermission(targetContext) &&
                     RaOfflineProxyController.isBatteryUnrestricted(targetContext) &&
-                    composeRule.activity.currentRaOfflineProxyStatus
-                        ?.version ==
-                    RaOfflineProxyController.SUPPORTED_API_VERSION
+                    RaOfflineProxyController.isSupportedApiVersion(
+                        composeRule.activity.currentRaOfflineProxyStatus?.version
+                    )
         )
 
         composeRule.activityRule.scenario.recreate()

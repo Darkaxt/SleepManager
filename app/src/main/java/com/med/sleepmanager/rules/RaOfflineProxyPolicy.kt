@@ -1,6 +1,7 @@
 package com.med.sleepmanager.rules
 
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyCommandResult
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyPendingAwardState
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueState
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
 
@@ -20,7 +21,8 @@ enum class RaOfflineProxyRestoreDecision {
 }
 
 object RaOfflineProxyPolicy {
-    const val SUPPORTED_API_VERSION = 1
+    const val MIN_SUPPORTED_API_VERSION = 1
+    const val MAX_SUPPORTED_API_VERSION = 2
 
     fun preSleepDecision(
         status: RaOfflineProxyStatus?
@@ -29,7 +31,7 @@ object RaOfflineProxyPolicy {
             return RaOfflineProxyPreSleepDecision.WAIT_FOR_SAFE_STATUS
         }
 
-        if (status.version != SUPPORTED_API_VERSION) {
+        if (status.version !in MIN_SUPPORTED_API_VERSION..MAX_SUPPORTED_API_VERSION) {
             return RaOfflineProxyPreSleepDecision.UNSUPPORTED_API
         }
 
@@ -37,16 +39,46 @@ object RaOfflineProxyPolicy {
             return RaOfflineProxyPreSleepDecision.LEAVE_UNTOUCHED
         }
 
-        return when (status.queue.state) {
-            RaOfflineProxyQueueState.IDLE,
-            RaOfflineProxyQueueState.BLOCKED ->
-                RaOfflineProxyPreSleepDecision.STOP_NOW
-
+        when (status.queue.state) {
             RaOfflineProxyQueueState.CACHING,
             RaOfflineProxyQueueState.WAITING ->
-                RaOfflineProxyPreSleepDecision.WAIT_FOR_QUEUE
+                return RaOfflineProxyPreSleepDecision.WAIT_FOR_QUEUE
 
             RaOfflineProxyQueueState.UNKNOWN ->
+                return RaOfflineProxyPreSleepDecision.WAIT_FOR_SAFE_STATUS
+
+            RaOfflineProxyQueueState.IDLE,
+            RaOfflineProxyQueueState.BLOCKED -> Unit
+        }
+
+        // API v1 has no pendingAwards object. Preserve the shipped 0.7.1
+        // cache-queue behavior as the compatibility fallback.
+        val pending = status.pendingAwards
+            ?: return RaOfflineProxyPreSleepDecision.STOP_NOW
+
+        // A Wi-Fi radio that is ON does not imply usable Internet. If
+        // RAOfflineProxy says it is offline, waiting/syncing awards cannot make
+        // progress, so do not strand the sleep transition. Smart Wi-Fi is the
+        // separate feature that may acquire connectivity later.
+        if (!status.online) {
+            return when (pending.state) {
+                RaOfflineProxyPendingAwardState.UNKNOWN ->
+                    RaOfflineProxyPreSleepDecision.WAIT_FOR_SAFE_STATUS
+                else ->
+                    RaOfflineProxyPreSleepDecision.STOP_NOW
+            }
+        }
+
+        return when (pending.state) {
+            RaOfflineProxyPendingAwardState.IDLE,
+            RaOfflineProxyPendingAwardState.BLOCKED ->
+                RaOfflineProxyPreSleepDecision.STOP_NOW
+
+            RaOfflineProxyPendingAwardState.WAITING,
+            RaOfflineProxyPendingAwardState.SYNCING ->
+                RaOfflineProxyPreSleepDecision.WAIT_FOR_QUEUE
+
+            RaOfflineProxyPendingAwardState.UNKNOWN ->
                 RaOfflineProxyPreSleepDecision.WAIT_FOR_SAFE_STATUS
         }
     }

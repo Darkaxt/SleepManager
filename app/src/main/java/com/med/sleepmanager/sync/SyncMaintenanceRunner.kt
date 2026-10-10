@@ -10,7 +10,10 @@ import android.os.Handler
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
+import com.med.sleepmanager.data.DirectRadioStore
 import com.med.sleepmanager.data.SleepCycleStore
+import com.med.sleepmanager.device.RadioBackend
+import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.network.NetworkReadyGate
 
@@ -86,7 +89,12 @@ class SyncMaintenanceRunner(
 
     private val helperResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != HelperController.ACTION_RESULT) return
+            if (
+                intent?.action != HelperController.ACTION_RESULT &&
+                intent?.action != HelperController.ACTION_RESULT_V2
+            ) {
+                return
+            }
             if (
                 intent.getStringExtra(HelperController.EXTRA_PHASE) !=
                 HelperController.PHASE_MAINTENANCE_WIFI
@@ -114,6 +122,12 @@ class SyncMaintenanceRunner(
                 val snapshot = cleanupState.pendingFinalSnapshot ?: return
                 finishNow(snapshot)
             }
+        }
+    }
+
+    private val helperResultReceiverV2 = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            helperResultReceiver.onReceive(context, intent)
         }
     }
 
@@ -214,25 +228,47 @@ class SyncMaintenanceRunner(
 
     private fun maybeRequestTemporarySleepWifi() {
         val cycle = SleepCycleStore.current(appContext)
+        val backend = RadioController.backend(appContext)
         val eligible =
             cycle.active &&
-                cycle.helperExpected &&
                 cycle.wifiManaged &&
-                !cycle.helperRestored &&
-                HelperController.isInstalled(appContext)
+                when (backend) {
+                    RadioBackend.PSERVER ->
+                        DirectRadioStore.isPendingForCycle(
+                            appContext,
+                            cycle.cycleId
+                        ) &&
+                            RadioController.directSleepWifiOwned(
+                                appContext,
+                                cycle.cycleId
+                            )
+
+                    RadioBackend.HELPER ->
+                        cycle.helperExpected &&
+                            !cycle.helperRestored &&
+                            HelperController.isInstalled(appContext)
+
+                    RadioBackend.NONE ->
+                        false
+                }
 
         if (!eligible) {
-            Log.i(TAG, "Periodic maintenance does not require Helper Wi-Fi restore")
+            Log.i(TAG, "Periodic maintenance has no owned sleep Wi-Fi to open")
             return
         }
 
-        registerHelperReceiver()
+        if (backend == RadioBackend.HELPER) {
+            registerHelperReceiver()
+        }
         cleanupState.recordTemporaryWifiRequest(
-            HelperController.setTemporaryWifi(appContext, enabled = true)
+            RadioController.setTemporaryWifi(appContext, enabled = true)
         )
 
         if (cleanupState.temporaryWifiOnRequested) {
-            Log.i(TAG, "Requested temporary Wi-Fi ON for periodic maintenance")
+            Log.i(
+                TAG,
+                "Requested temporary Wi-Fi ON for periodic maintenance via $backend"
+            )
         }
     }
 
@@ -250,15 +286,25 @@ class SyncMaintenanceRunner(
                 return
             }
 
-            registerHelperReceiver()
+            val backend = RadioController.backend(appContext)
+            if (backend == RadioBackend.HELPER) {
+                registerHelperReceiver()
+            }
             cleanupState.beginCleanup(snapshot)
 
-            if (HelperController.setTemporaryWifi(appContext, enabled = false)) {
+            if (RadioController.setTemporaryWifi(appContext, enabled = false)) {
+                Log.i(
+                    TAG,
+                    "Requested temporary Wi-Fi OFF after maintenance via $backend"
+                )
+                if (backend == RadioBackend.PSERVER) {
+                    finishNow(snapshot)
+                    return
+                }
                 handler.postDelayed(
                     cleanupTimeoutRunnable,
                     WIFI_CLEANUP_TIMEOUT_MS
                 )
-                Log.i(TAG, "Requested temporary Wi-Fi OFF after maintenance")
                 return
             }
 
@@ -354,12 +400,19 @@ class SyncMaintenanceRunner(
     private fun registerHelperReceiver() {
         if (helperReceiverRegistered) return
 
-        val filter = IntentFilter(HelperController.ACTION_RESULT)
         ContextCompat.registerReceiver(
             appContext,
             helperResultReceiver,
-            filter,
+            IntentFilter(HelperController.ACTION_RESULT),
             HelperController.PERMISSION,
+            handler,
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            appContext,
+            helperResultReceiverV2,
+            IntentFilter(HelperController.ACTION_RESULT_V2),
+            HelperController.PERMISSION_V2,
             handler,
             ContextCompat.RECEIVER_EXPORTED
         )
@@ -371,6 +424,9 @@ class SyncMaintenanceRunner(
         helperReceiverRegistered = false
         runCatching {
             appContext.unregisterReceiver(helperResultReceiver)
+        }
+        runCatching {
+            appContext.unregisterReceiver(helperResultReceiverV2)
         }
     }
 

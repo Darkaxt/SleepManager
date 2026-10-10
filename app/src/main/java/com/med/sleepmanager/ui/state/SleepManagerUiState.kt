@@ -39,6 +39,7 @@ internal data class SleepManagerUiState(
     val currentSyncthingState: SyncthingController.RuntimeState? = null,
     val currentTailscaleConnected: Boolean? = null,
     val currentBasicSyncState: BasicSyncController.RemoteState? = null,
+    val basicSyncReadinessProbeComplete: Boolean = false,
     val currentRaOfflineProxyStatus: RaOfflineProxyStatus? = null,
     val raOfflineProxyStatusProbeComplete: Boolean = false,
     val currentBackgroundReliability: BackgroundReliability.Snapshot? = null,

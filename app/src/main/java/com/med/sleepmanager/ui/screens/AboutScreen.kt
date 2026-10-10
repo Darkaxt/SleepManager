@@ -72,6 +72,7 @@ internal fun AboutPage(
     onInstallVerifiedUpdate: (String) -> Unit,
     installerReturnToken: Int,
     onUpdateStateChanged: () -> Unit,
+    showCompatibilityHelper: Boolean = true,
     scrollTarget: AboutScrollTarget? = null,
     scrollRequestId: Int = 0,
     onScrollTargetConsumed: () -> Unit = {}
@@ -105,8 +106,12 @@ internal fun AboutPage(
             }
             AboutScrollTarget.HELPER -> {
                 updatesContentRequester.bringIntoView()
-                runCatching { helperRequester.bringIntoView() }
-                    .onFailure { updatesRequester.bringIntoView() }
+                if (showCompatibilityHelper) {
+                    runCatching { helperRequester.bringIntoView() }
+                        .onFailure { updatesRequester.bringIntoView() }
+                } else {
+                    updatesRequester.bringIntoView()
+                }
             }
             null -> Unit
         }
@@ -159,14 +164,16 @@ internal fun AboutPage(
                 label = stringResource(R.string.app_name),
                 value = packageInfo?.versionName ?: stringResource(R.string.unknown)
             )
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-            AboutInfoRow(
-                label = stringResource(R.string.about_compatibility_helper),
-                value = helperVersion ?: stringResource(R.string.not_installed)
-            )
+            if (showCompatibilityHelper) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                AboutInfoRow(
+                    label = stringResource(R.string.about_compatibility_helper),
+                    value = helperVersion ?: stringResource(R.string.not_installed)
+                )
+            }
             HorizontalDivider(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 color = MaterialTheme.colorScheme.outlineVariant
@@ -246,36 +253,38 @@ internal fun AboutPage(
                         }
                     )
 
-                    append("\n")
-                    append(
-                        when {
-                            helperVersion == null && cachedHelperRelease != null ->
-                                context.getString(
-                                    R.string.about_helper_available_to_install_status,
-                                    cachedHelperRelease.versionName
-                                )
-                            helperVersion == null ->
-                                context.getString(
-                                    R.string.about_helper_not_installed_not_checked_status
-                                )
-                            cachedHelperUpdate != null ->
-                                context.getString(
-                                    R.string.about_helper_update_available_status,
-                                    helperVersion,
-                                    cachedHelperUpdate.versionName
-                                )
-                            cachedHelperRelease != null ->
-                                context.getString(
-                                    R.string.about_helper_up_to_date_status,
-                                    helperVersion
-                                )
-                            else ->
-                                context.getString(
-                                    R.string.about_helper_not_checked_status,
-                                    helperVersion
-                                )
-                        }
-                    )
+                    if (showCompatibilityHelper) {
+                        append("\n")
+                        append(
+                            when {
+                                helperVersion == null && cachedHelperRelease != null ->
+                                    context.getString(
+                                        R.string.about_helper_available_to_install_status,
+                                        cachedHelperRelease.versionName
+                                    )
+                                helperVersion == null ->
+                                    context.getString(
+                                        R.string.about_helper_not_installed_not_checked_status
+                                    )
+                                cachedHelperUpdate != null ->
+                                    context.getString(
+                                        R.string.about_helper_update_available_status,
+                                        helperVersion,
+                                        cachedHelperUpdate.versionName
+                                    )
+                                cachedHelperRelease != null ->
+                                    context.getString(
+                                        R.string.about_helper_up_to_date_status,
+                                        helperVersion
+                                    )
+                                else ->
+                                    context.getString(
+                                        R.string.about_helper_not_checked_status,
+                                        helperVersion
+                                    )
+                            }
+                        )
+                    }
                 }
 
             AboutActionRow(
@@ -394,7 +403,10 @@ internal fun AboutPage(
                     null
                 }
 
-            if (helperVersion == null || helperActionInfo != null) {
+            if (
+                showCompatibilityHelper &&
+                (helperVersion == null || helperActionInfo != null)
+            ) {
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.outlineVariant

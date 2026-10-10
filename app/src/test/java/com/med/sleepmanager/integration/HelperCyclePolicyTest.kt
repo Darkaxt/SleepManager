@@ -30,10 +30,18 @@ class HelperCyclePolicyTest {
     }
 
     @Test
-    fun sleepForDifferentCorrelatedCycle_isRejected() {
+    fun newerSleep_reconcilesStaleActiveCycle() {
+        assertEquals(
+            HelperCyclePolicy.SleepDecision.RECONCILE_STALE_ACTIVE,
+            HelperCyclePolicy.sleepDecision(true, 42L, 43L)
+        )
+    }
+
+    @Test
+    fun olderSleep_isRejectedAgainstNewerActiveCycle() {
         assertEquals(
             HelperCyclePolicy.SleepDecision.CYCLE_MISMATCH,
-            HelperCyclePolicy.sleepDecision(true, 42L, 43L)
+            HelperCyclePolicy.sleepDecision(true, 43L, 42L)
         )
     }
 
@@ -54,10 +62,18 @@ class HelperCyclePolicyTest {
     }
 
     @Test
-    fun restoreForDifferentCorrelatedCycle_isRejected() {
+    fun newerRestore_reconcilesStaleActiveCycle() {
+        assertEquals(
+            HelperCyclePolicy.RestoreDecision.RECONCILE_STALE_ACTIVE,
+            HelperCyclePolicy.restoreDecision(true, 42L, 0L, 43L)
+        )
+    }
+
+    @Test
+    fun olderRestore_isRejectedAgainstNewerActiveCycle() {
         assertEquals(
             HelperCyclePolicy.RestoreDecision.CYCLE_MISMATCH,
-            HelperCyclePolicy.restoreDecision(true, 42L, 0L, 43L)
+            HelperCyclePolicy.restoreDecision(true, 43L, 0L, 42L)
         )
     }
 

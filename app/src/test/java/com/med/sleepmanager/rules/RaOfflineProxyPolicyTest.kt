@@ -1,6 +1,8 @@
 package com.med.sleepmanager.rules
 
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyCommandResult
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyPendingAwardState
+import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyPendingAwardsStatus
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueState
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueStatus
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
@@ -73,11 +75,72 @@ class RaOfflineProxyPolicyTest {
     }
 
     @Test
+    fun apiV2IsSupported() {
+        assertEquals(
+            RaOfflineProxyPreSleepDecision.STOP_NOW,
+            RaOfflineProxyPolicy.preSleepDecision(
+                status(version = 2)
+            )
+        )
+    }
+
+    @Test
     fun unsupportedApiIsRejected() {
         assertEquals(
             RaOfflineProxyPreSleepDecision.UNSUPPORTED_API,
             RaOfflineProxyPolicy.preSleepDecision(
-                status(version = 2)
+                status(version = 3)
+            )
+        )
+    }
+
+    @Test
+    fun onlinePendingAwardsHoldWifiUntilTerminalState() {
+        for (
+            pending in listOf(
+                RaOfflineProxyPendingAwardState.WAITING,
+                RaOfflineProxyPendingAwardState.SYNCING
+            )
+        ) {
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.WAIT_FOR_QUEUE,
+                RaOfflineProxyPolicy.preSleepDecision(
+                    status(
+                        version = 2,
+                        online = true,
+                        pendingAwardState = pending
+                    )
+                )
+            )
+        }
+    }
+
+    @Test
+    fun offlinePendingAwardsDoNotBlockSleep() {
+        assertEquals(
+            RaOfflineProxyPreSleepDecision.STOP_NOW,
+            RaOfflineProxyPolicy.preSleepDecision(
+                status(
+                    version = 2,
+                    online = false,
+                    pendingAwardState =
+                        RaOfflineProxyPendingAwardState.WAITING
+                )
+            )
+        )
+    }
+
+    @Test
+    fun blockedPendingAwardsAreTerminal() {
+        assertEquals(
+            RaOfflineProxyPreSleepDecision.STOP_NOW,
+            RaOfflineProxyPolicy.preSleepDecision(
+                status(
+                    version = 2,
+                    online = true,
+                    pendingAwardState =
+                        RaOfflineProxyPendingAwardState.BLOCKED
+                )
             )
         )
     }
@@ -164,14 +227,16 @@ class RaOfflineProxyPolicyTest {
         version: Int = 1,
         running: Boolean = true,
         shouldBeRunning: Boolean = true,
+        online: Boolean = running,
         queue: RaOfflineProxyQueueState =
-            RaOfflineProxyQueueState.IDLE
+            RaOfflineProxyQueueState.IDLE,
+        pendingAwardState: RaOfflineProxyPendingAwardState? = null
     ) =
         RaOfflineProxyStatus(
             version = version,
             running = running,
             shouldBeRunning = shouldBeRunning,
-            online = running,
+            online = online,
             queue =
                 RaOfflineProxyQueueStatus(
                     count =
@@ -185,6 +250,20 @@ class RaOfflineProxyPolicyTest {
                         },
                     state = queue,
                     nextWindowAt = null
-                )
+                ),
+            pendingAwards =
+                pendingAwardState?.let { state ->
+                    RaOfflineProxyPendingAwardsStatus(
+                        count =
+                            if (state == RaOfflineProxyPendingAwardState.IDLE) 0 else 1,
+                        state = state,
+                        error =
+                            if (state == RaOfflineProxyPendingAwardState.BLOCKED) {
+                                "upload_failed"
+                            } else {
+                                null
+                            }
+                    )
+                }
         )
 }

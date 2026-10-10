@@ -21,11 +21,31 @@ internal fun View.performSleepManagerFeedback() {
     }
 }
 
+internal object SleepManagerFeedbackGate {
+    private var suppressWrappedFeedback = false
+
+    fun <T> withoutWrappedFeedback(block: () -> T): T {
+        val previous = suppressWrappedFeedback
+        suppressWrappedFeedback = true
+        return try {
+            block()
+        } finally {
+            suppressWrappedFeedback = previous
+        }
+    }
+
+    fun performWrappedFeedback(view: View) {
+        if (!suppressWrappedFeedback) {
+            view.performSleepManagerFeedback()
+        }
+    }
+}
+
 @Composable
 internal fun feedbackClick(action: () -> Unit): () -> Unit {
     val view = LocalView.current
     return {
-        view.performSleepManagerFeedback()
+        SleepManagerFeedbackGate.performWrappedFeedback(view)
         action()
     }
 }
@@ -34,7 +54,7 @@ internal fun feedbackClick(action: () -> Unit): () -> Unit {
 internal fun <T> feedbackChange(action: (T) -> Unit): (T) -> Unit {
     val view = LocalView.current
     return { value ->
-        view.performSleepManagerFeedback()
+        SleepManagerFeedbackGate.performWrappedFeedback(view)
         action(value)
     }
 }

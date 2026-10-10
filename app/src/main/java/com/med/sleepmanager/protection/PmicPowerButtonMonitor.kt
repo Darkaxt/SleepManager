@@ -1,6 +1,7 @@
 package com.med.sleepmanager.protection
 
 import android.os.Build
+import com.med.sleepmanager.device.SysfsAccessCache
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -85,22 +86,15 @@ class PmicPowerButtonMonitor(
         private const val KEY_POWER = 116
         private const val KEY_DOWN = 1
 
-        fun findPowerButtonDevicePath(): String? {
-            return try {
-                File("/sys/class/input")
-                    .listFiles()
-                    ?.asSequence()
-                    ?.filter { eventDir -> eventDir.name.startsWith("event") }
-                    ?.firstOrNull { eventDir ->
-                        runCatching {
-                            File(eventDir, "device/name").readText().trim() == "pmic_pwrkey"
-                        }.getOrDefault(false)
-                    }
-                    ?.let { eventDir -> "/dev/input/" + eventDir.name }
-            } catch (_: Throwable) {
-                null
-            }
-        }
+        fun findPowerButtonDevicePath(): String? =
+            SysfsAccessCache.inputEventDirectories()
+                .firstOrNull { eventDir ->
+                    runCatching {
+                        File(eventDir, "device/name").readText().trim() ==
+                            "pmic_pwrkey"
+                    }.getOrDefault(false)
+                }
+                ?.let { eventDir -> "/dev/input/" + eventDir.name }
 
         fun isSupported(): Boolean = findPowerButtonDevicePath() != null
     }

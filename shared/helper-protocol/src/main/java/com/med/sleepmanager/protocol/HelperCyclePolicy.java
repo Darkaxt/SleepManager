@@ -12,6 +12,7 @@ public final class HelperCyclePolicy {
     public enum SleepDecision {
         START_NEW,
         ALREADY_SLEEPING,
+        RECONCILE_STALE_ACTIVE,
         CYCLE_MISMATCH
     }
 
@@ -19,6 +20,7 @@ public final class HelperCyclePolicy {
         RESTORE_ACTIVE,
         ALREADY_RESTORED,
         NO_ACTIVE_CYCLE,
+        RECONCILE_STALE_ACTIVE,
         CYCLE_MISMATCH
     }
 
@@ -36,7 +38,9 @@ public final class HelperCyclePolicy {
                 activeCycleId != 0L &&
                 requestedCycleId != activeCycleId
         ) {
-            return SleepDecision.CYCLE_MISMATCH;
+            return requestedCycleId > activeCycleId
+                    ? SleepDecision.RECONCILE_STALE_ACTIVE
+                    : SleepDecision.CYCLE_MISMATCH;
         }
 
         return SleepDecision.ALREADY_SLEEPING;
@@ -63,7 +67,9 @@ public final class HelperCyclePolicy {
                 activeCycleId != 0L &&
                 requestedCycleId != activeCycleId
         ) {
-            return RestoreDecision.CYCLE_MISMATCH;
+            return requestedCycleId > activeCycleId
+                    ? RestoreDecision.RECONCILE_STALE_ACTIVE
+                    : RestoreDecision.CYCLE_MISMATCH;
         }
 
         return RestoreDecision.RESTORE_ACTIVE;

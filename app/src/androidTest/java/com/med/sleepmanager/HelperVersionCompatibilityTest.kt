@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,8 +39,6 @@ class HelperVersionCompatibilityTest {
             compatibilityEnabled()
         )
         stopMainService()
-        HelperController.forgetPendingState(context)
-        SystemClock.sleep(250L)
         SleepCycleStore.clear(context)
         DiagnosticsCycleStore.clear(context)
         EventHistoryStore.clear(context)
@@ -49,8 +48,6 @@ class HelperVersionCompatibilityTest {
     fun cleanup() {
         if (!compatibilityEnabled()) return
         stopMainService()
-        HelperController.forgetPendingState(context)
-        SystemClock.sleep(250L)
         SleepCycleStore.clear(context)
         DiagnosticsCycleStore.clear(context)
         EventHistoryStore.clear(context)
@@ -66,24 +63,34 @@ class HelperVersionCompatibilityTest {
     }
 
     @Test
-    fun helper112_realRoundTripEchoesCycleId_andCompletesMain() {
-        assertEquals(
-            InstrumentationRegistry.getArguments().getString("expectedCurrentHelperVersion", "1.1.2"),
-            helperVersionName()
+    fun currentHelper_realRoundTripEchoesCycleId_andCompletesMain() {
+        val expectedVersion =
+            InstrumentationRegistry.getArguments()
+                .getString("expectedHelperVersion")
+        assertTrue(
+            "expectedHelperVersion instrumentation argument is required",
+            !expectedVersion.isNullOrBlank()
         )
+        assertEquals(expectedVersion, helperVersionName())
         runRealRoundTrip(expectCycleId = true)
     }
 
-    private fun runRealRoundTrip(expectCycleId: Boolean) {
-        AppPreferences.setSetupComplete(context, true)
-        AppPreferences.setEnabled(context, true)
-        startMainServiceAndWaitUntilSettled()
+    @Test
+    fun currentHelper_reconcilesStaleCycleBeforeDifferentSleep() {
+        val expectedVersion =
+            InstrumentationRegistry.getArguments()
+                .getString("expectedHelperVersion")
+        assumeTrue(
+            "Requires current Helper version",
+            !expectedVersion.isNullOrBlank() &&
+                helperVersionName() == expectedVersion
+        )
 
         val results = LinkedBlockingQueue<Intent>()
         val receiver =
             object : BroadcastReceiver() {
                 override fun onReceive(receiverContext: Context?, intent: Intent?) {
-                    if (intent?.action == HelperController.ACTION_RESULT) {
+                    if (intent?.action == HelperController.resultAction(context)) {
                         results.offer(Intent(intent))
                     }
                 }
@@ -92,50 +99,204 @@ class HelperVersionCompatibilityTest {
         ContextCompat.registerReceiver(
             context,
             receiver,
-            IntentFilter(HelperController.ACTION_RESULT),
-            HelperController.PERMISSION,
+            IntentFilter(HelperController.resultAction(context)),
+            HelperController.responsePermission(context),
             null,
             ContextCompat.RECEIVER_EXPORTED
         )
 
         try {
-            DiagnosticsCycleStore.begin(context)
-            val cycle =
-                SleepCycleStore.begin(
-                    context = context,
-                    helperExpected = true,
-                    wifiManaged = false,
-                    bluetoothManaged = false
-                )
-            SleepCycleStore.markHelperSleepRequested(context)
+            val staleCycleId = 41L
+            val replacementCycleId = 42L
 
             assertTrue(
                 HelperController.sendSleep(
                     context = context,
                     wifi = false,
                     bluetooth = false,
-                    cycleId = cycle.cycleId
+                    cycleId = staleCycleId
                 )
             )
+            val firstSleep = awaitPhase(results, HelperController.PHASE_SLEEP)
+            assertEquals(
+                HelperController.STATUS_OK,
+                firstSleep.getStringExtra(HelperController.EXTRA_STATUS)
+            )
+            assertEquals(
+                staleCycleId,
+                firstSleep.getLongExtra(HelperController.EXTRA_CYCLE_ID, -1L)
+            )
+
+            assertTrue(
+                HelperController.sendSleep(
+                    context = context,
+                    wifi = false,
+                    bluetooth = false,
+                    cycleId = replacementCycleId
+                )
+            )
+            val replacementSleep =
+                awaitPhase(results, HelperController.PHASE_SLEEP)
+            assertEquals(
+                HelperController.STATUS_OK,
+                replacementSleep.getStringExtra(HelperController.EXTRA_STATUS)
+            )
+            assertEquals(
+                replacementCycleId,
+                replacementSleep.getLongExtra(
+                    HelperController.EXTRA_CYCLE_ID,
+                    -1L
+                )
+            )
+
+            assertTrue(
+                HelperController.restoreNow(
+                    context,
+                    replacementCycleId
+                )
+            )
+            val wakeResult = awaitPhase(results, HelperController.PHASE_WAKE)
+            assertEquals(
+                replacementCycleId,
+                wakeResult.getLongExtra(HelperController.EXTRA_CYCLE_ID, -1L)
+            )
+            assertTrue(
+                wakeResult.getBooleanExtra(
+                    HelperController.EXTRA_RESTORE_SUCCESS,
+                    false
+                )
+            )
+        } finally {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    @Test
+    fun currentHelper_reconcilesStaleActiveCycleOnNewerRestore() {
+        val expectedVersion =
+            InstrumentationRegistry.getArguments()
+                .getString("expectedHelperVersion")
+        assumeTrue(
+            "Requires current Helper version",
+            !expectedVersion.isNullOrBlank() &&
+                helperVersionName() == expectedVersion
+        )
+
+        val results = LinkedBlockingQueue<Intent>()
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                    if (intent?.action == HelperController.resultAction(context)) {
+                        results.offer(Intent(intent))
+                    }
+                }
+            }
+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(HelperController.resultAction(context)),
+            HelperController.responsePermission(context),
+            null,
+            ContextCompat.RECEIVER_EXPORTED
+        )
+
+        try {
+            val staleCycleId = 51L
+            val newerMainCycleId = 52L
+
+            assertTrue(
+                HelperController.sendSleep(
+                    context = context,
+                    wifi = false,
+                    bluetooth = false,
+                    cycleId = staleCycleId
+                )
+            )
+            val sleepResult =
+                awaitPhaseForCycle(
+                    results,
+                    HelperController.PHASE_SLEEP,
+                    staleCycleId
+                )
+            assertEquals(
+                HelperController.STATUS_OK,
+                sleepResult.getStringExtra(HelperController.EXTRA_STATUS)
+            )
+
+            assertTrue(
+                HelperController.restoreNow(
+                    context,
+                    newerMainCycleId
+                )
+            )
+            val wakeResult =
+                awaitPhaseForCycle(
+                    results,
+                    HelperController.PHASE_WAKE,
+                    newerMainCycleId
+                )
+            assertTrue(
+                wakeResult.getBooleanExtra(
+                    HelperController.EXTRA_RESTORE_SUCCESS,
+                    false
+                )
+            )
+            assertEquals(
+                HelperController.STATUS_ALREADY_RESTORED,
+                wakeResult.getStringExtra(HelperController.EXTRA_STATUS)
+            )
+        } finally {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    private fun runRealRoundTrip(expectCycleId: Boolean) {
+        AppPreferences.setSetupComplete(context, true)
+        AppPreferences.setEnabled(context, true)
+        AppPreferences.setManageWifi(context, true)
+        AppPreferences.setManageBluetooth(context, false)
+        AppPreferences.setSleepGraceMs(context, 0L)
+        AppPreferences.setCustomDelayEnabled(context, false)
+
+        startMainServiceAndWaitUntilSettled()
+
+        val results = LinkedBlockingQueue<Intent>()
+        val receiver =
+            object : BroadcastReceiver() {
+                override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                    if (intent?.action == HelperController.resultAction(context)) {
+                        results.offer(Intent(intent))
+                    }
+                }
+            }
+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(HelperController.resultAction(context)),
+            HelperController.responsePermission(context),
+            null,
+            ContextCompat.RECEIVER_EXPORTED
+        )
+
+        try {
+            setScreenInteractive(false)
 
             val sleepResult = awaitPhase(results, HelperController.PHASE_SLEEP)
             assertEquals(
                 HelperController.STATUS_OK,
                 sleepResult.getStringExtra(HelperController.EXTRA_STATUS)
             )
+
+            val cycle =
+                waitForActiveHelperCycle(
+                    timeoutMs = 5_000L
+                )
             assertCycleCorrelation(sleepResult, cycle.cycleId, expectCycleId)
 
-            assertTrue(
-                "Main transaction did not remain active after Helper sleep result",
-                waitUntil(timeoutMs = 5_000L) {
-                    val current = SleepCycleStore.current(context)
-                    current.active &&
-                        current.cycleId == cycle.cycleId &&
-                        !current.helperRestored
-                }
-            )
+            setScreenInteractive(true)
 
-            assertTrue(HelperController.restoreNow(context, cycle.cycleId))
             val wakeResult = awaitPhase(results, HelperController.PHASE_WAKE)
             assertEquals(
                 HelperController.STATUS_OK,
@@ -151,13 +312,14 @@ class HelperVersionCompatibilityTest {
 
             assertTrue(
                 "Main did not accept the real Helper wake result",
-                waitUntil(timeoutMs = 1_500L) {
+                waitUntil(timeoutMs = 5_000L) {
                     !SleepCycleStore.isActive(context)
                 }
             )
             assertNull(SleepCycleStore.restoreProblem(context))
         } finally {
             context.unregisterReceiver(receiver)
+            setScreenInteractive(true)
         }
     }
 
@@ -167,7 +329,7 @@ class HelperVersionCompatibilityTest {
         expectCycleId: Boolean
     ) {
         if (expectCycleId) {
-            assertTrue("Helper 1.1.2 result did not include cycleId", result.hasExtra(HelperController.EXTRA_CYCLE_ID))
+            assertTrue("Current Helper result did not include cycleId", result.hasExtra(HelperController.EXTRA_CYCLE_ID))
             assertEquals(
                 cycleId,
                 result.getLongExtra(HelperController.EXTRA_CYCLE_ID, -1L)
@@ -175,6 +337,27 @@ class HelperVersionCompatibilityTest {
         } else {
             assertFalse("Helper 1.1.1 unexpectedly returned cycleId", result.hasExtra(HelperController.EXTRA_CYCLE_ID))
         }
+    }
+
+    private fun awaitPhaseForCycle(
+        queue: LinkedBlockingQueue<Intent>,
+        phase: String,
+        cycleId: Long
+    ): Intent {
+        val deadline = SystemClock.elapsedRealtime() + 8_000L
+        while (SystemClock.elapsedRealtime() < deadline) {
+            val remaining =
+                (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(1L)
+            val result = queue.poll(remaining, TimeUnit.MILLISECONDS) ?: break
+            if (
+                result.getStringExtra(HelperController.EXTRA_PHASE) == phase &&
+                result.getLongExtra(HelperController.EXTRA_CYCLE_ID, -1L) ==
+                    cycleId
+            ) {
+                return result
+            }
+        }
+        error("Timed out waiting for Helper phase=$phase cycle=$cycleId")
     }
 
     private fun awaitPhase(
@@ -201,6 +384,44 @@ class HelperVersionCompatibilityTest {
         context.packageManager
             .getPackageInfo(HelperController.PACKAGE, 0)
             .versionName
+
+    private fun setScreenInteractive(interactive: Boolean) {
+        val powerManager =
+            context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val uiAutomation =
+            InstrumentationRegistry.getInstrumentation().uiAutomation
+
+        val keyCode = if (interactive) 224 else 223
+        uiAutomation.executeShellCommand("input keyevent $keyCode").close()
+
+        assertTrue(
+            if (interactive) {
+                "Emulator did not return to interactive state"
+            } else {
+                "Emulator did not reach non-interactive state"
+            },
+            waitUntil(timeoutMs = 8_000L) {
+                powerManager.isInteractive == interactive
+            }
+        )
+    }
+
+    private fun waitForActiveHelperCycle(
+        timeoutMs: Long
+    ): SleepCycleStore.Snapshot {
+        var snapshot = SleepCycleStore.current(context)
+        assertTrue(
+            "Main transaction did not remain active after Helper sleep result",
+            waitUntil(timeoutMs) {
+                snapshot = SleepCycleStore.current(context)
+                snapshot.active &&
+                    snapshot.helperExpected &&
+                    snapshot.helperSleepRequested &&
+                    !snapshot.helperRestored
+            }
+        )
+        return snapshot
+    }
 
     private fun startMainServiceAndWaitUntilSettled() {
         ContextCompat.startForegroundService(

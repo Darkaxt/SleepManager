@@ -457,11 +457,32 @@ object DiagnosticsTransitionStore {
             )
         }
 
-        if ("wi-fi" in lower || "bluetooth" in lower) {
+        if (
+            "wi-fi" in lower ||
+            "bluetooth" in lower ||
+            "pserver radios" in lower
+        ) {
             val restoring = event.startsWith("Wake") || event.startsWith("Disable")
+            val directPServerSleep =
+                !restoring && "radio=pserver" in lower
+            val directPServerRestore =
+                restoring && "pserver radios" in lower
             record(
                 context,
                 COMPONENT_HELPER,
+                reset = directPServerSleep,
+                initialState =
+                    if (directPServerSleep) {
+                        "reported by PServer"
+                    } else {
+                        null
+                    },
+                sleepRequest =
+                    if (directPServerSleep) {
+                        "OFF"
+                    } else {
+                        null
+                    },
                 sleepResult = if (!restoring) event else null,
                 sleepState =
                     if (!restoring && ("wi-fi off" in lower || "bluetooth off" in lower)) {
@@ -472,10 +493,13 @@ object DiagnosticsTransitionStore {
                 restoreTarget = "previous Wi-Fi / Bluetooth state",
                 restoreResult = if (restoring) event else null,
                 finalState =
-                    if (restoring && "restored" in lower) {
-                        "previous radio state requested"
-                    } else {
-                        null
+                    when {
+                        directPServerRestore && "restored" in lower ->
+                            "previous radio state restored"
+                        restoring && "restored" in lower ->
+                            "previous radio state requested"
+                        else ->
+                            null
                     },
                 note = event
             )
@@ -591,7 +615,7 @@ object DiagnosticsTransitionStore {
 
     fun label(componentId: String): String =
         when (componentId) {
-            COMPONENT_HELPER -> "Helper Wi-Fi / Bluetooth"
+            COMPONENT_HELPER -> "Wi-Fi / Bluetooth"
             COMPONENT_SYNCTHING -> "Syncthing-Fork"
             COMPONENT_BASIC_SYNC -> "BasicSync"
             COMPONENT_RA_OFFLINE_PROXY -> "RAOfflineProxy"

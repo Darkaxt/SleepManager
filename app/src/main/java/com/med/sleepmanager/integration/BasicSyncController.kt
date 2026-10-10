@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -198,6 +199,12 @@ object BasicSyncController {
             context.packageManager.getPackageInfo(PACKAGE, 0)
         }.isSuccess
 
+    fun isStopped(context: Context): Boolean =
+        runCatching {
+            val info = context.packageManager.getApplicationInfo(PACKAGE, 0)
+            info.flags and ApplicationInfo.FLAG_STOPPED != 0
+        }.getOrDefault(false)
+
     fun versionName(context: Context): String? =
         runCatching {
             context.packageManager.getPackageInfo(PACKAGE, 0).versionName
@@ -255,9 +262,15 @@ object BasicSyncController {
 
     fun requestState(
         context: Context,
-        timeoutMs: Long = STATE_QUERY_TIMEOUT_MS
+        timeoutMs: Long = STATE_QUERY_TIMEOUT_MS,
+        attempts: Int = 1,
+        retryDelayMs: Long = 0L
     ): RemoteState? {
         if (!isInstalled(context)) return null
+
+        // A previous successful STATE_CHANGED must not keep the integration
+        // available after the user disables BasicSync remote control.
+        clearObservedState()
 
         val appContext = context.applicationContext
         val result = AtomicReference<RemoteState?>(null)
@@ -295,17 +308,37 @@ object BasicSyncController {
             )
             registered = true
 
-            if (!sendRemoteControl(appContext, ACTION_REQUEST_STATE)) {
-                Log.w(TAG, "REQUEST_STATE could not be sent")
-                return null
+            val safeAttempts = attempts.coerceAtLeast(1)
+            val safeTimeoutMs = timeoutMs.coerceAtLeast(1L)
+
+            for (attempt in 1..safeAttempts) {
+                if (!sendRemoteControl(appContext, ACTION_REQUEST_STATE)) {
+                    Log.w(TAG, "REQUEST_STATE could not be sent")
+                    return null
+                }
+
+                Log.i(
+                    TAG,
+                    "REQUEST_STATE attempt $attempt/$safeAttempts sent; " +
+                        "waiting up to ${safeTimeoutMs}ms"
+                )
+                val received =
+                    latch.await(safeTimeoutMs, TimeUnit.MILLISECONDS)
+                val state = result.get() ?: observedState
+                if (received || state != null) {
+                    return state
+                }
+
+                if (attempt < safeAttempts && retryDelayMs > 0L) {
+                    Thread.sleep(retryDelayMs)
+                }
             }
 
-            Log.i(TAG, "REQUEST_STATE sent; waiting up to ${timeoutMs}ms")
-            val received = latch.await(timeoutMs.coerceAtLeast(1L), TimeUnit.MILLISECONDS)
-            if (!received) {
-                Log.w(TAG, "Timed out waiting for STATE_CHANGED")
-            }
-            result.get()
+            Log.w(
+                TAG,
+                "Timed out waiting for STATE_CHANGED after $safeAttempts attempts"
+            )
+            null
         } catch (t: Throwable) {
             Log.e(TAG, "Unable to query BasicSync state", t)
             null

@@ -40,6 +40,7 @@ import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.device.DeviceControlController
+import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.diagnostics.DiagnosticsBuilder
 import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.RaOfflineProxyController
@@ -269,6 +270,14 @@ class MainActivity : ComponentActivity() {
             uiViewModel.update { it.copy(currentBasicSyncState = value) }
         }
 
+    internal var basicSyncReadinessProbeComplete: Boolean
+        get() = uiState.basicSyncReadinessProbeComplete
+        set(value) {
+            uiViewModel.update {
+                it.copy(basicSyncReadinessProbeComplete = value)
+            }
+        }
+
     internal var currentRaOfflineProxyStatus: RaOfflineProxyStatus?
         get() = uiState.currentRaOfflineProxyStatus
         set(value) {
@@ -306,6 +315,8 @@ class MainActivity : ComponentActivity() {
     @Volatile
     private var syncthingStateProbeRunning = false
     @Volatile
+    private var basicSyncReadinessProbeRunning = false
+    @Volatile
     private var raOfflineProxyStateProbeRunning = false
     @Volatile
     private var backgroundReliabilityProbeRunning = false
@@ -318,6 +329,7 @@ class MainActivity : ComponentActivity() {
     private var pendingExternalNavigation = false
     private var pendingUpdateInstallPath: String? = null
     private var pendingPackageInstallerReturn = false
+    private var pendingHelperInstallerReturn = false
     internal var installerReturnToken: Int
         get() = uiState.installerReturnToken
         set(value) {
@@ -345,8 +357,11 @@ class MainActivity : ComponentActivity() {
     private val statusRefreshRunnable = object : Runnable {
         override fun run() {
             if (!isFinishing && !isDestroyed) {
-                // Refresh the real radio states through the compatibility helper.
-                HelperController.requestState(this@MainActivity)
+                // Direct PServer devices read radio state locally. Only the
+                // fallback backend needs the Compatibility Helper query.
+                if (!RadioController.directAvailable()) {
+                    HelperController.requestState(this@MainActivity)
+                }
                 refreshIntegrationRuntimeStates()
                 refreshManagerEnabledState()
                 refreshManagedRadioSettingsState()
@@ -370,6 +385,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshIntegrationRuntimeStates() {
+        if (RadioController.directAvailable()) {
+            currentWifiState = RadioController.currentWifiEnabled(this)
+            currentBluetoothState =
+                RadioController.currentBluetoothEnabled(this)
+        }
+
         currentTailscaleConnected =
             if (TailscaleController.isInstalled(this)) {
                 TailscaleController.isConnected(this)
@@ -377,16 +398,44 @@ class MainActivity : ComponentActivity() {
                 null
             }
 
-        currentBasicSyncState =
-            if (
-                BasicSyncController.isInstalled(this) &&
-                BasicSyncController.supportsStateApi(this)
-            ) {
-                BasicSyncController.startStateObserver(this)
+        if (
+            BasicSyncController.isInstalled(this) &&
+            BasicSyncController.supportsStateApi(this)
+        ) {
+            BasicSyncController.startStateObserver(this)
+            currentBasicSyncState =
                 BasicSyncController.lastObservedState()
-            } else {
-                null
+
+            if (
+                !basicSyncReadinessProbeComplete &&
+                !basicSyncReadinessProbeRunning
+            ) {
+                basicSyncReadinessProbeRunning = true
+                val appContext = applicationContext
+                Thread {
+                    val state =
+                        BasicSyncController.requestState(
+                            appContext,
+                            timeoutMs = 1_750L,
+                            attempts = 3,
+                            retryDelayMs = 250L
+                        )
+                    runOnUiThread {
+                        currentBasicSyncState = state
+                        basicSyncReadinessProbeComplete = true
+                        basicSyncReadinessProbeRunning = false
+                        activityRefreshToken++
+                    }
+                }.apply {
+                    name = "SleepManagerBasicSyncReadiness"
+                    isDaemon = true
+                    start()
+                }
             }
+        } else {
+            currentBasicSyncState = null
+            basicSyncReadinessProbeComplete = true
+        }
 
         if (!RaOfflineProxyController.isInstalled(this)) {
             currentRaOfflineProxyStatus = null
@@ -474,17 +523,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun handleHelperState(intent: Intent?) {
+        if (
+            intent?.action != HelperController.ACTION_STATE &&
+            intent?.action != HelperController.ACTION_STATE_V2
+        ) {
+            return
+        }
+
+        currentWifiState = intent.getBooleanExtra(
+            HelperController.EXTRA_WIFI_STATE,
+            false
+        )
+        currentBluetoothState = intent.getBooleanExtra(
+            HelperController.EXTRA_BLUETOOTH_STATE,
+            false
+        )
+    }
+
     private val helperStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != HelperController.ACTION_STATE) return
-            currentWifiState = intent.getBooleanExtra(
-                HelperController.EXTRA_WIFI_STATE,
-                false
-            )
-            currentBluetoothState = intent.getBooleanExtra(
-                HelperController.EXTRA_BLUETOOTH_STATE,
-                false
-            )
+            handleHelperState(intent)
+        }
+    }
+
+    private val helperStateReceiverV2 = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            handleHelperState(intent)
         }
     }
 
@@ -642,8 +707,24 @@ class MainActivity : ComponentActivity() {
                         manageJamesDspEnabledState = enabled
                     },
                     onManageBasicSyncChange = { enabled ->
-                        AppPreferences.setManageBasicSync(this@MainActivity, enabled)
-                        manageBasicSyncEnabledState = enabled
+                        if (
+                            enabled &&
+                            BasicSyncController.lastObservedState() == null
+                        ) {
+                            Toast.makeText(
+                                this@MainActivity,
+                                getString(
+                                    R.string.home_basicsync_remote_control_required
+                                ),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            AppPreferences.setManageBasicSync(
+                                this@MainActivity,
+                                enabled
+                            )
+                            manageBasicSyncEnabledState = enabled
+                        }
                     },
                     onManageRaOfflineProxyChange = { enabled ->
                         AppPreferences.setManageRaOfflineProxy(
@@ -772,14 +853,22 @@ class MainActivity : ComponentActivity() {
                     onOpenBatteryOptimizationRequested = {
                         openBatteryOptimizationSettings()
                     },
+                    onOpenHelperBatteryOptimizationRequested = {
+                        openHelperBatteryOptimizationSettings()
+                    },
+                    onOpenHelperWifiControlSettingsRequested = {
+                        openHelperWifiControlSettings()
+                    },
                     onOpenRaOfflineProxySettingsRequested = {
+                        pendingExternalNavigation = true
                         if (
                             !RaOfflineProxyController
-                                .openAppSettings(this@MainActivity)
+                                .openBatteryOptimizationSettings(this@MainActivity)
                         ) {
+                            pendingExternalNavigation = false
                             Toast.makeText(
                                 this@MainActivity,
-                                "Unable to open RAOfflineProxy app settings",
+                                "Unable to open RAOfflineProxy battery optimization settings",
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
@@ -825,9 +914,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        registerHelperStateReceiver()
+        if (!RadioController.directAvailable()) {
+            registerHelperStateReceiver()
+            HelperController.requestState(this)
+        }
         registerBatterySaverStateReceiver()
-        HelperController.requestState(this)
         refreshBatterySaverState()
     }
 
@@ -835,10 +926,33 @@ class MainActivity : ComponentActivity() {
         super.onResume()
 
         pendingExternalNavigation = false
+        // Re-check the explicit REQUEST_STATE/STATE_CHANGED contract after
+        // returning from BasicSync settings; this is the authoritative remote
+        // control readiness signal. Never render a stale state from before the
+        // user disabled BasicSync remote control.
+        BasicSyncController.clearObservedState()
+        currentBasicSyncState = null
+        basicSyncReadinessProbeComplete = false
 
         if (pendingPackageInstallerReturn) {
+            val helperInstallAttempt = pendingHelperInstallerReturn
             pendingPackageInstallerReturn = false
+            pendingHelperInstallerReturn = false
             installerReturnToken++
+
+            if (
+                helperInstallAttempt &&
+                !RadioController.directAvailable() &&
+                !HelperController.isInstalled(this)
+            ) {
+                Toast.makeText(
+                    this,
+                    getString(
+                        R.string.about_helper_install_anyway_reminder
+                    ),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
 
         pendingUpdateInstallPath?.let { apkPath ->
@@ -924,6 +1038,10 @@ class MainActivity : ComponentActivity() {
                 unregisterReceiver(helperStateReceiver)
             } catch (_: IllegalArgumentException) {
             }
+            try {
+                unregisterReceiver(helperStateReceiverV2)
+            } catch (_: IllegalArgumentException) {
+            }
             helperStateReceiverRegistered = false
         }
 
@@ -952,12 +1070,19 @@ class MainActivity : ComponentActivity() {
     private fun registerHelperStateReceiver() {
         if (helperStateReceiverRegistered) return
 
-        val filter = IntentFilter(HelperController.ACTION_STATE)
         ContextCompat.registerReceiver(
             this,
             helperStateReceiver,
-            filter,
+            IntentFilter(HelperController.ACTION_STATE),
             HelperController.PERMISSION,
+            null,
+            ContextCompat.RECEIVER_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            this,
+            helperStateReceiverV2,
+            IntentFilter(HelperController.ACTION_STATE_V2),
+            HelperController.PERMISSION_V2,
             null,
             ContextCompat.RECEIVER_EXPORTED
         )
@@ -1083,6 +1208,23 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        val helperNeeded =
+            (AppPreferences.manageWifi(this) ||
+                AppPreferences.manageBluetooth(this)) &&
+                !RadioController.directAvailable()
+
+        if (
+            helperNeeded &&
+            !HelperController.isBatteryUnrestricted(this)
+        ) {
+            Toast.makeText(
+                this,
+                "Allow Helper background access first.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
         AppPreferences.setSetupComplete(this, true)
         DiagnosticsStateStore.recordEvent(this, "Setup finished • background automation active")
         finishAndRemoveTask()
@@ -1103,12 +1245,26 @@ class MainActivity : ComponentActivity() {
         }
 
         val helperNeeded =
-            AppPreferences.manageWifi(this) || AppPreferences.manageBluetooth(this)
+            (AppPreferences.manageWifi(this) ||
+                AppPreferences.manageBluetooth(this)) &&
+                !RadioController.directAvailable()
 
         if (helperNeeded && !HelperController.isInstalled(this)) {
             Toast.makeText(
                 this,
-                "Install the SleepManager compatibility helper first",
+                "Install Helper first.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        if (
+            helperNeeded &&
+            !HelperController.isBatteryUnrestricted(this)
+        ) {
+            Toast.makeText(
+                this,
+                "Allow Helper background access first.",
                 Toast.LENGTH_LONG
             ).show()
             return
@@ -1308,6 +1464,70 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    internal fun openHelperBatteryOptimizationSettings() {
+        if (!HelperController.isInstalled(this)) {
+            Toast.makeText(
+                this,
+                "Install Helper first.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return
+        }
+
+        val intent =
+            if (HelperController.isBatteryUnrestricted(this)) {
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            } else {
+                Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:${HelperController.PACKAGE}")
+                )
+            }
+
+        launchExternalActivity(
+            intent = intent,
+            failureMessage = "Unable to open Helper battery optimization settings"
+        )
+    }
+
+    private fun openHelperWifiControlSettings() {
+        pendingExternalNavigation = true
+
+        val specialAccess =
+            Intent("android.settings.MANAGE_SPECIAL_APP_ACCESSES")
+        runCatching {
+            startActivity(specialAccess)
+        }.onSuccess {
+            Toast.makeText(
+                this,
+                "Allow Helper in Wi-Fi control.",
+                Toast.LENGTH_LONG
+            ).show()
+        }.onFailure {
+            val fallback =
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse(
+                        "package:${HelperController.PACKAGE}"
+                    )
+                )
+            runCatching {
+                startActivity(fallback)
+            }.onFailure {
+                pendingExternalNavigation = false
+                Toast.makeText(
+                    this,
+                    "Allow Helper in Settings → Wi-Fi control.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
     internal fun openUnusedAppRestrictionsSettings() {
         val intent =
             runCatching {
@@ -1366,6 +1586,15 @@ class MainActivity : ComponentActivity() {
         }
 
         pendingPackageInstallerReturn = true
+        pendingHelperInstallerReturn =
+            apk.name.startsWith("SleepManager-Helper-")
+        if (pendingHelperInstallerReturn) {
+            Toast.makeText(
+                this,
+                "Older-app warning? More details → Install anyway.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
         launchExternalActivity(
             intent = UpdateInstaller.installIntent(this, apk),
             failureMessage = "Unable to open Android's package installer"

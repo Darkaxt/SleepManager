@@ -33,6 +33,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
@@ -51,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -64,6 +66,7 @@ import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.DeviceControlController
+import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueState
@@ -86,7 +89,6 @@ import com.med.sleepmanager.ui.components.ClamshellOptionsCard
 import com.med.sleepmanager.ui.components.CompactIntegrationRow
 import com.med.sleepmanager.ui.components.CompactSupportedAppRow
 import com.med.sleepmanager.ui.components.CompactSideRail
-import com.med.sleepmanager.ui.components.LastActivityCard
 import com.med.sleepmanager.ui.components.OnboardingCard
 import com.med.sleepmanager.ui.components.SectionTitle
 import com.med.sleepmanager.ui.components.SettingRow
@@ -94,6 +96,7 @@ import com.med.sleepmanager.ui.components.SettingsCard
 import com.med.sleepmanager.ui.components.StatusCard
 import com.med.sleepmanager.ui.components.SyncthingTargetDialog
 import com.med.sleepmanager.ui.components.UpdateAvailableCard
+import com.med.sleepmanager.ui.controller.controllerNavigation
 import com.med.sleepmanager.ui.feedbackClick
 import com.med.sleepmanager.ui.iconRes
 import com.med.sleepmanager.ui.labelRes
@@ -159,6 +162,8 @@ private class IntegrationUiRow(
         onOpenExternalUrlRequested: (String) -> Unit,
         onOpenAppInfoRequested: () -> Unit,
         onOpenBatteryOptimizationRequested: () -> Unit,
+        onOpenHelperBatteryOptimizationRequested: () -> Unit,
+        onOpenHelperWifiControlSettingsRequested: () -> Unit,
         onOpenRaOfflineProxySettingsRequested: () -> Unit,
         onOpenUnusedAppRestrictionsRequested: () -> Unit,
         onRequestUpdateNotificationPermissionRequested: () -> Unit,
@@ -223,11 +228,12 @@ private class IntegrationUiRow(
             currentSection = AppSection.ADVANCED
         }
 
-        fun navigateToActivityLog() {
-            currentSection = AppSection.ACTIVITY_LOG
-            drawerScope.launch {
-                activityListState.animateScrollToItem(0)
-            }
+        fun navigateSection(offset: Int) {
+            val sections = AppSection.entries
+            val currentIndex = sections.indexOf(currentSection)
+            val nextIndex =
+                (currentIndex + offset + sections.size) % sections.size
+            currentSection = sections[nextIndex]
         }
 
         val compactLayout = LocalConfiguration.current.screenWidthDp < 600
@@ -267,9 +273,46 @@ private class IntegrationUiRow(
             AppPreferences.isSetupComplete(context)
         }
 
+        val directRadioControlAvailable = remember(refreshToken) {
+            RadioController.directAvailable()
+        }
         val helperInstalled = remember(refreshToken) {
             HelperController.isInstalled(context)
         }
+        val radioBackendAvailable =
+            directRadioControlAvailable || helperInstalled
+        val helperBatteryUnrestricted =
+            remember(refreshToken) {
+                if (
+                    helperInstalled &&
+                    !directRadioControlAvailable
+                ) {
+                    HelperController.isBatteryUnrestricted(context)
+                } else {
+                    true
+                }
+            }
+        val helperWifiControlAccess =
+            remember(refreshToken) {
+                if (
+                    helperInstalled &&
+                    !directRadioControlAvailable
+                ) {
+                    HelperController.wifiControlAccess(context)
+                } else {
+                    null
+                }
+            }
+        val helperRadioReady =
+            helperInstalled && helperBatteryUnrestricted
+        val wifiControlReady =
+            directRadioControlAvailable ||
+                (
+                    helperRadioReady &&
+                        helperWifiControlAccess?.effectivelyAllowed != false
+                )
+        val bluetoothControlReady =
+            directRadioControlAvailable || helperRadioReady
         val helperVersion = remember(refreshToken) {
             runCatching {
                 context.packageManager.getPackageInfo(HelperController.PACKAGE, 0).versionName
@@ -296,6 +339,17 @@ private class IntegrationUiRow(
         val basicSyncVersion = remember(refreshToken) {
             BasicSyncController.versionName(context)
         }
+        val basicSyncStopped = remember(refreshToken) {
+            basicSyncInstalled && BasicSyncController.isStopped(context)
+        }
+        val basicSyncStateApi =
+            BasicSyncController.supportsStateApi(context)
+        val basicSyncReady =
+            basicSyncInstalled &&
+                !basicSyncStopped &&
+                basicSyncStateApi &&
+                uiState.basicSyncReadinessProbeComplete &&
+                uiState.currentBasicSyncState != null
         val raOfflineProxyInstalled = remember(refreshToken) {
             RaOfflineProxyController.isInstalled(context)
         }
@@ -319,8 +373,9 @@ private class IntegrationUiRow(
         val raOfflineProxyStatusProbeComplete =
             uiState.raOfflineProxyStatusProbeComplete
         val raOfflineProxyApiCompatible =
-            raOfflineProxyStatus?.version ==
-                RaOfflineProxyController.SUPPORTED_API_VERSION
+            RaOfflineProxyController.isSupportedApiVersion(
+                raOfflineProxyStatus?.version
+            )
         val raOfflineProxyReady =
             raOfflineProxyInstalled &&
                 raOfflineProxyProviderAvailable &&
@@ -365,9 +420,11 @@ private class IntegrationUiRow(
         val availableUpdate = remember(refreshToken) {
             UpdateChecker.cachedUpdate(context)
         }
-        val availableHelperUpdate = remember(refreshToken) {
+        val cachedHelperUpdate = remember(refreshToken) {
             UpdateChecker.cachedHelperUpdate(context)
         }
+        val availableHelperUpdate =
+            cachedHelperUpdate.takeUnless { directRadioControlAvailable }
         val updateNotificationsAllowed = remember(refreshToken) {
             UpdateNotifier.notificationsAllowed(context)
         }
@@ -408,6 +465,22 @@ private class IntegrationUiRow(
         }
 
         ModalNavigationDrawer(
+            modifier =
+                Modifier.controllerNavigation(
+                    listState = currentListState,
+                    enabled = drawerState.isClosed,
+                    onPreviousSection = { navigateSection(-1) },
+                    onNextSection = { navigateSection(1) },
+                    onMenuRequested = {
+                        drawerScope.launch {
+                            if (drawerState.isClosed) {
+                                drawerState.open()
+                            } else {
+                                drawerState.close()
+                            }
+                        }
+                    }
+                ),
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
@@ -532,7 +605,9 @@ private class IntegrationUiRow(
                                     onClick = feedbackClick {
                                         drawerScope.launch { drawerState.open() }
                                     },
-                                    modifier = Modifier.offset(y = (-4).dp)
+                                    modifier = Modifier
+                                        .offset(y = (-4).dp)
+                                        .focusProperties { canFocus = false }
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_menu),
@@ -554,6 +629,20 @@ private class IntegrationUiRow(
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                        },
+                        actions = {
+                            if (currentSection == AppSection.ACTIVITY_LOG) {
+                                OutlinedButton(
+                                    onClick = feedbackClick {
+                                        onCopyDiagnosticsRequested()
+                                    },
+                                    modifier = Modifier.padding(end = 12.dp)
+                                ) {
+                                    Text(
+                                        stringResource(R.string.activity_copy_log)
+                                    )
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -666,13 +755,16 @@ private class IntegrationUiRow(
                             icon = R.drawable.ic_wifi,
                             title = stringResource(R.string.wifi),
                             subtitle = stringResource(
-                                if (helperInstalled) {
-                                    R.string.home_radio_sleep_description
-                                } else {
-                                    R.string.home_helper_required
+                                when {
+                                    wifiControlReady ->
+                                        R.string.home_radio_sleep_description
+                                    !radioBackendAvailable ->
+                                        R.string.home_helper_required
+                                    else ->
+                                        R.string.home_helper_setup_required
                                 }
                             ),
-                            status = if (helperInstalled) {
+                            status = if (wifiControlReady) {
                                 uiState.currentWifiState?.let {
                                     stringResource(
                                         if (it) {
@@ -686,7 +778,7 @@ private class IntegrationUiRow(
                                 null
                             },
                             checked = wifiEnabled,
-                            enabled = helperInstalled,
+                            enabled = wifiControlReady,
                             onCheckedChange = {
                                 onManageWifiChange(it)
                             }
@@ -701,13 +793,16 @@ private class IntegrationUiRow(
                             icon = R.drawable.ic_bluetooth,
                             title = stringResource(R.string.bluetooth),
                             subtitle = stringResource(
-                                if (helperInstalled) {
-                                    R.string.home_radio_sleep_description
-                                } else {
-                                    R.string.home_helper_required
+                                when {
+                                    bluetoothControlReady ->
+                                        R.string.home_radio_sleep_description
+                                    !radioBackendAvailable ->
+                                        R.string.home_helper_required
+                                    else ->
+                                        R.string.home_helper_setup_required
                                 }
                             ),
-                            status = if (helperInstalled) {
+                            status = if (bluetoothControlReady) {
                                 uiState.currentBluetoothState?.let {
                                     stringResource(
                                         if (it) {
@@ -721,7 +816,7 @@ private class IntegrationUiRow(
                                 null
                             },
                             checked = bluetoothEnabled,
-                            enabled = helperInstalled,
+                            enabled = bluetoothControlReady,
                             onCheckedChange = {
                                 onManageBluetoothChange(it)
                             }
@@ -764,7 +859,11 @@ private class IntegrationUiRow(
                 }
 
                 item {
-                    AnimatedVisibility(visible = !helperInstalled) {
+                    AnimatedVisibility(
+                        visible =
+                            !directRadioControlAvailable &&
+                                !helperInstalled
+                    ) {
                         InfoCard(
                             title = stringResource(
                                 R.string.home_helper_not_installed_title
@@ -776,6 +875,54 @@ private class IntegrationUiRow(
                             onAction = {
                                 navigateToAbout(AboutScrollTarget.HELPER)
                             }
+                        )
+                    }
+                }
+
+                item {
+                    AnimatedVisibility(
+                        visible =
+                            !directRadioControlAvailable &&
+                                helperInstalled &&
+                                !helperBatteryUnrestricted
+                    ) {
+                        InfoCard(
+                            title = stringResource(
+                                R.string.home_helper_background_title
+                            ),
+                            text = stringResource(
+                                R.string.home_helper_background_description
+                            ),
+                            actionLabel = stringResource(
+                                R.string.home_helper_background_action
+                            ),
+                            onAction =
+                                onOpenHelperBatteryOptimizationRequested
+                        )
+                    }
+                }
+
+                item {
+                    AnimatedVisibility(
+                        visible =
+                            !directRadioControlAvailable &&
+                                helperInstalled &&
+                                helperBatteryUnrestricted &&
+                                helperWifiControlAccess
+                                    ?.effectivelyAllowed == false
+                    ) {
+                        InfoCard(
+                            title = stringResource(
+                                R.string.home_helper_wifi_control_title
+                            ),
+                            text = stringResource(
+                                R.string.home_helper_wifi_control_description
+                            ),
+                            actionLabel = stringResource(
+                                R.string.home_helper_wifi_control_action
+                            ),
+                            onAction =
+                                onOpenHelperWifiControlSettingsRequested
                         )
                     }
                 }
@@ -887,14 +1034,6 @@ private class IntegrationUiRow(
                     ) {
                         val syncthingBroadcastReminder =
                             stringResource(R.string.home_syncthing_broadcast_reminder)
-                        val basicSyncRemoteControlReminder =
-                            stringResource(
-                                if (BasicSyncController.supportsStateApi(context)) {
-                                    R.string.home_basicsync_remote_control_modern
-                                } else {
-                                    R.string.home_basicsync_remote_control_legacy
-                                }
-                            )
                         val raOfflineProxyStatusText =
                             when {
                                 !raOfflineProxyInstalled ->
@@ -1087,7 +1226,11 @@ private class IntegrationUiRow(
                                             basicSyncVersion
                                                 ?: stringResource(R.string.installed),
                                         status =
-                                            if (BasicSyncController.supportsStateApi(context)) {
+                                            if (basicSyncStopped) {
+                                                stringResource(
+                                                    R.string.home_basicsync_stopped
+                                                )
+                                            } else if (basicSyncStateApi) {
                                                 uiState.currentBasicSyncState?.let { state ->
                                                     val mode =
                                                         stringResource(
@@ -1142,24 +1285,26 @@ private class IntegrationUiRow(
                                                         runState,
                                                         syncState
                                                     ).joinToString(" · ")
-                                                } ?: stringResource(R.string.checking)
+                                                } ?: stringResource(
+                                                    if (
+                                                        uiState.basicSyncReadinessProbeComplete
+                                                    ) {
+                                                        R.string.home_basicsync_remote_control_required
+                                                    } else {
+                                                        R.string.checking
+                                                    }
+                                                )
                                             } else {
                                                 stringResource(
                                                     R.string.home_basicsync_legacy_status
                                                 )
                                             },
                                         checked = basicSyncEnabled,
-                                        enabled = true,
+                                        enabled = basicSyncReady || basicSyncEnabled,
                                         onCheckedChange = {
                                             onManageBasicSyncChange(it)
 
-                                            if (it) {
-                                                Toast.makeText(
-                                                    context,
-                                                    basicSyncRemoteControlReminder,
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-                                            } else if (managerEnabled) {
+                                            if (!it && managerEnabled) {
                                                 onRestoreBasicSyncRequested()
                                                 SleepCycleStore.completeIfRestored(context)
                                                 SyncMaintenanceScheduler.cancel(context)
@@ -1306,8 +1451,8 @@ private class IntegrationUiRow(
                         )
 
                     BehaviorCard(
-                        wifi = wifiEnabled && helperInstalled,
-                        bluetooth = bluetoothEnabled && helperInstalled,
+                        wifi = wifiEnabled && wifiControlReady,
+                        bluetooth = bluetoothEnabled && bluetoothControlReady,
                         batterySaver =
                             batterySaverActionEnabled && batterySaverControlSupported,
                         syncthing = syncthingEnabled && selectedTarget != null,
@@ -1361,13 +1506,6 @@ private class IntegrationUiRow(
                     }
                 }
 
-                item {
-                    LastActivityCard(
-                        context = context,
-                        onViewLog = { navigateToActivityLog() },
-                        onCopyLog = { onCopyDiagnosticsRequested() }
-                    )
-                }
                     }
 
                     AppSection.ADVANCED -> {
@@ -1473,8 +1611,7 @@ private class IntegrationUiRow(
                     AppSection.ACTIVITY_LOG -> {
                         item {
                             ActivityLogPage(
-                                context = context,
-                                onCopyLog = { onCopyDiagnosticsRequested() }
+                                context = context
                             )
                         }
                     }
@@ -1519,6 +1656,8 @@ private class IntegrationUiRow(
                                 onUpdateStateChanged = {
                                     onRefreshRequested()
                                 },
+                                showCompatibilityHelper =
+                                    !directRadioControlAvailable,
                                 scrollTarget = aboutScrollTarget,
                                 scrollRequestId = aboutScrollRequestId,
                                 onScrollTargetConsumed = {

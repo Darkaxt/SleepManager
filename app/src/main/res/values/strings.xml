@@ -30,13 +30,13 @@
     <string name="integration_raofflineproxy">RAOfflineProxy</string>
     <string name="raofflineproxy_api_unavailable">Automation API unavailable</string>
     <string name="raofflineproxy_permission_missing">Control permission missing · reinstall SleepManager after RAOfflineProxy</string>
-    <string name="raofflineproxy_needs_unrestricted">Battery usage must be Unrestricted</string>
+    <string name="raofflineproxy_needs_unrestricted">Battery optimization exemption required</string>
     <string name="raofflineproxy_api_unsupported">Unsupported automation API v%1$d</string>
     <string name="raofflineproxy_queue_caching">Caching · %1$d queued</string>
     <string name="raofflineproxy_queue_waiting">Waiting · %1$d queued</string>
     <string name="raofflineproxy_queue_blocked">Queue blocked</string>
-    <string name="raofflineproxy_app_settings">App settings</string>
-    <string name="raofflineproxy_unrestricted_hint">Open Battery in RAOfflineProxy app info and set battery usage to Unrestricted.</string>
+    <string name="raofflineproxy_app_settings">Allow</string>
+    <string name="raofflineproxy_unrestricted_hint">Set Battery usage to Unrestricted</string>
     <string name="quick_setup_integration_detected">✓ %1$s detected</string>
     <string name="quick_setup_named_integration_detected">✓ %1$s detected</string>
     <string name="quick_setup_named_integration_detected_with_version">✓ %1$s • %2$s detected</string>
@@ -163,7 +163,8 @@
     <string name="about_main_apk_verified">APK verified. Opening Android installer…</string>
     <string name="about_helper_name">SleepManager Helper</string>
     <string name="about_helper_version">SleepManager Helper %1$s</string>
-    <string name="about_download_verify_install_helper_wifi_bluetooth">Download, verify and install the signed Helper for Wi-Fi and Bluetooth.</string>
+    <string name="about_download_verify_install_helper_wifi_bluetooth">Required for Wi-Fi and Bluetooth. Older-app warning? More details → Install anyway.</string>
+    <string name="about_helper_install_anyway_reminder">Helper not installed — More details → Install anyway.</string>
     <string name="about_download_verify_install_helper">Download, verify and install the signed Helper APK.</string>
     <string name="about_preparing_helper">Preparing SleepManager Helper…</string>
     <string name="about_downloading_helper">Downloading SleepManager Helper %1$s…</string>
@@ -266,6 +267,13 @@
     <string name="stats_forget_pending_restore">Forget pending restore</string>
 
     <string name="activity_copy_log">Copy log</string>
+    <string name="activity_timeline_description">A simple timeline of what SleepManager did. Copy log keeps the full technical details.</string>
+    <string name="activity_timeline_sleep">Sleep</string>
+    <string name="activity_timeline_wake">Wake</string>
+    <string name="activity_timeline_maintenance">Sleep maintenance</string>
+    <string name="activity_timeline_protection">Protection</string>
+    <string name="activity_timeline_recovery">Recovery</string>
+    <string name="activity_timeline_system">System</string>
     <string name="activity_no_recent_activity">No recent activity</string>
     <string name="activity_advanced_diagnostics">Advanced diagnostics</string>
     <string name="activity_advanced_diagnostics_description">Collect detailed multi-cycle system snapshots for troubleshooting. Uses extra CPU and storage during sleep/wake; leave off unless needed.</string>
@@ -379,6 +387,13 @@
     <string name="home_battery_saver_description">Enable during sleep and restore the previous state on wake.</string>
     <string name="home_helper_not_installed_title">Compatibility helper not installed</string>
     <string name="home_helper_not_installed_description">The helper controls Wi‑Fi and Bluetooth without root or Shizuku. It has no launcher icon and runs only when SleepManager asks it to.</string>
+    <string name="home_helper_background_title">Helper battery optimization exemption required</string>
+    <string name="home_helper_background_description">Required before SleepManager can manage Wi-Fi or Bluetooth.</string>
+    <string name="home_helper_background_action">Allow</string>
+    <string name="home_helper_setup_required">Complete Helper setup to use this action.</string>
+    <string name="home_helper_wifi_control_title">Wi-Fi control access required</string>
+    <string name="home_helper_wifi_control_description">SleepManager Helper is installed, but Android is not allowing it to control Wi-Fi. Open Special app access → Wi-Fi control and allow SleepManager Helper. Some OEM firmware can still show its own Wi-Fi confirmation even when this access is already allowed.</string>
+    <string name="home_helper_wifi_control_action">Open special access</string>
     <string name="home_sleep_behavior">Sleep behavior</string>
     <string name="home_sleep_behavior_description">Control how SleepManager reacts when the screen turns off.</string>
     <string name="home_clamshell_options">Clamshell options</string>
@@ -389,10 +404,12 @@
     <string name="home_supported_apps">Supported apps</string>
 
     <string name="home_syncthing_fork">Syncthing‑Fork</string>
-    <string name="home_syncthing_broadcast_reminder">Enable Settings → Behaviour → Service control by broadcast in Syncthing-Fork.</string>
+    <string name="home_syncthing_broadcast_reminder">Enable “Service control by broadcast” in Syncthing.</string>
     <string name="home_basicsync_legacy_status">Legacy: STOP → Auto mode</string>
-    <string name="home_basicsync_remote_control_modern">Enable Allow remote control in BasicSync. SleepManager will preserve and restore BasicSync\'s previous mode.</string>
-    <string name="home_basicsync_remote_control_legacy">Enable Allow remote control in BasicSync. This BasicSync version uses legacy STOP → Auto mode behavior.</string>
+    <string name="home_basicsync_remote_control_modern">Enable “Allow remote control” in BasicSync.</string>
+    <string name="home_basicsync_remote_control_required">Allow remote control required</string>
+    <string name="home_basicsync_stopped">Open BasicSync to enable remote control</string>
+    <string name="home_basicsync_remote_control_legacy">Enable “Allow remote control” in BasicSync.</string>
 
     <string name="home_condition_battery_below">Battery below %1$d%%</string>
     <string name="home_condition_not_charging">Device is not charging</string>

@@ -5,9 +5,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.SystemClock
+import com.med.sleepmanager.device.SysfsAccessCache
 import com.med.sleepmanager.rules.BatteryCapacityPolicy
 import com.med.sleepmanager.rules.BatteryCapacitySelection
-import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.max
@@ -58,12 +58,15 @@ object BatterySleepStore {
         val chargeMah: Double?
             get() = capacitySelection.displayedCurrentUah?.div(1000.0)
 
-        val batteryHealthPercent: Double?
+        val rawBatteryHealthPercent: Double?
             get() =
-                BatteryCapacityPolicy.batteryHealthPercent(
+                BatteryCapacityPolicy.rawBatteryHealthPercent(
                     learnedFullUah = fullChargeUah,
-                    designFullUah = designChargeUah
+                    designFullUah = capacitySelection.effectiveDesignUah
                 )
+
+        val batteryHealthPercent: Double?
+            get() = rawBatteryHealthPercent?.coerceAtMost(100.0)
 
         val precisePercent: Double?
             get() {
@@ -91,7 +94,9 @@ object BatterySleepStore {
         val deepSleepMs: Long? = null,
         val preciseDrainPercent: Double? = null,
         val preciseBatteryChangePercent: Double? = null,
-        val falseWakeCount: Int = 0
+        val falseWakeCount: Int = 0,
+        val startChargeUah: Long? = null,
+        val endChargeUah: Long? = null
     ) {
         val drainPerHour: Double?
             get() {
@@ -199,10 +204,10 @@ object BatterySleepStore {
             charging = charging,
             externalPowerConnected = plugged != 0,
             chargeCounterUah = chargeCounter,
-            fullChargeUah = readChargeUahFromSysfs(
+            fullChargeUah = SysfsAccessCache.readPositiveLong(
                 "/sys/class/power_supply/battery/charge_full"
             ),
-            designChargeUah = readChargeUahFromSysfs(
+            designChargeUah = SysfsAccessCache.readPositiveLong(
                 "/sys/class/power_supply/battery/charge_full_design"
             )
         )
@@ -351,7 +356,12 @@ object BatterySleepStore {
             deepSleepMs = deepSleepMs,
             preciseDrainPercent = preciseDrainPercent,
             preciseBatteryChangePercent = preciseBatteryChangePercent,
-            falseWakeCount = falseWakeCount
+            falseWakeCount = falseWakeCount,
+            startChargeUah =
+                startChargeUah
+                    .takeIf { it != Int.MIN_VALUE }
+                    ?.toLong(),
+            endChargeUah = endCounter?.toLong()
         )
 
         appendSession(context, session)
@@ -429,7 +439,7 @@ object BatterySleepStore {
             }
 
         val deepSessions =
-            measured.mapNotNull { (session, _) ->
+            eligible.mapNotNull { session ->
                 session.deepSleepPercent?.let { percent ->
                     percent to session.durationMs
                 }
@@ -473,8 +483,8 @@ object BatterySleepStore {
             averageDrainPerHour = averageDrainPerHour,
             averageDrainMahPerHour = averageDrainMahPerHour,
             averageDeepSleepPercent = averageDeepSleepPercent,
-            averageSessionCount = measured.size,
-            totalMeasuredSleepMs = measured.sumOf { it.first.durationMs },
+            averageSessionCount = eligible.size,
+            totalMeasuredSleepMs = eligible.sumOf { it.durationMs },
             bestDrainPerHour = drainRates.minOrNull(),
             worstDrainPerHour = drainRates.maxOrNull(),
             estimatedHoursRemaining = estimatedHoursRemaining,
@@ -516,6 +526,12 @@ object BatterySleepStore {
                         }
                         item.preciseBatteryChangePercent?.let {
                             put("preciseBatteryChangePercent", it)
+                        }
+                        item.startChargeUah?.let {
+                            put("startChargeUah", it)
+                        }
+                        item.endChargeUah?.let {
+                            put("endChargeUah", it)
                         }
                         put("falseWakeCount", item.falseWakeCount.coerceAtLeast(0))
                     }
@@ -578,7 +594,21 @@ object BatterySleepStore {
                                 },
                             falseWakeCount =
                                 item.optInt("falseWakeCount", 0)
-                                    .coerceAtLeast(0)
+                                    .coerceAtLeast(0),
+                            startChargeUah =
+                                if (item.has("startChargeUah")) {
+                                    item.optLong("startChargeUah")
+                                        .takeIf { it >= 0L }
+                                } else {
+                                    null
+                                },
+                            endChargeUah =
+                                if (item.has("endChargeUah")) {
+                                    item.optLong("endChargeUah")
+                                        .takeIf { it >= 0L }
+                                } else {
+                                    null
+                                }
                         )
                     )
                 }
@@ -623,13 +653,26 @@ object BatterySleepStore {
             .takeIf { it.isFinite() && it > 0.0 && it <= 100.0 }
     }
 
-    private fun isEligibleForLongTermStats(session: SleepSession): Boolean =
+    internal fun sessionAnalyticsEligible(session: SleepSession): Boolean =
         !session.chargedDuringSleep &&
-            session.durationMs >= MIN_AVERAGE_DURATION_MS &&
-            (
-                session.preciseDrainPercent != null ||
-                    session.endPercent <= session.startPercent
-            )
+            session.durationMs >= MIN_AVERAGE_DURATION_MS
+
+    internal fun drainSampleExclusionReason(
+        session: SleepSession
+    ): String? =
+        when {
+            session.chargedDuringSleep ->
+                "charged during sleep"
+            session.durationMs < MIN_AVERAGE_DURATION_MS ->
+                "sleep shorter than 3 hours"
+            effectiveDrainPercent(session) == null ->
+                "no measurable battery decrease"
+            else ->
+                null
+        }
+
+    private fun isEligibleForLongTermStats(session: SleepSession): Boolean =
+        sessionAnalyticsEligible(session)
 
     private fun enrichHistoricalPrecision(
         session: SleepSession,
@@ -661,13 +704,4 @@ object BatterySleepStore {
     private fun estimateCapacityMah(snapshot: BatterySnapshot): Double? =
         bestCapacityUah(snapshot)?.div(1000.0)
 
-    private fun readChargeUahFromSysfs(path: String): Long? =
-        runCatching {
-            File(path)
-                .takeIf { it.canRead() }
-                ?.readText()
-                ?.trim()
-                ?.toLongOrNull()
-                ?.takeIf { it > 0L }
-        }.getOrNull()
 }

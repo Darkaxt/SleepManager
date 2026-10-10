@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import com.med.sleepmanager.BuildConfig
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.UpdateStateStore
+import com.med.sleepmanager.device.RadioController
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -50,6 +51,9 @@ object UpdateChecker {
     private const val HELPER_PACKAGE = "com.med.sleepmanager.helper"
     private const val CONNECT_TIMEOUT_MS = 8000
     private const val READ_TIMEOUT_MS = 8000
+    private const val HELPER_NETWORK_WAIT_MS = 15_000L
+    private const val HELPER_FETCH_ATTEMPTS = 3
+    private const val HELPER_FETCH_RETRY_DELAY_MS = 750L
 
     private val checkGate = UpdateCheckGate()
 
@@ -86,9 +90,53 @@ object UpdateChecker {
 
     fun fetchLatestHelperForInstall(context: Context): HelperUpdateInfo? {
         val appContext = context.applicationContext
-        val release = fetchLatestStableRelease()
-        cacheRelease(appContext, release)
-        return release.helper
+
+        // Fresh install must not depend on the user pressing Check for updates.
+        // Reuse trustworthy cached release metadata immediately when present.
+        cachedHelperRelease(appContext)
+            ?.takeIf { it.directInstallAvailable }
+            ?.let { return it }
+
+        if (
+            !ValidatedNetworkAwaiter.await(
+                appContext,
+                HELPER_NETWORK_WAIT_MS
+            )
+        ) {
+            throw IllegalStateException(
+                "No validated Internet connection yet. Connect to a network and retry."
+            )
+        }
+
+        var lastFailure: Throwable? = null
+        repeat(HELPER_FETCH_ATTEMPTS) { attempt ->
+            try {
+                val release = fetchLatestStableRelease()
+                cacheRelease(appContext, release)
+                return release.helper
+            } catch (error: Throwable) {
+                lastFailure = error
+                if (
+                    attempt + 1 < HELPER_FETCH_ATTEMPTS &&
+                    isTransientFetchFailure(error)
+                ) {
+                    Thread.sleep(HELPER_FETCH_RETRY_DELAY_MS)
+                } else {
+                    throw error
+                }
+            }
+        }
+
+        throw lastFailure
+            ?: IllegalStateException("Unable to find the Helper release.")
+    }
+
+    private fun isTransientFetchFailure(error: Throwable): Boolean {
+        if (error is java.io.IOException) return true
+        val message = error.message.orEmpty()
+        return message.contains("HTTP 408") ||
+            message.contains("HTTP 429") ||
+            Regex("HTTP 5\\d\\d").containsMatchIn(message)
     }
 
     fun simulateAvailableUpdate(
@@ -240,6 +288,12 @@ object UpdateChecker {
         context: Context,
         helper: HelperUpdateInfo?
     ): HelperUpdateInfo? {
+        if (
+            runCatching { RadioController.directAvailable() }
+                .getOrDefault(false)
+        ) {
+            return null
+        }
         helper ?: return null
         val installed = runCatching {
             context.packageManager.getPackageInfo(HELPER_PACKAGE, 0)

@@ -67,6 +67,9 @@ adb_target shell pm grant   com.med.sleepmanager   android.permission.POST_NOTIF
 
 adb_target shell cmd appops set   com.med.sleepmanager   SCHEDULE_EXACT_ALARM   allow >/dev/null 2>&1 || true
 
+adb_target shell dumpsys deviceidle whitelist +com.med.sleepmanager.helper \
+  >/dev/null 2>&1 || true
+
 MAIN_VERSION="$(adb_target shell dumpsys package com.med.sleepmanager   | sed -n 's/.*versionName=//p' | head -n 1 | tr -d '\r')"
 HELPER_VERSION="$(adb_target shell dumpsys package com.med.sleepmanager.helper   | sed -n 's/.*versionName=//p' | head -n 1 | tr -d '\r')"
 

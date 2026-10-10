@@ -85,19 +85,19 @@ object SleepWakePolicy {
      * STOP-capable integrations must settle before SleepManager applies an
      * action that can make their runtime state harder to verify.
      *
-     * Wi-Fi only counts when the Helper is available to actually turn it off.
-     * Battery Saver counts independently because it can change app run
+     * Wi-Fi only counts when a radio backend is available to actually turn it
+     * off. Battery Saver counts independently because it can change app run
      * conditions even when SleepManager leaves Wi-Fi untouched.
      */
     fun shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
         wifiManaged: Boolean,
-        helperAvailable: Boolean,
+        radioControlAvailable: Boolean,
         batterySaverWillEnable: Boolean,
         syncthingStopRequested: Boolean,
         basicSyncStopRequested: Boolean
     ): Boolean {
         val disruptiveActionPending =
-            (wifiManaged && helperAvailable) || batterySaverWillEnable
+            (wifiManaged && radioControlAvailable) || batterySaverWillEnable
         val managedStopPending =
             syncthingStopRequested || basicSyncStopRequested
 
@@ -105,14 +105,25 @@ object SleepWakePolicy {
     }
 
     /**
-     * Preserve the existing Helper ordering for Tailscale, while also making
-     * Battery Saver wait for a pending VPN disconnect verification.
+     * Preserve radio-control ordering for Tailscale, while also making Battery
+     * Saver wait for a pending VPN disconnect verification.
      */
     fun shouldWaitForTailscaleBeforeDisruptiveSleepAction(
-        helperAvailable: Boolean,
+        radioControlAvailable: Boolean,
         batterySaverWillEnable: Boolean,
         tailscaleVerificationPending: Boolean
     ): Boolean =
         tailscaleVerificationPending &&
-            (helperAvailable || batterySaverWillEnable)
+            (radioControlAvailable || batterySaverWillEnable)
+
+    /**
+     * A newly-created sleep transaction must stay alive while STOP/Tailscale
+     * gates still have disruptive sleep work to run. This matters for direct
+     * PServer radios because their ownership is created only when the gate
+     * finally applies the sleep radio state.
+     */
+    fun shouldCompleteSleepCycleAfterFreshActions(
+        postStopActionsPending: Boolean
+    ): Boolean =
+        !postStopActionsPending
 }

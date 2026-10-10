@@ -63,16 +63,23 @@ class StableMainHelperCompatibilityTest {
     }
 
     @Test
-    fun stableMain061_acceptsHelper112CorrelatedResults() {
+    fun stableMain061_acceptsCurrentHelperCorrelatedResults() {
+        val expectedHelperVersion =
+            InstrumentationRegistry.getArguments()
+                .getString("expectedHelperVersion")
+        assertTrue(
+            "expectedHelperVersion instrumentation argument is required",
+            !expectedHelperVersion.isNullOrBlank()
+        )
         assertEquals(
             InstrumentationRegistry.getArguments().getString("expectedStableMainVersion", "0.6.1"),
             packageVersionName(context.packageName)
         )
         assertEquals(
-            InstrumentationRegistry.getArguments().getString("expectedCurrentHelperVersion", "1.1.2"),
+            expectedHelperVersion,
             packageVersionName(HelperController.PACKAGE)
         )
-        assertTrue("Helper 1.1.2 must be installed", HelperController.isInstalled(context))
+        assertTrue("Current Helper must be installed", HelperController.isInstalled(context))
 
         AppPreferences.setSetupComplete(context, true)
         AppPreferences.setEnabled(context, true)
@@ -130,7 +137,7 @@ class StableMainHelperCompatibilityTest {
                 HelperController.STATUS_OK,
                 sleepResult.getStringExtra(HelperController.EXTRA_STATUS)
             )
-            assertTrue("Helper 1.1.2 sleep result is missing cycleId", sleepResult.hasExtra("cycle_id"))
+            assertTrue("Current Helper sleep result is missing cycleId", sleepResult.hasExtra("cycle_id"))
             assertEquals(cycle.cycleId, sleepResult.getLongExtra("cycle_id", -1L))
 
             assertTrue(
@@ -155,11 +162,11 @@ class StableMainHelperCompatibilityTest {
                     false
                 )
             )
-            assertTrue("Helper 1.1.2 wake result is missing cycleId", wakeResult.hasExtra("cycle_id"))
+            assertTrue("Current Helper wake result is missing cycleId", wakeResult.hasExtra("cycle_id"))
             assertEquals(cycle.cycleId, wakeResult.getLongExtra("cycle_id", -1L))
 
             assertTrue(
-                "Stable Main did not accept Helper 1.1.2 wake result",
+                "Stable Main did not accept current Helper wake result",
                 waitUntil(timeoutMs = 1_500L) {
                     !SleepCycleStore.isActive(context)
                 }
