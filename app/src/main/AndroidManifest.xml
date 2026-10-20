@@ -64,6 +64,12 @@
                 android:resource="@xml/update_file_paths" />
         </provider>
 
+        <!-- Read-only status API. No private diagnostics or control methods exposed. -->
+        <provider
+            android:name=".api.SleepManagerStatusProvider"
+            android:authorities="${applicationId}.status"
+            android:exported="true" />
+
         <service
             android:name=".service.SleepManagerService"
             android:enabled="true"

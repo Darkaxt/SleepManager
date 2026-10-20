@@ -17,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -31,21 +30,21 @@ import com.med.sleepmanager.ui.activity.ActivityTimelineBuilder
 import com.med.sleepmanager.ui.activity.ActivityTimelineGroup
 import com.med.sleepmanager.ui.activity.ActivityTimelineKind
 import com.med.sleepmanager.ui.components.SettingsCard
-import com.med.sleepmanager.ui.controller.controllerFocusHighlight
 import com.med.sleepmanager.ui.feedbackChange
 import java.util.Date
 
 @Composable
 internal fun ActivityLogPage(
-    context: Context
+    context: Context,
+    refreshToken: Int = 0
 ) {
-    val events = EventHistoryStore.recent(context)
-    val timeline = ActivityTimelineBuilder.build(events)
     var advancedDiagnostics by remember(context) {
         mutableStateOf(AppPreferences.advancedDiagnosticsEnabled(context))
     }
-    var diagnosticsFocused by remember {
-        mutableStateOf(false)
+    // Timeline parsing and grouping are stable until the event state or
+    // diagnostics mode changes; scrolling must not rebuild them.
+    val timeline = remember(context, refreshToken, advancedDiagnostics) {
+        ActivityTimelineBuilder.build(EventHistoryStore.recent(context))
     }
 
     Column(
@@ -70,7 +69,6 @@ internal fun ActivityLogPage(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .controllerFocusHighlight(diagnosticsFocused)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -97,10 +95,6 @@ internal fun ActivityLogPage(
                         advancedDiagnostics = enabled
                         AppPreferences.setAdvancedDiagnosticsEnabled(context, enabled)
                     },
-                    modifier =
-                        Modifier.onFocusChanged {
-                            diagnosticsFocused = it.isFocused
-                        }
                 )
             }
         }

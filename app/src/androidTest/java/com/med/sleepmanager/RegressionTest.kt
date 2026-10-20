@@ -253,30 +253,32 @@ class RegressionTest {
             "Sync then stop on sleep & wake toggle"
         ).assertIsNotEnabled()
 
-        list.performScrollToNode(hasText("Use custom delay"))
-        composeRule.onNodeWithContentDescription("Use custom delay toggle")
-            .performClick()
+        // Custom Delay moved from Advanced to the Home Grace Period dialog.
+        openSection("Home", "SleepManager")
+        composeRule.onNodeWithTag("main_list")
+            .performScrollToNode(hasText("Grace period"))
+        composeRule.onNodeWithTag("grace_option_custom").performClick()
+        composeRule.onNodeWithTag("custom_delay_option_300000").performClick()
+        composeRule.onNodeWithText("Done").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            AppPreferences.customDelayEnabled(targetContext)
+            AppPreferences.customDelayEnabled(targetContext) &&
+                AppPreferences.customDelayMs(targetContext) == 300_000L
         }
         assertTrue(AppPreferences.sleepGraceMs(targetContext) == 0L)
 
-        list.performScrollToNode(hasText("Delay before sleep actions"))
-        composeRule.onNodeWithText("5 min")
-            .performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            AppPreferences.customDelayMs(targetContext) == 300_000L
-        }
-
-        list.performScrollToNode(hasText("Battery level"))
+        openSection("Advanced settings", "Advanced")
+        composeRule.onNodeWithTag("main_list")
+            .performScrollToNode(hasText("Battery level"))
         composeRule.onNodeWithContentDescription("Battery level toggle")
             .performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             AppPreferences.batteryConditionEnabled(targetContext)
         }
 
-        composeRule.onNodeWithText("< 50%")
-            .performClick()
+        // The reset baseline is 30%; two taps select 50%.
+        repeat(2) {
+            composeRule.onNodeWithTag("battery_threshold_increase").performClick()
+        }
         composeRule.waitUntil(timeoutMillis = 5_000) {
             AppPreferences.batteryBelowPercent(targetContext) == 50
         }

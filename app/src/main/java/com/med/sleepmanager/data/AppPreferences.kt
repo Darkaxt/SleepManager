@@ -1,6 +1,7 @@
 package com.med.sleepmanager.data
 
 import android.content.Context
+import com.med.sleepmanager.api.SleepManagerStatusProvider
 
 object AppPreferences {
     private const val PREFS = "sleep_manager"
@@ -40,8 +41,12 @@ object AppPreferences {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun isEnabled(context: Context) = prefs(context).getBoolean(KEY_ENABLED, false)
-    fun setEnabled(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_ENABLED, value).apply()
+    fun setEnabled(context: Context, value: Boolean) {
+        val preferences = prefs(context)
+        if (preferences.getBoolean(KEY_ENABLED, false) == value) return
+        preferences.edit().putBoolean(KEY_ENABLED, value).apply()
+        SleepManagerStatusProvider.notifyChanged(context)
+    }
 
     fun manageWifi(context: Context) = prefs(context).getBoolean(KEY_WIFI, false)
     fun setManageWifi(context: Context, value: Boolean) =
@@ -219,7 +224,7 @@ object AppPreferences {
     const val BATTERY_SAVER_OFF = "off"
 
     private val CUSTOM_DELAY_VALUES =
-        setOf(60_000L, 300_000L, 600_000L, 1_800_000L)
+        setOf(60_000L, 120_000L, 180_000L, 300_000L, 600_000L, 900_000L, 1_800_000L, 3_600_000L)
     private val BATTERY_SAVER_MODES =
         setOf(BATTERY_SAVER_IGNORE, BATTERY_SAVER_ON, BATTERY_SAVER_OFF)
 

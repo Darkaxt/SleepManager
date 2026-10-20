@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.3.1 — 2026-10-20
+
+- Incorporate upstream 0.7.3 through 851a1bd: touch controls, expanded Custom
+  durations, RAOfflineProxy 2.2 permission support and read-only Status API v1.
+- Retain official Tailscale/TailDNS ownership, exact restore targets, existing
+  settings and Darkaxt-only updates with the permanent paired signer.
+- Main 0.7.3.1/code 568; unchanged Helper 1.1.7.1/code 1122. No device deployment.
+
+## 0.7.3
+
+### Touch-first interface
+- Removed the legacy custom gamepad focus/navigation layer in favor of standard Android touch interaction.
+- Reworked Home Grace Period into a 2×2 selector with Immediate, 5s, 10s and Custom.
+- Added Custom choices of 1, 2, 3, 5, 10, 15 and 30 minutes, plus 1 hour; selection is saved only on Done and the selected label displays clearly.
+- Moved Custom Delay out of Advanced to avoid a duplicate setting.
+- Replaced the Advanced battery threshold control with a −/+ stepper (20–60% in 10% increments).
+- Removed unnecessary hidden Home placeholders and added stable keys to main list cards.
+
+### RAOfflineProxy compatibility
+- Added the native Android runtime permission prompt for RAOfflineProxy v2.2 builds that declare CONTROL_PROXY as a dangerous permission.
+- Preserved the existing guidance for earlier install-time permission behavior and existing sleep/wake integration semantics.
+
+### Read-only launcher Status API
+- Added versioned ContentProvider `content://com.med.sleepmanager.status` with `enabled` and `serviceRunning` fields and state change notifications.
+- Added provider instrumentation tests and `docs/status-api.md` for third-party launcher integration.
+- The API does not expose controls or private diagnostics and does not start SleepManager's service.
+
+### Compatibility
+- Main app: **0.7.3 / versionCode 567**.
+- Helper: **1.1.7 / versionCode 1121**, unchanged.
+- Android **9 / API 28 or newer**; upgrades retain existing settings when signatures match.
+- Existing sleep/wake automation, restore ownership and sync integrations are unchanged.
+- The separate 0.7.4 background UI refresh optimization is not included.
+
+---
+
 Release notes are organized by version and focus on user-visible behavior first.
 
 ## 0.7.2.1 — 2026-10-10

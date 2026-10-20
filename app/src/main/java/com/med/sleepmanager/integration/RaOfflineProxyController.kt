@@ -94,6 +94,22 @@ object RaOfflineProxyController {
         context.checkSelfPermission(CONTROL_PERMISSION) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
 
+    /**
+     * RAOfflineProxy 2.2 exposes CONTROL_PROXY as a dangerous runtime
+     * permission. Older builds define it as install-time normal permission:
+     * only prompt the user if the installed provider explicitly declares
+     * the new protection level.
+     */
+    fun canRequestControlPermission(context: Context): Boolean {
+        if (!isInstalled(context) || !providerAvailable(context)) return false
+        return runCatching {
+            @Suppress("DEPRECATION")
+            val info = context.packageManager.getPermissionInfo(CONTROL_PERMISSION, 0)
+            (info.protectionLevel and android.content.pm.PermissionInfo.PROTECTION_MASK_BASE) ==
+                android.content.pm.PermissionInfo.PROTECTION_DANGEROUS
+        }.getOrDefault(false)
+    }
+
     fun isBatteryUnrestricted(context: Context): Boolean {
         val powerManager =
             context.getSystemService(Context.POWER_SERVICE) as? PowerManager

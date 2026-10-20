@@ -26,6 +26,7 @@ import android.util.Log
 import android.view.Display
 import java.util.concurrent.Executors
 import com.med.sleepmanager.MainActivity
+import com.med.sleepmanager.api.SleepManagerStatusProvider
 import com.med.sleepmanager.R
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.DiagnosticsCycleStore
@@ -767,6 +768,7 @@ class SleepManagerService : Service() {
     override fun onCreate() {
         super.onCreate()
         running = true
+        SleepManagerStatusProvider.notifyChanged(this)
         createNotificationChannel()
         startForegroundCompat()
         registerScreenReceiver()
@@ -4723,6 +4725,7 @@ class SleepManagerService : Service() {
         }
 
         running = false
+        SleepManagerStatusProvider.notifyChanged(this)
         Log.i(TAG, "Service stopped; active sleep transaction preserved")
         super.onDestroy()
     }

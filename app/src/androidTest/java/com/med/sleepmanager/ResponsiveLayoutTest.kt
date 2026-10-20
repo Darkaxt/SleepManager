@@ -127,15 +127,12 @@ class ResponsiveLayoutTest {
             "Sync then stop on sleep & wake toggle"
         ).assertIsNotEnabled()
 
+        // The duplicate Advanced Custom Delay section is intentionally gone.
         composeRule.onNodeWithTag("main_list")
-            .performScrollToNode(hasText("Advanced sleep conditions"))
-        composeRule.onNodeWithText("Advanced sleep conditions")
+            .performScrollToNode(hasText("Conditions"))
+        composeRule.onNodeWithText("Conditions")
             .assertIsDisplayed()
-
-        composeRule.onNodeWithTag("main_list")
-            .performScrollToNode(hasText("Use custom delay"))
-        composeRule.onNodeWithText("Use custom delay")
-            .assertIsDisplayed()
+        composeRule.onNodeWithText("Use custom delay").assertDoesNotExist()
     }
 
     @Test

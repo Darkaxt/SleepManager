@@ -5,6 +5,47 @@ support for TailDNS.
 
 The specification in [SPECIFICATION.md](SPECIFICATION.md) is authoritative.
 
+## October 20 upstream promotion
+
+Authorization: `already_authorized` by monitor-taildns-upstream-updates.
+Maintained synchronization and TD-1 through TD-9 remain authoritative. No TD-10
+or physical-device control/acceptance is in this maintenance scope.
+
+- Stage 1 — Merge and verify exact upstream: **COMPLETE**. Incorporate all 44
+  missing commits through 851a1bdd0f99c99fc4881447be2d041381774529 (0.7.3),
+  preserving package-aware VPN transactions, settings, updater origin and pinned
+  paired signer. Main becomes 0.7.3.1/code 568; unchanged Helper stays
+  1.1.7.1/code 1122. Pass fork/protocol tests, clean unit tests, both release
+  lint-vital gates, clean paired permanent-key release assemblies and diff review.
+- Stage 2 — Publish and independently verify: **ACTIVE**. Commit/push only
+  after Stage 1 passes; normal paired release must pass the established repository
+  signing/emulator gates. Independently verify published source/tag/state, package
+  IDs, versions/codes, common pinned signer, update URLs and every asset hash.
+
+Merge conflicts are limited to main version metadata and release notes. Keep the
+fork's existing reviewed build/publication workflows: upstream now requires its
+maintainer's GitHub-verified annotated tag, while this fork's established channel
+publishes exact immutable signed artifacts after its main-release emulator gates.
+No existing fork check is removed: permanent APK certificate, exact source/tag,
+artifact ID/hashes, paired Helper compatibility and emulator gates stay required.
+Upstream workflow history is incorporated without adopting its distinct release
+identity/convention or inventing a new signing credential.
+
+Stage 1 acceptance is verified: fork artifact/protocol contracts, clean unit tests,
+both release lint-vital and debug lint checks, clean paired permanently signed
+release APKs and instrumentation compilation pass. Gate ticket 1527 acquired
+Local\Darka.AndroidGradleBuildGate; observed workers 2/parallel false/Gradle heap
+3 GB, test fork 1 with 512 MB heap; Kotlin daemon requested 3 GB. No memory failure
+or native tasks. Preflight was clear; native single-use completion and post-build
+daemon exit are verified. Local SDK inspection confirms both package/version/code
+identities, the common pinned signer and compiled TailDNS/fork-update/Status API
+markers. VPN transaction, Helper/protocol and updater source remain byte-identical
+to the previously verified fork. No scope-serving refactoring need was found.
+Stage 1 blockers: none. Stage 2 publication/independent verification remains
+unresolved until delivered; no tracked deferrals. The original dirty checkout
+and its untracked wrapper are preserved; use only this isolated task-owned clone.
+Evidence: D:/Tools/taildns-upstream-verification-20261020/.
+
 ## October 6 upstream promotion
 
 Authorization: `already_authorized` by `monitor-taildns-upstream-updates`.

@@ -1,14 +1,12 @@
 package com.med.sleepmanager.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -21,28 +19,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.med.sleepmanager.R
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.ui.components.SectionTitle
 import com.med.sleepmanager.ui.components.SettingsCard
-import com.med.sleepmanager.ui.controller.controllerFocusHighlight
 import com.med.sleepmanager.ui.feedbackClick
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.med.sleepmanager.ui.feedbackChange
 
 @Composable
@@ -51,72 +43,116 @@ internal fun SleepGraceSelector(
     customDelayEnabled: Boolean,
     customDelayMs: Long,
     onChange: (Long) -> Unit,
-    onCustom: () -> Unit
+    onCustomDelaySelected: (Long) -> Unit
 ) {
-    val options = listOf(
+    val options: List<Pair<String, Long?>> = listOf(
         stringResource(R.string.grace_immediate) to 0L,
         stringResource(R.string.duration_5_seconds) to 5000L,
-        stringResource(R.string.duration_10_seconds) to 10000L
+        stringResource(R.string.duration_10_seconds) to 10000L,
+        stringResource(R.string.custom) to null
     )
+    val customDurations = listOf(
+        stringResource(R.string.duration_1_minute) to 60_000L,
+        stringResource(R.string.duration_2_minutes) to 120_000L,
+        stringResource(R.string.duration_3_minutes) to 180_000L,
+        stringResource(R.string.duration_5_minutes) to 300_000L,
+        stringResource(R.string.duration_10_minutes) to 600_000L,
+        stringResource(R.string.duration_15_minutes) to 900_000L,
+        stringResource(R.string.duration_30_minutes) to 1_800_000L,
+        stringResource(R.string.duration_1_hour) to 3_600_000L
+    )
+    val selectedCustomDuration = customDurations
+        .firstOrNull { (_, duration) -> duration == customDelayMs }?.first
+        ?: stringResource(R.string.unknown)
+    var showCustomPicker by remember { mutableStateOf(false) }
+    var stagedCustomDelay by remember { mutableStateOf(customDelayMs) }
 
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Text(stringResource(R.string.grace_period), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
         Text(
-            stringResource(R.string.grace_period),
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            stringResource(
-                if (customDelayEnabled) {
-                    R.string.grace_period_custom_delay_active
-                } else {
-                    R.string.grace_period_description
-                }
-            ),
+            stringResource(if (customDelayEnabled) R.string.grace_period_custom_delay_active else R.string.grace_period_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(options.size) { index ->
-                val (label, value) = options[index]
-                FilterChip(
-                    selected = !customDelayEnabled && valueMs == value,
-                    onClick = feedbackClick { onChange(value) },
-                    enabled = !customDelayEnabled,
-                    label = { Text(label) }
-                )
-            }
-
-            item {
-                FilterChip(
-                    selected = customDelayEnabled,
-                    onClick = feedbackClick(onCustom),
-                    label = { Text(stringResource(R.string.custom)) }
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.chunked(2).forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { (label, duration) ->
+                        val selected = if (duration == null) customDelayEnabled else !customDelayEnabled && valueMs == duration
+                        OutlinedButton(
+                            onClick = feedbackClick {
+                                if (duration == null) {
+                                    stagedCustomDelay = customDelayMs
+                                    showCustomPicker = true
+                                } else onChange(duration)
+                            },
+                            modifier = Modifier.weight(1f).heightIn(min = 54.dp)
+                                .testTag(if (duration == null) "grace_option_custom" else "grace_option_$duration")
+                                .semantics { this.selected = selected },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                                contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                            )
+                        ) { Text(label, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+                    }
+                }
             }
         }
-
         if (customDelayEnabled) {
-            TextButton(onClick = feedbackClick(onCustom)) {
-                Text(
-                    stringResource(
-                        R.string.advanced_with_duration,
-                        formatDuration(customDelayMs)
-                    )
-                )
-            }
+            Text(
+                text = stringResource(R.string.grace_custom_selected_duration, selectedCustomDuration),
+                modifier = Modifier.testTag("grace_custom_selected_duration"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
-}
 
-internal enum class AdvancedScrollTarget {
-    CUSTOM_DELAY
+    if (showCustomPicker) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showCustomPicker = false },
+            title = { Text(stringResource(R.string.use_custom_delay)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.custom_delay_description), style = MaterialTheme.typography.bodyMedium)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        customDurations.chunked(2).forEach { row ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { (label, duration) ->
+                                    val selected = stagedCustomDelay == duration
+                                    OutlinedButton(
+                                        onClick = feedbackClick { stagedCustomDelay = duration },
+                                        modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+                                            .testTag("custom_delay_option_$duration")
+                                            .semantics { this.selected = selected },
+                                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+                                        )
+                                    ) { Text(label, maxLines = 2) }
+                                }
+                                if (row.size == 1) androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = feedbackClick {
+                    showCustomPicker = false
+                    onCustomDelaySelected(stagedCustomDelay)
+                }) { Text(stringResource(R.string.done)) }
+            },
+            dismissButton = {
+                TextButton(onClick = feedbackClick { showCustomPicker = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -126,8 +162,6 @@ internal fun AdvancedSettingsPage(
     syncConditionsAvailable: Boolean,
     onPeriodicSyncWhileSleepingChange: (Boolean) -> Unit,
     onSyncThenStopOnSleepWakeChange: (Boolean) -> Unit,
-    customDelayEnabled: Boolean,
-    customDelayMs: Long,
     batteryConditionEnabled: Boolean,
     batteryBelowPercent: Int,
     notChargingOnly: Boolean,
@@ -135,28 +169,14 @@ internal fun AdvancedSettingsPage(
     scheduleEnabled: Boolean,
     scheduleStartMinutes: Int,
     scheduleEndMinutes: Int,
-    onCustomDelayEnabledChange: (Boolean) -> Unit,
-    onCustomDelayChange: (Long) -> Unit,
     onBatteryConditionEnabledChange: (Boolean) -> Unit,
     onBatteryBelowPercentChange: (Int) -> Unit,
     onNotChargingOnlyChange: (Boolean) -> Unit,
     onBatterySaverModeChange: (String) -> Unit,
     onScheduleEnabledChange: (Boolean) -> Unit,
     onPickScheduleStart: () -> Unit,
-    onPickScheduleEnd: () -> Unit,
-    scrollTarget: AdvancedScrollTarget? = null,
-    scrollRequestId: Int = 0,
-    onScrollTargetConsumed: () -> Unit = {}
+    onPickScheduleEnd: () -> Unit
 ) {
-    val customDelayRequester = remember { BringIntoViewRequester() }
-
-    LaunchedEffect(scrollRequestId, scrollTarget) {
-        if (scrollTarget == AdvancedScrollTarget.CUSTOM_DELAY) {
-            customDelayRequester.bringIntoView()
-            onScrollTargetConsumed()
-        }
-    }
-
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -201,70 +221,6 @@ internal fun AdvancedSettingsPage(
         }
 
         SectionTitle(
-            title = stringResource(R.string.advanced_sleep_conditions),
-            subtitle = stringResource(R.string.advanced_sleep_conditions_description)
-        )
-
-        SettingsCard(
-            modifier = Modifier.bringIntoViewRequester(customDelayRequester)
-        ) {
-            AdvancedToggleRow(
-                title = stringResource(R.string.use_custom_delay),
-                subtitle = if (customDelayEnabled) {
-                    stringResource(
-                        R.string.custom_delay_active_description,
-                        formatDuration(customDelayMs)
-                    )
-                } else {
-                    stringResource(R.string.custom_delay_description)
-                },
-                checked = customDelayEnabled,
-                onCheckedChange = onCustomDelayEnabledChange
-            )
-
-            if (customDelayEnabled) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.delay_before_sleep_actions),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    val options = listOf(
-                        stringResource(R.string.duration_1_minute) to 60_000L,
-                        stringResource(R.string.duration_5_minutes) to 300_000L,
-                        stringResource(R.string.duration_10_minutes) to 600_000L,
-                        stringResource(R.string.duration_30_minutes) to 1_800_000L
-                    )
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(options.size) { index ->
-                            val (label, value) = options[index]
-                            FilterChip(
-                                modifier = Modifier.testTag(
-                                    "custom_delay_option_$value"
-                                ),
-                                selected = customDelayMs == value,
-                                onClick = feedbackClick { onCustomDelayChange(value) },
-                                label = { Text(label) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        SectionTitle(
             title = stringResource(R.string.conditions),
             subtitle = stringResource(R.string.conditions_description)
         )
@@ -284,29 +240,35 @@ internal fun AdvancedSettingsPage(
             )
 
             if (batteryConditionEnabled) {
+                val decreaseDescription = stringResource(R.string.battery_threshold_decrease)
+                val increaseDescription = stringResource(R.string.battery_threshold_increase)
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val levels = listOf(20, 30, 40, 50, 60)
-                        items(levels.size) { index ->
-                            val level = levels[index]
-                            FilterChip(
-                                selected = batteryBelowPercent == level,
-                                onClick = feedbackClick { onBatteryBelowPercentChange(level) },
-                                label = {
-                                    Text(
-                                        stringResource(
-                                            R.string.battery_level_chip,
-                                            level
-                                        )
-                                    )
-                                }
-                            )
-                        }
+                        OutlinedButton(
+                            onClick = feedbackClick { onBatteryBelowPercentChange((batteryBelowPercent - 10).coerceAtLeast(20)) },
+                            enabled = batteryBelowPercent > 20,
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("battery_threshold_decrease")
+                                .semantics { contentDescription = decreaseDescription }
+                        ) { Text("−") }
+                        Text(
+                            stringResource(R.string.battery_level_chip, batteryBelowPercent),
+                            modifier = Modifier.weight(1f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        OutlinedButton(
+                            onClick = feedbackClick { onBatteryBelowPercentChange((batteryBelowPercent + 10).coerceAtMost(60)) },
+                            enabled = batteryBelowPercent < 60,
+                            modifier = Modifier.heightIn(min = 48.dp).testTag("battery_threshold_increase")
+                                .semantics { contentDescription = increaseDescription }
+                        ) { Text("+") }
                     }
                 }
             }
@@ -459,12 +421,10 @@ internal fun AdvancedToggleRow(
 ) {
     val toggleContentDescription =
         stringResource(R.string.toggle_content_description, title)
-    var toggleFocused by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .controllerFocusHighlight(toggleFocused)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -494,7 +454,6 @@ internal fun AdvancedToggleRow(
             onCheckedChange = feedbackChange(onCheckedChange),
             enabled = enabled,
             modifier = Modifier
-                .onFocusChanged { toggleFocused = it.isFocused }
                 .semantics {
                     contentDescription = toggleContentDescription
                 }

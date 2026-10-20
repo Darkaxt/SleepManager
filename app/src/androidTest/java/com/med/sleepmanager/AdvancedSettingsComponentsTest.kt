@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.ui.screens.AdvancedSettingsPage
+import com.med.sleepmanager.ui.screens.SleepGraceSelector
 import com.med.sleepmanager.ui.theme.SleepManagerTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -32,8 +34,6 @@ class AdvancedSettingsComponentsTest {
     fun everyAdvancedControl_invokesItsExpectedCallback() {
         var periodic by mutableStateOf(false)
         var syncThenStop by mutableStateOf(false)
-        var customDelayEnabled by mutableStateOf(false)
-        var customDelayMs by mutableStateOf(60_000L)
         var batteryCondition by mutableStateOf(false)
         var batteryBelow by mutableStateOf(30)
         var notCharging by mutableStateOf(false)
@@ -53,8 +53,6 @@ class AdvancedSettingsComponentsTest {
                         syncConditionsAvailable = true,
                         onPeriodicSyncWhileSleepingChange = { periodic = it },
                         onSyncThenStopOnSleepWakeChange = { syncThenStop = it },
-                        customDelayEnabled = customDelayEnabled,
-                        customDelayMs = customDelayMs,
                         batteryConditionEnabled = batteryCondition,
                         batteryBelowPercent = batteryBelow,
                         notChargingOnly = notCharging,
@@ -62,10 +60,6 @@ class AdvancedSettingsComponentsTest {
                         scheduleEnabled = scheduleEnabled,
                         scheduleStartMinutes = 23 * 60,
                         scheduleEndMinutes = 7 * 60,
-                        onCustomDelayEnabledChange = {
-                            customDelayEnabled = it
-                        },
-                        onCustomDelayChange = { customDelayMs = it },
                         onBatteryConditionEnabledChange = {
                             batteryCondition = it
                         },
@@ -94,27 +88,15 @@ class AdvancedSettingsComponentsTest {
         ).performScrollTo().performClick()
         assertTrue(syncThenStop)
 
-        composeRule.onNodeWithContentDescription("Use custom delay toggle")
-            .performScrollTo().performClick()
-        assertTrue(customDelayEnabled)
-
-        composeRule.onNodeWithTag("custom_delay_option_1800000")
-            .performScrollTo()
-            .performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            customDelayMs == 1_800_000L
-        }
-        assertEquals(1_800_000L, customDelayMs)
-        composeRule.onNodeWithTag("custom_delay_option_1800000")
-            .assertIsSelected()
-
         composeRule.onNodeWithContentDescription("Battery level toggle")
             .performScrollTo().performClick()
         assertTrue(batteryCondition)
 
-        composeRule.onNodeWithText("< 60%")
-            .performScrollTo()
-            .performSemanticsAction(SemanticsActions.OnClick)
+        repeat(3) {
+            composeRule.onNodeWithTag("battery_threshold_increase")
+                .performScrollTo()
+                .performClick()
+        }
         composeRule.waitUntil(timeoutMillis = 5_000) {
             batteryBelow == 60
         }
@@ -149,5 +131,62 @@ class AdvancedSettingsComponentsTest {
 
         assertTrue(startPicked)
         assertTrue(endPicked)
+    }
+
+    @Test
+    fun gracePeriodLargeTouchTargets_customPickerConfirmsOrCancels() {
+        var graceMs by mutableStateOf(5_000L)
+        var customEnabled by mutableStateOf(false)
+        var customMs by mutableStateOf(60_000L)
+
+        composeRule.setContent {
+            SleepManagerTheme {
+                SleepGraceSelector(
+                    valueMs = graceMs,
+                    customDelayEnabled = customEnabled,
+                    customDelayMs = customMs,
+                    onChange = {
+                        customEnabled = false
+                        graceMs = it
+                    },
+                    onCustomDelaySelected = {
+                        customMs = it
+                        customEnabled = true
+                        graceMs = 0L
+                    }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("grace_option_5000").assertIsSelected()
+        composeRule.onNodeWithTag("grace_option_custom").performClick()
+        composeRule.onNodeWithTag("custom_delay_option_120000").performClick()
+        composeRule.onNodeWithText("Cancel").performClick()
+        assertEquals(60_000L, customMs)
+        assertEquals(false, customEnabled)
+
+        composeRule.onNodeWithTag("grace_option_custom").performClick()
+        composeRule.onNodeWithTag("custom_delay_option_120000").performClick()
+        composeRule.onNodeWithText("Done").performClick()
+        assertEquals(120_000L, customMs)
+        assertTrue(customEnabled)
+        composeRule.onNodeWithTag("grace_option_custom").assertIsSelected()
+        composeRule.onNodeWithText("Selected: 2 min").assertIsDisplayed()
+
+        // Ensure the new one-hour choice persists and is displayed using
+        // the same readable duration label as the Custom dialog.
+        composeRule.onNodeWithTag("grace_option_custom").performClick()
+        composeRule.onNodeWithTag("custom_delay_option_3600000").performClick()
+        composeRule.onNodeWithText("Done").performClick()
+        assertEquals(3_600_000L, customMs)
+        assertTrue(customEnabled)
+        composeRule.onNodeWithText("Selected: 1 h").assertIsDisplayed()
+        composeRule.onNodeWithText("Advanced • 3600s").assertDoesNotExist()
+
+        composeRule.onNodeWithTag("grace_option_10000").performClick()
+        assertEquals(10_000L, graceMs)
+        assertEquals(false, customEnabled)
+        composeRule.onNodeWithTag("grace_option_10000").assertIsSelected()
+        composeRule.onNodeWithTag("grace_custom_selected_duration").assertDoesNotExist()
     }
 }

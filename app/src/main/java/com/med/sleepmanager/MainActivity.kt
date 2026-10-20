@@ -345,6 +345,14 @@ class MainActivity : ComponentActivity() {
             activityRefreshToken++
         }
 
+    private val raOfflineProxyControlPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) {
+            pendingExternalNavigation = false
+            activityRefreshToken++
+        }
+
     private val unusedAppRestrictionsLauncher =
         registerForActivityResult(
             ActivityResultContracts.StartActivityForResult()
@@ -858,6 +866,21 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenHelperWifiControlSettingsRequested = {
                         openHelperWifiControlSettings()
+                    },
+                    onRequestRaOfflineProxyControlPermissionRequested = {
+                        if (
+                            RaOfflineProxyController.canRequestControlPermission(
+                                this@MainActivity
+                            ) &&
+                            !RaOfflineProxyController.hasControlPermission(
+                                this@MainActivity
+                            )
+                        ) {
+                            pendingExternalNavigation = true
+                            raOfflineProxyControlPermissionLauncher.launch(
+                                RaOfflineProxyController.CONTROL_PERMISSION
+                            )
+                        }
                     },
                     onOpenRaOfflineProxySettingsRequested = {
                         pendingExternalNavigation = true

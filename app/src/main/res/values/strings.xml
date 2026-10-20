@@ -30,6 +30,7 @@
     <string name="integration_raofflineproxy">RAOfflineProxy</string>
     <string name="raofflineproxy_api_unavailable">Automation API unavailable</string>
     <string name="raofflineproxy_permission_missing">Control permission missing · reinstall SleepManager after RAOfflineProxy</string>
+    <string name="raofflineproxy_permission_grant_needed">Control permission required · tap Allow</string>
     <string name="raofflineproxy_needs_unrestricted">Battery optimization exemption required</string>
     <string name="raofflineproxy_api_unsupported">Unsupported automation API v%1$d</string>
     <string name="raofflineproxy_queue_caching">Caching · %1$d queued</string>
@@ -70,10 +71,10 @@
     <string name="duration_5_seconds">5 s</string>
     <string name="duration_10_seconds">10 s</string>
     <string name="grace_period">Grace period</string>
-    <string name="grace_period_custom_delay_active">Using custom delay from Advanced settings.</string>
+    <string name="grace_period_custom_delay_active">Custom delay is active. Tap Custom to change its duration.</string>
     <string name="grace_period_description">Wait before applying sleep actions. If the device wakes during this period, no changes are applied.</string>
     <string name="custom">Custom</string>
-    <string name="advanced_with_duration">Advanced • %1$s</string>
+    <string name="grace_custom_selected_duration">Selected: %1$s</string>
 
     <string name="advanced_sync_behavior">Advanced sync behavior</string>
     <string name="advanced_sync_behavior_description">Control how supported sync apps run during sleep and wake transitions.</string>
@@ -90,9 +91,13 @@
     <string name="custom_delay_description">Choose a longer delay before sleep actions than the standard Grace period options.</string>
     <string name="delay_before_sleep_actions">Delay before sleep actions</string>
     <string name="duration_1_minute">1 min</string>
+    <string name="duration_2_minutes">2 min</string>
+    <string name="duration_3_minutes">3 min</string>
+    <string name="duration_15_minutes">15 min</string>
     <string name="duration_5_minutes">5 min</string>
     <string name="duration_10_minutes">10 min</string>
     <string name="duration_30_minutes">30 min</string>
+    <string name="duration_1_hour">1 h</string>
     <string name="duration_seconds_compact">%1$ds</string>
 
     <string name="conditions">Conditions</string>
@@ -101,6 +106,8 @@
     <string name="battery_below_percent">Only when battery is below %1$d%%</string>
     <string name="ignore_battery_percentage">Ignore battery percentage</string>
     <string name="battery_level_chip">&lt; %1$d%%</string>
+    <string name="battery_threshold_decrease">Decrease battery threshold</string>
+    <string name="battery_threshold_increase">Increase battery threshold</string>
     <string name="not_charging">Not charging</string>
     <string name="only_when_unplugged">Only when the device is unplugged</string>
     <string name="ignore_charging_state">Ignore charging state</string>

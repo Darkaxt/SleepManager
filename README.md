@@ -62,8 +62,8 @@ SleepManager tracks ownership of these changes so it does not overwrite a state 
 
 SleepManager can delay sleep actions after the screen turns off, which helps avoid unnecessary state changes during very short screen-off periods.
 
-- **Grace Period** — choose Immediate, 5 s or 10 s before SleepManager starts the configured sleep actions.
-- **Custom Delay** — choose a longer delay of 1, 5, 10 or 30 minutes from Advanced settings.
+- **Grace Period** — choose Immediate, 5 s, 10 s or Custom on Home before SleepManager starts configured sleep actions.
+- **Custom** — choose 1, 2, 3, 5, 10, 15 or 30 minutes, or 1 hour, in the Home Grace Period dialog.
 
 If the device wakes before the delay finishes, the pending sleep actions are cancelled.
 
@@ -152,7 +152,7 @@ SleepManager can apply additional conditions before running the configured sleep
 
 All enabled conditions use **AND logic**: every enabled condition must be true for the sleep automation to run.
 
-- **Custom Delay** — choose a longer delay before sleep actions start: 1, 5, 10 or 30 minutes.
+- **Grace Period Custom** — configure a longer Home delay before sleep actions start (1, 2, 3, 5, 10, 15, 30 minutes or 1 hour).
 - **Battery Level** — run sleep actions only when the battery is below the selected threshold.
 - **Not Charging** — run sleep actions only when the device is unplugged.
 - **Battery Saver** — run sleep actions only when Android Battery Saver is ON or OFF, or ignore its state.
@@ -197,6 +197,10 @@ Use **Copy log** to generate a detailed diagnostic report that includes:
 - Recent Android process-exit information on Android 11+ when available
 
 The diagnostic report is designed to make troubleshooting and bug reports easier without requiring ADB.
+
+## Read-only Status API
+
+Starting in SleepManager 0.7.3, launchers can read the user's enabled setting and the foreground service lifecycle using `content://com.med.sleepmanager.status`. This is a versioned, read-only API, without control commands or private diagnostics. See [Status API v1](docs/status-api.md).
 
 ## Updates
 

@@ -5,7 +5,6 @@ import android.os.Build
 import android.provider.Settings
 import android.view.View
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -96,7 +95,6 @@ import com.med.sleepmanager.ui.components.SettingsCard
 import com.med.sleepmanager.ui.components.StatusCard
 import com.med.sleepmanager.ui.components.SyncthingTargetDialog
 import com.med.sleepmanager.ui.components.UpdateAvailableCard
-import com.med.sleepmanager.ui.controller.controllerNavigation
 import com.med.sleepmanager.ui.feedbackClick
 import com.med.sleepmanager.ui.iconRes
 import com.med.sleepmanager.ui.labelRes
@@ -165,6 +163,7 @@ private class IntegrationUiRow(
         onOpenHelperBatteryOptimizationRequested: () -> Unit,
         onOpenHelperWifiControlSettingsRequested: () -> Unit,
         onOpenRaOfflineProxySettingsRequested: () -> Unit,
+        onRequestRaOfflineProxyControlPermissionRequested: () -> Unit,
         onOpenUnusedAppRestrictionsRequested: () -> Unit,
         onRequestUpdateNotificationPermissionRequested: () -> Unit,
         onInstallVerifiedUpdateRequested: (String) -> Unit,
@@ -195,12 +194,6 @@ private class IntegrationUiRow(
         var aboutScrollRequestId by remember {
             mutableStateOf(if (openUpdatesOnLaunch) 1 else 0)
         }
-        var advancedScrollTarget by remember {
-            mutableStateOf<AdvancedScrollTarget?>(null)
-        }
-        var advancedScrollRequestId by remember {
-            mutableStateOf(0)
-        }
         val homeListState = rememberLazyListState()
         val advancedListState = rememberLazyListState()
         val statsListState = rememberLazyListState()
@@ -220,20 +213,6 @@ private class IntegrationUiRow(
             aboutScrollTarget = target
             aboutScrollRequestId++
             currentSection = AppSection.ABOUT
-        }
-
-        fun navigateToAdvanced(target: AdvancedScrollTarget) {
-            advancedScrollTarget = target
-            advancedScrollRequestId++
-            currentSection = AppSection.ADVANCED
-        }
-
-        fun navigateSection(offset: Int) {
-            val sections = AppSection.entries
-            val currentIndex = sections.indexOf(currentSection)
-            val nextIndex =
-                (currentIndex + offset + sections.size) % sections.size
-            currentSection = sections[nextIndex]
         }
 
         val compactLayout = LocalConfiguration.current.screenWidthDp < 600
@@ -342,8 +321,9 @@ private class IntegrationUiRow(
         val basicSyncStopped = remember(refreshToken) {
             basicSyncInstalled && BasicSyncController.isStopped(context)
         }
-        val basicSyncStateApi =
+        val basicSyncStateApi = remember(refreshToken) {
             BasicSyncController.supportsStateApi(context)
+        }
         val basicSyncReady =
             basicSyncInstalled &&
                 !basicSyncStopped &&
@@ -363,6 +343,11 @@ private class IntegrationUiRow(
         val raOfflineProxyControlPermission =
             remember(refreshToken) {
                 RaOfflineProxyController.hasControlPermission(context)
+            }
+        val raOfflineProxyRuntimePermissionSupported =
+            remember(refreshToken, raOfflineProxyControlPermission) {
+                !raOfflineProxyControlPermission &&
+                    RaOfflineProxyController.canRequestControlPermission(context)
             }
         val raOfflineProxyBatteryUnrestricted =
             remember(refreshToken) {
@@ -465,22 +450,6 @@ private class IntegrationUiRow(
         }
 
         ModalNavigationDrawer(
-            modifier =
-                Modifier.controllerNavigation(
-                    listState = currentListState,
-                    enabled = drawerState.isClosed,
-                    onPreviousSection = { navigateSection(-1) },
-                    onNextSection = { navigateSection(1) },
-                    onMenuRequested = {
-                        drawerScope.launch {
-                            if (drawerState.isClosed) {
-                                drawerState.open()
-                            } else {
-                                drawerState.close()
-                            }
-                        }
-                    }
-                ),
             drawerState = drawerState,
             drawerContent = {
                 ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
@@ -667,7 +636,7 @@ private class IntegrationUiRow(
             ) {
                 when (currentSection) {
                     AppSection.HOME -> {
-                item {
+                item(key = "home_status") {
                     StatusCard(
                         enabled = managerEnabled,
                         running = SleepManagerService.running,
@@ -716,7 +685,7 @@ private class IntegrationUiRow(
                     )
                 }
 
-                item {
+                item(key = "home_battery_dashboard") {
                     BatteryDashboardCard(
                         dashboard = batteryDashboard,
                         stats = batteryStats
@@ -858,71 +827,44 @@ private class IntegrationUiRow(
                     }
                 }
 
-                item {
-                    AnimatedVisibility(
-                        visible =
-                            !directRadioControlAvailable &&
-                                !helperInstalled
-                    ) {
+                // Render only the warning that exists: empty animated items
+                // unnecessarily add layout work and spacing while scrolling.
+                if (!directRadioControlAvailable && !helperInstalled) {
+                    item(key = "home_helper_missing") {
                         InfoCard(
-                            title = stringResource(
-                                R.string.home_helper_not_installed_title
-                            ),
-                            text = stringResource(
-                                R.string.home_helper_not_installed_description
-                            ),
+                            title = stringResource(R.string.home_helper_not_installed_title),
+                            text = stringResource(R.string.home_helper_not_installed_description),
                             actionLabel = stringResource(R.string.install_helper),
-                            onAction = {
-                                navigateToAbout(AboutScrollTarget.HELPER)
-                            }
+                            onAction = { navigateToAbout(AboutScrollTarget.HELPER) }
                         )
                     }
                 }
 
-                item {
-                    AnimatedVisibility(
-                        visible =
-                            !directRadioControlAvailable &&
-                                helperInstalled &&
-                                !helperBatteryUnrestricted
-                    ) {
+                if (!directRadioControlAvailable &&
+                    helperInstalled &&
+                    !helperBatteryUnrestricted
+                ) {
+                    item(key = "home_helper_background") {
                         InfoCard(
-                            title = stringResource(
-                                R.string.home_helper_background_title
-                            ),
-                            text = stringResource(
-                                R.string.home_helper_background_description
-                            ),
-                            actionLabel = stringResource(
-                                R.string.home_helper_background_action
-                            ),
-                            onAction =
-                                onOpenHelperBatteryOptimizationRequested
+                            title = stringResource(R.string.home_helper_background_title),
+                            text = stringResource(R.string.home_helper_background_description),
+                            actionLabel = stringResource(R.string.home_helper_background_action),
+                            onAction = onOpenHelperBatteryOptimizationRequested
                         )
                     }
                 }
 
-                item {
-                    AnimatedVisibility(
-                        visible =
-                            !directRadioControlAvailable &&
-                                helperInstalled &&
-                                helperBatteryUnrestricted &&
-                                helperWifiControlAccess
-                                    ?.effectivelyAllowed == false
-                    ) {
+                if (!directRadioControlAvailable &&
+                    helperInstalled &&
+                    helperBatteryUnrestricted &&
+                    helperWifiControlAccess?.effectivelyAllowed == false
+                ) {
+                    item(key = "home_helper_wifi_access") {
                         InfoCard(
-                            title = stringResource(
-                                R.string.home_helper_wifi_control_title
-                            ),
-                            text = stringResource(
-                                R.string.home_helper_wifi_control_description
-                            ),
-                            actionLabel = stringResource(
-                                R.string.home_helper_wifi_control_action
-                            ),
-                            onAction =
-                                onOpenHelperWifiControlSettingsRequested
+                            title = stringResource(R.string.home_helper_wifi_control_title),
+                            text = stringResource(R.string.home_helper_wifi_control_description),
+                            actionLabel = stringResource(R.string.home_helper_wifi_control_action),
+                            onAction = onOpenHelperWifiControlSettingsRequested
                         )
                     }
                 }
@@ -934,19 +876,24 @@ private class IntegrationUiRow(
                     )
                 }
 
-                item {
+                item(key = "home_grace_period") {
                     SettingsCard {
                         SleepGraceSelector(
                             valueMs = sleepGraceMs,
                             customDelayEnabled = customDelayEnabled,
                             customDelayMs = customDelayMs,
                             onChange = { value ->
+                                if (customDelayEnabled) onCustomDelayEnabledChange(false)
                                 onSleepGraceChange(value)
                             },
-                            onCustom = {
-                                navigateToAdvanced(
-                                    AdvancedScrollTarget.CUSTOM_DELAY
-                                )
+                            onCustomDelaySelected = { duration ->
+                                onCustomDelayChange(duration)
+                                if (!onCanScheduleExactAlarmsRequested()) {
+                                    onRequestExactAlarmAccessRequested()
+                                } else {
+                                    onCustomDelayEnabledChange(true)
+                                    onSleepGraceChange(0L)
+                                }
                             }
                         )
                     }
@@ -1044,7 +991,11 @@ private class IntegrationUiRow(
                                     )
                                 !raOfflineProxyControlPermission ->
                                     stringResource(
-                                        R.string.raofflineproxy_permission_missing
+                                        if (raOfflineProxyRuntimePermissionSupported) {
+                                            R.string.raofflineproxy_permission_grant_needed
+                                        } else {
+                                            R.string.raofflineproxy_permission_missing
+                                        }
                                     )
                                 !raOfflineProxyBatteryUnrestricted ->
                                     stringResource(
@@ -1325,6 +1276,29 @@ private class IntegrationUiRow(
                                         R.string.integration_raofflineproxy
                                     )
                                 ) {
+                                    // Keep the two callback branches explicitly typed.
+                                    // Kotlin otherwise infers Any? for a mixed callable/lambda when.
+                                    val requestControlPermission: () -> Unit = {
+                                        onRequestRaOfflineProxyControlPermissionRequested()
+                                    }
+                                    val openBatteryUsageSettings: () -> Unit = {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(
+                                                R.string.raofflineproxy_unrestricted_hint
+                                            ),
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        onOpenRaOfflineProxySettingsRequested()
+                                    }
+                                    val secondaryAction: (() -> Unit)? =
+                                        when {
+                                            raOfflineProxyRuntimePermissionSupported ->
+                                                requestControlPermission
+                                            !raOfflineProxyBatteryUnrestricted ->
+                                                openBatteryUsageSettings
+                                            else -> null
+                                        }
                                     CompactIntegrationRow(
                                         icon = R.drawable.ic_raofflineproxy_mono,
                                         title = stringResource(
@@ -1348,29 +1322,14 @@ private class IntegrationUiRow(
                                             RaOfflineProxyController.open(context)
                                         },
                                         secondaryActionLabel =
-                                            if (!raOfflineProxyBatteryUnrestricted) {
-                                                stringResource(
-                                                    R.string.raofflineproxy_app_settings
-                                                )
-                                            } else {
-                                                null
+                                            when {
+                                                raOfflineProxyRuntimePermissionSupported ->
+                                                    stringResource(R.string.raofflineproxy_app_settings)
+                                                !raOfflineProxyBatteryUnrestricted ->
+                                                    stringResource(R.string.raofflineproxy_app_settings)
+                                                else -> null
                                             },
-                                        onSecondaryAction =
-                                            if (!raOfflineProxyBatteryUnrestricted) {
-                                                {
-                                                    Toast.makeText(
-                                                        context,
-                                                        context.getString(
-                                                            R.string
-                                                                .raofflineproxy_unrestricted_hint
-                                                        ),
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                    onOpenRaOfflineProxySettingsRequested()
-                                                }
-                                            } else {
-                                                null
-                                            }
+                                        onSecondaryAction = secondaryAction
                                     )
                                 }
                             )
@@ -1534,8 +1493,6 @@ private class IntegrationUiRow(
                                         onServiceRefreshRequested()
                                     }
                                 },
-                                customDelayEnabled = customDelayEnabled,
-                                customDelayMs = customDelayMs,
                                 batteryConditionEnabled = batteryConditionEnabled,
                                 batteryBelowPercent = batteryBelowPercent,
                                 notChargingOnly = notChargingOnly,
@@ -1543,23 +1500,6 @@ private class IntegrationUiRow(
                                 scheduleEnabled = scheduleEnabled,
                                 scheduleStartMinutes = scheduleStartMinutes,
                                 scheduleEndMinutes = scheduleEndMinutes,
-                                onCustomDelayEnabledChange = { enabled ->
-                                    if (
-                                        enabled &&
-                                        !onCanScheduleExactAlarmsRequested()
-                                    ) {
-                                        onRequestExactAlarmAccessRequested()
-                                    } else {
-                                        onCustomDelayEnabledChange(enabled)
-
-                                        if (!enabled) {
-                                            onSleepGraceChange(0L)
-                                        }
-                                    }
-                                },
-                                onCustomDelayChange = {
-                                    onCustomDelayChange(it)
-                                },
                                 onBatteryConditionEnabledChange = {
                                     onBatteryConditionEnabledChange(it)
                                 },
@@ -1590,11 +1530,6 @@ private class IntegrationUiRow(
                                     onShowTimePickerRequested(scheduleEndMinutes) { value ->
                                         onScheduleEndMinutesChange(value)
                                     }
-                                },
-                                scrollTarget = advancedScrollTarget,
-                                scrollRequestId = advancedScrollRequestId,
-                                onScrollTargetConsumed = {
-                                    advancedScrollTarget = null
                                 }
                             )
                         }
@@ -1611,7 +1546,8 @@ private class IntegrationUiRow(
                     AppSection.ACTIVITY_LOG -> {
                         item {
                             ActivityLogPage(
-                                context = context
+                                context = context,
+                                refreshToken = refreshToken
                             )
                         }
                     }
