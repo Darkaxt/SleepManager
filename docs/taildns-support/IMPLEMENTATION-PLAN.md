@@ -17,7 +17,7 @@ or physical-device control/acceptance is in this maintenance scope.
   paired signer. Main becomes 0.7.3.1/code 568; unchanged Helper stays
   1.1.7.1/code 1122. Pass fork/protocol tests, clean unit tests, both release
   lint-vital gates, clean paired permanent-key release assemblies and diff review.
-- Stage 2 — Publish and independently verify: **ACTIVE**. Commit/push only
+- Stage 2 — Publish and independently verify: **COMPLETE**. Commit/push only
   after Stage 1 passes; normal paired release must pass the established repository
   signing/emulator gates. Independently verify published source/tag/state, package
   IDs, versions/codes, common pinned signer, update URLs and every asset hash.
@@ -41,8 +41,18 @@ daemon exit are verified. Local SDK inspection confirms both package/version/cod
 identities, the common pinned signer and compiled TailDNS/fork-update/Status API
 markers. VPN transaction, Helper/protocol and updater source remain byte-identical
 to the previously verified fork. No scope-serving refactoring need was found.
-Stage 1 blockers: none. Stage 2 publication/independent verification remains
-unresolved until delivered; no tracked deferrals. The original dirty checkout
+Stage 1 and Stage 2 blockers: none. Tracked deferrals: none.
+Normal public v0.7.3.1 at merge 07564f628b9a3db0fe3b6d3744f9e9340ff838ef
+passed all six jobs in 39376281602: signed clean build, previous-Helper
+compatibility, instrumentation, real emulator sleep/wake, responsive UI and
+source-bound immutable-artifact publication. Independent public downloads
+verified both package IDs, Main 0.7.3.1/568 and Helper 1.1.7.1/1122, their common
+pinned signer, exact source/tag, normal release state, every public asset hash,
+matching update URLs and compiled TailDNS/fork-update/Status API markers.
+Main SHA256: 0592cbf50fb80a1e0a7de79e1be980edac046b08caffc0e9dfbad4dfd2634432.
+Helper SHA256: 5434437b59c50ca723c9bdd59fa76559319455f4677608cff0a32d49badf342f.
+No local/physical device was controlled or installed; CI emulator results are
+not new TD-10 acceptance. Prior releases and permanent signing material survive. The original dirty checkout
 and its untracked wrapper are preserved; use only this isolated task-owned clone.
 Evidence: D:/Tools/taildns-upstream-verification-20261020/.
 
