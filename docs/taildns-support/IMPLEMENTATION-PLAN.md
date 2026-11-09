@@ -25,9 +25,16 @@ independently match expected package/version/code, v2 signature, permanent commo
 certificate and protected Helper permission; compiled client/updater/token markers
 are present. All app/Helper/shared executable source remains unchanged.
 
-Remaining acceptance: established GitHub signing and required emulator gates;
-normal0.7.3.2 publication; independent public APK/manifest/source verification.
-No device installation or control.
+The bounded November9 maintenance is COMPLETE. GitHub42586298740 passes
+isolated signing, full required emulator regressions and normal paired0.7.3.2
+publication from `5cd209697eaf7590f2529f18234ac626cd7f0396`. Independent public retrieval verifies all
+four assets, exact source/tag/normal/latest state, Main0.7.3.2/code569 and unchanged
+Helper1.1.7.1/code1122, both package IDs, common permanent pinned certificate and
+v2 signatures, protected Helper permissions, compiled fork/client/token markers,
+and manifest URLs/hashes. Exact upstream history is incorporated with zero behind.
+No remaining maintenance blocker or tracked deferral; no device installation or
+control and no new TD-10 device acceptance claim. This evidence-only follow-up
+changes no APK payload and requires no additional release.
 Compact evidence: D:/Projects/TailD-support/maintenance/20261109/upstream.
 
 Authorization: `already_authorized` by the request to fork SleepManager and add
