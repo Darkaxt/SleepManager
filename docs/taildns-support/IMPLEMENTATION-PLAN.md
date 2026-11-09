@@ -1,5 +1,35 @@
 # TailDNS integration implementation plan
 
+## November 9 scheduled maintenance
+
+Authoritative scope: SPECIFICATION.md maintained-upstream-sync contract TD-1
+through TD-9; no new TD-10 device acceptance. This maintenance follows verified
+TailDNS Windows +53, Android +51 and TailD Windows +53, within the existing family
+maintenance execution. No additional product stage or device workflow is opened.
+
+Source preparation is complete and ready for integrated validation: exact
+upstream ae74e8b447401e905fa28b191eb9347fab02de54 is merged without rewriting
+history. All four incoming commits affect only README/badge documentation and
+its upstream-owned writer. Its job is explicitly scoped to Baggio94/SleepManager
+so the fork does not acquire another scheduled write. Main becomes0.7.3.2/code569
+from actual upstream0.7.3/code567. Unchanged Helper retains1.1.7.1/code1122.
+Package IDs, all application/Helper/shared code, signing pin, disconnect/restore
+tokens and fork-only updater source are unchanged from verified0.7.3.1.
+
+Integrated local verification passes: focused integration/updater and Python
+artifact/paired-permission tests; clean release lint-vital and both signed APK
+assemblies through gate ticket58bc7a957d184fa69e7a9d8143eb5742. Effective profile
+is two workers, no parallel projects,3GiB heap, one fail-fast test fork; Kotlin
+2.3.21 runs in process. Wrapper/build and daemon exit are verified. Both APKs
+independently match expected package/version/code, v2 signature, permanent common
+certificate and protected Helper permission; compiled client/updater/token markers
+are present. All app/Helper/shared executable source remains unchanged.
+
+Remaining acceptance: established GitHub signing and required emulator gates;
+normal0.7.3.2 publication; independent public APK/manifest/source verification.
+No device installation or control.
+Compact evidence: D:/Projects/TailD-support/maintenance/20261109/upstream.
+
 Authorization: `already_authorized` by the request to fork SleepManager and add
 support for TailDNS.
 

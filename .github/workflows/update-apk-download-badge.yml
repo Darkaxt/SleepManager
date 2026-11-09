@@ -1,0 +1,80 @@
+name: Update APK download badge
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-badge:
+    if: github.repository == 'Baggio94/SleepManager'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count main app APK downloads across published releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          total = 0
+          page = 1
+
+          while True:
+              url = f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
+              request = Request(url, headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "User-Agent": "SleepManager-APK-download-badge",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              })
+              with urlopen(request, timeout=30) as response:
+                  releases = json.load(response)
+
+              for release in releases:
+                  if release.get("draft"):
+                      continue
+                  for asset in release.get("assets", []):
+                      name = asset.get("name", "").lower()
+                      if (name.startswith("sleepmanager-")
+                              and name.endswith(".apk")
+                              and not name.startswith("sleepmanager-helper-")):
+                          total += asset.get("download_count", 0)
+
+              if len(releases) < 100:
+                  break
+              page += 1
+
+          message = f"{total / 1_000_000:.1f}M" if total >= 1_000_000 else (
+              f"{total / 1_000:.1f}k" if total >= 1_000 else str(total)
+          )
+          badge = {
+              "schemaVersion": 1,
+              "label": "APK downloads",
+              "message": message,
+              "color": "2A4174",
+          }
+          path = Path(".github/badges/apk-downloads.json")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(badge, indent=2) + "\n", encoding="utf-8")
+          print(f"Main app APK downloads: {total}")
+          PY
+
+      - name: Commit badge updates when counts change
+        run: |
+          git add .github/badges/apk-downloads.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: refresh APK download badge"
+            git push
+          fi

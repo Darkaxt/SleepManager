@@ -1,4 +1,4 @@
-# SleepManager 0.7.3.1 / Helper 1.1.7.1
+# SleepManager 0.7.3.2 / Helper 1.1.7.1
 
 > **Note**
 >
@@ -15,12 +15,14 @@
 
 ## What's New
 
+- Incorporates the complete upstream README/badge history through `ae74e8b44740`. Runtime behavior and the Helper remain unchanged. The upstream badge writer stays scoped to its own repository.
+
 - **RAOfflineProxy v2.2 compatibility** — when the installed version requires the Android runtime **CONTROL_PROXY** permission, SleepManager can request it through the system permission dialog. Older versions continue to use the existing permission guidance.
 - **Read-only Status API v1** — compatible launchers can query whether SleepManager is **enabled** and whether its foreground service is **running**. This API does not change settings or expose private diagnostics. See [Status API documentation](https://github.com/Darkaxt/SleepManager/blob/main/docs/status-api.md).
 
 ## First Install
 
-1. Install **SleepManager 0.7.3.1** from the release assets below.
+1. Install **SleepManager 0.7.3.2** from the release assets below.
 2. Open SleepManager and choose what you want it to manage.
 3. If needed, SleepManager will guide you through installing and setting up the **Compatibility Helper**.
 4. Enable **SleepManager**, then tap **Finish setup**.
@@ -28,7 +30,7 @@
 
 ## Maintained fork compatibility
 
-Main 0.7.3.1 (code 568), unchanged Helper 1.1.7.1 (code 1122).
+Main 0.7.3.2 (code 569), unchanged Helper 1.1.7.1 (code 1122).
 Official Tailscale and TailDNS remain supported with active-VPN package selection
 and exact disconnect/restore ownership. Both APKs retain the permanent fork
 certificate and signature-protected Helper contract. Updates come only from
