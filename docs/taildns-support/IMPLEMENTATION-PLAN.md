@@ -1,5 +1,35 @@
 # TailDNS integration implementation plan
 
+## November 10 scheduled maintenance
+
+Authoritative scope: SPECIFICATION.md maintained-upstream-sync TD-1 through TD-9.
+The source-integration stage is COMPLETE; integrated acceptance is verified.
+This follows independently verified TailDNS Windows +54, Android +52 and TailD
+Windows +56. Stage10/B12 in TailD and original TD-10 device acceptance remain open;
+this scheduled maintenance does not install or control a device.
+
+Exact upstream90419395a08f591c965e4b8c49a11b36c14835dc is merged with history intact.
+Three incoming commits add the upstream GPL-3.0 license and update README/badges.
+The upstream badge writer remains scoped to Baggio94/SleepManager. All application,
+Helper/shared runtime, package IDs, active-VPN ownership, disconnect/restore tokens,
+fork-only updater and permanent common signing pin remain unchanged. Main becomes
+0.7.3.3/code570 from actual upstream0.7.3/code567; Helper remains1.1.7.1/code1122.
+
+Source-integration acceptance passes: focused integration/updater contracts,
+Python artifact/paired-permission checks, clean release lint-vital and signed
+Main/Helper assemblies. Native readinessc860b42cc37b8b049e5c8f017a1810db attempt1 /
+workflow28c91193dbb2ed3ff48e8cbcffa68a3d verifies whole-process exit. The actual
+Gradle child verifies two workers, no parallel projects,3GiB heaps, one fail-fast
+test fork and single-use daemon retirement. Kotlin uses its supported in-process
+project property. Both APKs independently match expected packages, versions/codes,
+permanent common signer, protected permissions and fork/client/restore markers.
+All executable app/Helper/shared source remains unchanged.
+
+Final-delivery stage is ACTIVE: ordinary merge push, existing isolated GitHub
+signing/emulator gates, normal paired0.7.3.3 release and independent public APK/
+manifest/source verification remain. No device actions or device-acceptance claim.
+Compact evidence: D:/Projects/TailD-support/maintenance/20261110.
+
 ## November 9 scheduled maintenance
 
 Authoritative scope: SPECIFICATION.md maintained-upstream-sync contract TD-1

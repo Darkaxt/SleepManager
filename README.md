@@ -13,8 +13,9 @@ It can temporarily turn off Wi-Fi, Bluetooth and supported background services w
 
 <p align="center">
   <a href="https://github.com/Baggio94/SleepManager/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/Baggio94/SleepManager?style=for-the-badge&amp;label=Stars&amp;labelColor=1A1B20&amp;color=2A4174" height="26"></a>
-  <a href="https://github.com/Baggio94/SleepManager/releases"><img alt="Main app APK downloads across all releases" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FBaggio94%2FSleepManager%2Fmain%2F.github%2Fbadges%2Fapk-downloads.json&amp;style=for-the-badge&amp;labelColor=1A1B20" height="26"></a>
+  <a href="https://github.com/Baggio94/SleepManager/releases"><img alt="Downloads of SleepManager APK across all releases" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FBaggio94%2FSleepManager%2Fmain%2F.github%2Fbadges%2Fapk-downloads.json&amp;style=for-the-badge&amp;label=DOWNLOADS&amp;labelColor=1A1B20" height="26"></a>
   <a href="https://baggio94.github.io/SleepManager/"><img alt="SleepManager website" src="https://img.shields.io/badge/Website-SleepManager-2A4174?style=for-the-badge&amp;labelColor=1A1B20" height="26"></a>
+  <a href="LICENSE"><img alt="GPL-3.0 license" src="https://img.shields.io/badge/License-GPL--3.0-2A4174?style=for-the-badge&amp;labelColor=1A1B20" height="26"></a>
 </p>
 
 ## Main Features
@@ -349,3 +350,9 @@ helper/build/outputs/apk/debug/helper-debug.apk
 - [Latest Release](https://github.com/Darkaxt/SleepManager/releases/latest)
 - [RELEASE_NOTES.md](RELEASE_NOTES.md) — what's new in the current release
 - [CHANGELOG.md](CHANGELOG.md) — full version history
+
+## License
+
+SleepManager is licensed under the **GNU General Public License v3.0** (GPL-3.0-only).
+
+See the [LICENSE](LICENSE) file for the full license text.

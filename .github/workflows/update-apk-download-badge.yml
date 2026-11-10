@@ -59,7 +59,7 @@ jobs:
           )
           badge = {
               "schemaVersion": 1,
-              "label": "APK downloads",
+              "label": "DOWNLOADS",
               "message": message,
               "color": "2A4174",
           }
