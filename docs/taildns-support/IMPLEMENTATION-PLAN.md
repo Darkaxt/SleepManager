@@ -25,9 +25,15 @@ project property. Both APKs independently match expected packages, versions/code
 permanent common signer, protected permissions and fork/client/restore markers.
 All executable app/Helper/shared source remains unchanged.
 
-Final-delivery stage is ACTIVE: ordinary merge push, existing isolated GitHub
-signing/emulator gates, normal paired0.7.3.3 release and independent public APK/
-manifest/source verification remain. No device actions or device-acceptance claim.
+Final-delivery acceptance is COMPLETE. GitHub42783487376 passes required isolated
+signing/emulator/publication gates from `659179cc34505b0afc21f16df03c82d251ffcdce`. Independent public
+retrieval verifies four normal/latest assets, exact source/tag, Main0.7.3.3/code570
+and unchanged Helper1.1.7.1/code1122, both package IDs, common pinned certificate,
+v2 signatures/protected permissions and manifest URLs/hashes. Exact upstream
+history is present with zero behind. No device/TD-10 acceptance is claimed; no
+remaining source or release blocker. The private task checkpoint separately
+records a protected local readiness-input cleanup residual for manual resolution.
+This evidence-only follow-up changes no APK payload and requires no new release.
 Compact evidence: D:/Projects/TailD-support/maintenance/20261110.
 
 ## November 9 scheduled maintenance
