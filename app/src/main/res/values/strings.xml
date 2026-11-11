@@ -26,6 +26,11 @@
     <string name="integration_syncthing_fork">Syncthing-Fork</string>
     <string name="integration_tailscale">Tailscale / TailDNS</string>
     <string name="integration_jamesdsp">JamesDSP</string>
+    <string name="integration_keymapper">Key Mapper</string>
+    <string name="integration_keymapper_requires_47">Requires Key Mapper 4.7+</string>
+    <string name="integration_keymapper_active">Mappings active</string>
+    <string name="integration_keymapper_paused">Mappings paused</string>
+    <string name="integration_keymapper_unknown">State unknown · open Key Mapper to sync</string>
     <string name="integration_basicsync">BasicSync</string>
     <string name="integration_raofflineproxy">RAOfflineProxy</string>
     <string name="raofflineproxy_api_unavailable">Automation API unavailable</string>

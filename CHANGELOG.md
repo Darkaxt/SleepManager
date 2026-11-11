@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.8.0.1 — 2026-11-11
+
+- Incorporate upstream 0.8.0 through `76d1f0ca689a`: optional Key Mapper 4.7+
+  mappings control and background Home refresh with change-based invalidation.
+- Preserve official Tailscale/TailDNS active-VPN ownership, exact restore tokens,
+  retained settings, Darkaxt-only updates and the permanent common signing pin.
+- Main 0.8.0.1/code571; unchanged Helper1.1.7.1/code1122. No device actions.
+
+## 0.8.0 — 2026-11-10
+
+### Key Mapper integration
+- Added optional **Key Mapper 4.7.0+** state-aware mappings control, off by default.
+- Pauses mappings only when they were observed active before the sleep transaction.
+- Resumes only mappings that SleepManager requested to pause; respects manually paused mappings.
+- Unknown initial state is left unchanged; does not stop Key Mapper or its accessibility service.
+- Added mapping status and restore ownership to App Integrations / diagnostics.
+
+### Home UI responsiveness
+- Moved periodic Home live-status reads and change comparison off the UI thread.
+- Invalidates only affected Compose state for metadata, dashboard, stats and Activity log.
+- Retains the 3-second foreground cadence, immediate action refresh and lifecycle safeguards.
+- Added JVM tests for the change-detection policy and Key Mapper behavior.
+
+### Compatibility and validation
+- Main app: **0.8.0 / versionCode 570**.
+- Helper remains **1.1.7 / versionCode 1121**.
+- Key Mapper **4.7.0+** is required for the new integration.
+- Normal mappings pause/resume and Syncthing-Fork STOP/FOLLOW were observed on AYN Thor.
+- Existing signing identity and Android 9+ minimum remain unchanged.
+
+---
+
 ## 0.7.3.1 — 2026-10-20
 
 - Incorporate upstream 0.7.3 through 851a1bd: touch controls, expanded Custom

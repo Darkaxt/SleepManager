@@ -1,38 +1,55 @@
-# SleepManager 0.7.3.3 / Helper 1.1.7.1
+# SleepManager 0.8.0.1 / Helper 1.1.7.1
+
+SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **Home screen smoother**, especially on high-refresh-rate Android handhelds.
 
 > **Note**
 >
-> **Recent AYN and Retroid devices:** SleepManager supports direct Wi-Fi and Bluetooth control, so the **Compatibility Helper is no longer required** on supported recent AYN and Retroid handhelds.
+> **Recent compatible AYN and Retroid devices:** Wi-Fi and Bluetooth can be controlled directly, without the Compatibility Helper.
 >
-> **Other devices / brands:** install the new **SleepManager Helper** when prompted and grant its **battery optimization exemption**. If SleepManager reports that Wi-Fi control access is required, enable it in **Settings → Apps → Special app access → Wi-Fi control → SleepManager Helper**.
+> **Other devices:** the optional **SleepManager Helper 1.1.7.1** remains available for Wi-Fi/Bluetooth control. If prompted, exempt the Helper from battery optimization and allow Wi-Fi control access in Android settings.
 
 > [!WARNING]
-> **AYANEO / KONKR devices — disable DuraSpeed.**
->
-> On devices with **DuraSpeed**, turn it **OFF** in Android Settings. DuraSpeed may restrict SleepManager, its Compatibility Helper and sync integrations in the background, preventing Wi-Fi/Bluetooth restoration after long standby.
->
-> **Battery usage → Unrestricted is not enough:** DuraSpeed must be disabled separately. This resolved overnight restoration failures on a KONKR Pocket Advance.
+> **AYANEO / KONKR devices with DuraSpeed:** disable **DuraSpeed** in Android Settings. Battery usage set to Unrestricted does not override DuraSpeed's background restrictions.
 
 ## What's New
 
-- Incorporates the complete upstream GPL-3.0 license and README/badge history through `90419395a08f`. Runtime behavior and the Helper remain unchanged. The upstream badge writer stays scoped to its own repository.
+### Key Mapper 4.7+ Integration
 
-- **RAOfflineProxy v2.2 compatibility** — when the installed version requires the Android runtime **CONTROL_PROXY** permission, SleepManager can request it through the system permission dialog. Older versions continue to use the existing permission guidance.
-- **Read-only Status API v1** — compatible launchers can query whether SleepManager is **enabled** and whether its foreground service is **running**. This API does not change settings or expose private diagnostics. See [Status API documentation](https://github.com/Darkaxt/SleepManager/blob/main/docs/status-api.md).
+SleepManager can now manage **Key Mapper mappings** as part of a normal sleep/wake cycle.
 
-## First Install
+- **Pause on sleep:** when mappings are running, SleepManager requests a pause when its sleep actions begin.
+- **Resume on wake:** SleepManager requests a resume only when it was responsible for pausing those mappings.
+- **Respect manual pauses:** mappings already paused before sleep are left untouched, including after wake.
+- **Safe when the state is unknown:** SleepManager does not send a blind pause request before receiving Key Mapper's state.
+- **Optional and off by default:** enable Key Mapper in **App Integrations**. Key Mapper's accessibility service and saved mappings are not modified.
 
-1. Install **SleepManager 0.7.3.3** from the release assets below.
-2. Open SleepManager and choose what you want it to manage.
-3. If needed, SleepManager will guide you through installing and setting up the **Compatibility Helper**.
-4. Enable **SleepManager**, then tap **Finish setup**.
+Requires **Key Mapper 4.7.0 or newer**, which exposes the mapping-state API used by SleepManager.
 
+### Smoother Home Screen
+
+Home screen updates now run in the background and refresh only what has changed. This makes scrolling smoother while keeping battery, integration and Activity information up to date.
+
+## Compatibility
+
+- SleepManager **0.8.0.1 / versionCode 571**
+- SleepManager Helper **1.1.7.1 / versionCode 1122** (unchanged)
+- Android **9 / API 28 or newer**
+- Key Mapper **4.7.0+** for the new integration
+- Existing SleepManager settings are retained when updating an official signed build
+- No root, Shizuku or ADB is required for normal use
+
+## Installation and Updating
+
+Install **SleepManager-0.8.0.1.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+
+On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
+
+To use Key Mapper integration, install **Key Mapper 4.7.0+** and enable its integration in SleepManager after Key Mapper reports its mapping state.
 
 ## Maintained fork compatibility
 
-Main 0.7.3.3 (code 570), unchanged Helper 1.1.7.1 (code 1122).
-Official Tailscale and TailDNS remain supported with active-VPN package selection
-and exact disconnect/restore ownership. Both APKs retain the permanent fork
-certificate and signature-protected Helper contract. Updates come only from
-Darkaxt/SleepManager. Existing settings are preserved by in-place fork updates.
-This publication does not install or control any device.
+This release merges exact upstream76d1f0ca689a259bdbf87ca40fe526ae1cc0190b.
+Official Tailscale and TailDNS retain package-aware active-VPN selection and exact
+disconnect/restore ownership. Both APKs use the existing permanent fork certificate
+and signature-protected Helper contract. Updates come only from Darkaxt/SleepManager;
+fork settings/data remain compatible. No device installation or validation is claimed.

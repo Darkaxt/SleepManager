@@ -186,7 +186,8 @@ internal fun CompactIntegrationRow(
     onOpen: (() -> Unit)? = null,
     preserveIconColors: Boolean = false,
     secondaryActionLabel: String? = null,
-    onSecondaryAction: (() -> Unit)? = null
+    onSecondaryAction: (() -> Unit)? = null,
+    statusActive: Boolean? = null
 ) {
     val compact = LocalConfiguration.current.screenWidthDp < 600
     val toggleContentDescription =
@@ -243,10 +244,11 @@ internal fun CompactIntegrationRow(
                 )
 
                 status?.let {
-                    val active =
+                    val active = statusActive ?: (
                         it.contains("Running", ignoreCase = true) ||
                             it.contains("Connected", ignoreCase = true) ||
                             it.contains("Starting", ignoreCase = true)
+                        )
                     Text(
                         "•",
                         style = MaterialTheme.typography.bodyMedium,

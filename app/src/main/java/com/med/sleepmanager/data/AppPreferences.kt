@@ -13,6 +13,7 @@ object AppPreferences {
     private const val KEY_SYNCTHING = "syncthing"
     private const val KEY_TAILSCALE = "tailscale"
     private const val KEY_JAMES_DSP = "james_dsp"
+    private const val KEY_KEY_MAPPER = "key_mapper"
     private const val KEY_BASICSYNC = "basicsync"
     private const val KEY_RA_OFFLINE_PROXY = "raofflineproxy"
     private const val KEY_PERIODIC_SYNC_WHILE_SLEEPING = "periodic_sync_while_sleeping"
@@ -89,6 +90,12 @@ object AppPreferences {
 
     fun setManageJamesDsp(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_JAMES_DSP, value).apply()
+
+    fun manageKeyMapper(context: Context) =
+        prefs(context).getBoolean(KEY_KEY_MAPPER, false)
+
+    fun setManageKeyMapper(context: Context, value: Boolean) =
+        prefs(context).edit().putBoolean(KEY_KEY_MAPPER, value).apply()
 
     fun manageBasicSync(context: Context) =
         prefs(context).getBoolean(KEY_BASICSYNC, false)

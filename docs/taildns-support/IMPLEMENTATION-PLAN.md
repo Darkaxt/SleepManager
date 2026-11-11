@@ -1,5 +1,35 @@
 # TailDNS integration implementation plan
 
+## November 11 maintained upstream synchronization
+
+Authoritative scope: SPECIFICATION.md maintained-upstream-sync and TD-1 through TD-9.
+source-integration is COMPLETE; final-delivery is ACTIVE. Focused integration,
+updater and UI-state policies, Python artifact contracts, release lint-vital and
+clean signed Main/Helper assemblies pass. Native readinessb0967b37fe02e9e5b990c181e5e0628c
+attempt1/workflow543a7b5ebc24bc934665e4b61cc2f9b7 verifies whole-tree and daemon exit;
+two workers/no parallel projects/3GiB requested heaps/one fail-fast test fork and
+single-use daemon retirement are verified. Both actual APKs verify packages,
+versions/codes, common pinned signer, paired permissions and old/new runtime markers.
+This ordered maintenance follows independently verified TailDNS Windows+55,
+Android+53 and TailD Windows+57. TailD Stage10/B12 and original TD-10 acceptance
+remain open; this maintenance does not install/control devices or change providers.
+
+Exact upstream 76d1f0ca689a259bdbf87ca40fe526ae1cc0190b adds two commits, including actual upstream
+0.8.0/code570. Fork Main is 0.8.0.1/code571; unchanged Helper1.1.7.1/code1122.
+Only four document/version conflicts require resolution. All canonical runtime
+changes merge normally: optional, off-by-default Key Mapper state/owned restoration
+and single-worker Home snapshot/change detection with existing lifecycle/cadence.
+Fork Tailscale controller, transaction tokens, signature permissions, Helper/shared
+source, updater origin and permanent signing identity remain unchanged.
+
+Verified source-integration acceptance: integration/updater/new UI-state policy unit tests,
+Python artifact contracts, release lint-vital, clean signed pair, local package/
+version/code/signer/compiled marker and source-contract verification before commit.
+final-delivery acceptance: ordinary history-preserving push, existing GitHub
+signing/emulator gates, normal paired 0.8.0.1 release and independent public
+package/code/common signer/hash/manifest URL/source verification. Compact evidence:
+D:/Projects/TailD-support/maintenance/20261111.
+
 ## November 10 scheduled maintenance
 
 Authoritative scope: SPECIFICATION.md maintained-upstream-sync TD-1 through TD-9.

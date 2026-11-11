@@ -21,6 +21,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import java.util.concurrent.Executors
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -57,6 +58,7 @@ import com.med.sleepmanager.qs.SleepManagerTileService
 import com.med.sleepmanager.service.SleepManagerService
 import com.med.sleepmanager.ui.screens.SleepManagerScreen
 import com.med.sleepmanager.ui.state.SleepManagerUiState
+import com.med.sleepmanager.ui.state.LiveUiRefreshSnapshot
 import com.med.sleepmanager.ui.state.SleepManagerViewModel
 import com.med.sleepmanager.ui.theme.SleepManagerTheme
 import com.med.sleepmanager.update.UpdateCheckScheduler
@@ -128,6 +130,12 @@ class MainActivity : ComponentActivity() {
         get() = uiState.manageJamesDspEnabled
         set(value) {
             uiViewModel.update { it.copy(manageJamesDspEnabled = value) }
+        }
+
+    internal var manageKeyMapperEnabledState: Boolean
+        get() = uiState.manageKeyMapperEnabled
+        set(value) {
+            uiViewModel.update { it.copy(manageKeyMapperEnabled = value) }
         }
 
     internal var manageBasicSyncEnabledState: Boolean
@@ -362,6 +370,73 @@ class MainActivity : ComponentActivity() {
         }
 
     private val statusRefreshHandler = Handler(Looper.getMainLooper())
+    private val uiRefreshExecutor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "SleepManagerLiveUiRefresh").apply { isDaemon = true }
+    }
+    // All flags below are only accessed by the main thread. A single worker
+    // skips overlapping polls when an app/provider responds slowly.
+    private var uiRefreshInFlight = false
+    private var uiRefreshActive = false
+    private var uiRefreshGeneration = 0L
+    private var previousUiSnapshot: LiveUiRefreshSnapshot? = null
+
+    private fun requestLiveUiRefresh() {
+        if (!uiRefreshActive || uiRefreshInFlight || isFinishing || isDestroyed) return
+        uiRefreshInFlight = true
+        val generation = uiRefreshGeneration
+        val appContext = applicationContext
+
+        uiRefreshExecutor.execute {
+            val result = runCatching { LiveUiRefreshSnapshot.read(appContext) }
+            statusRefreshHandler.post {
+                uiRefreshInFlight = false
+                if (!uiRefreshActive || uiRefreshGeneration != generation ||
+                    isFinishing || isDestroyed
+                ) return@post
+
+                result.onSuccess { snapshot ->
+                    val changes = snapshot.signature()
+                        .changesSince(previousUiSnapshot?.signature())
+                    previousUiSnapshot = snapshot
+
+                    uiViewModel.update { state ->
+                        state.copy(
+                            metadataRefreshToken = state.metadataRefreshToken +
+                                if (changes.metadataChanged) 1 else 0,
+                            activityLogRefreshToken = state.activityLogRefreshToken +
+                                if (changes.eventsChanged) 1 else 0,
+                            liveBatteryDashboard = if (changes.dashboardChanged) {
+                                snapshot.dashboard
+                            } else {
+                                state.liveBatteryDashboard
+                            },
+                            liveBatteryStats = if (changes.statsChanged) {
+                                snapshot.stats
+                            } else {
+                                state.liveBatteryStats
+                            },
+                            currentWifiState = if (snapshot.directRadioAvailable) {
+                                snapshot.wifiEnabled
+                            } else {
+                                state.currentWifiState
+                            },
+                            currentBluetoothState = if (snapshot.directRadioAvailable) {
+                                snapshot.bluetoothEnabled
+                            } else {
+                                state.currentBluetoothState
+                            },
+                            currentTailscaleConnected = snapshot.tailscaleConnected
+                        )
+                    }
+                }.onFailure { error ->
+                    // On unexpected provider errors, retain the legacy cache
+                    // refresh so the UI never becomes permanently stale.
+                    Log.w("SleepManager", "Background UI poll failed", error)
+                    activityRefreshToken++
+                }
+            }
+        }
+    }
     private val statusRefreshRunnable = object : Runnable {
         override fun run() {
             if (!isFinishing && !isDestroyed) {
@@ -382,10 +457,9 @@ class MainActivity : ComponentActivity() {
                 refreshScheduleSettingsState()
                 refreshUpdateSettingsState()
 
-                // Re-read every UI-facing state while the Activity is visible:
-                // manager/service state, enabled actions, helper availability,
-                // Syncthing targets/selection/version, behavior recap and last activity.
-                activityRefreshToken++
+                // Keep the 3-second poll; only invalidate Compose caches
+                // when a real difference arrives from the background worker.
+                requestLiveUiRefresh()
 
                 statusRefreshHandler.postDelayed(this, STATUS_REFRESH_INTERVAL_MS)
             }
@@ -393,19 +467,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshIntegrationRuntimeStates() {
-        if (RadioController.directAvailable()) {
-            currentWifiState = RadioController.currentWifiEnabled(this)
-            currentBluetoothState =
-                RadioController.currentBluetoothEnabled(this)
-        }
-
-        currentTailscaleConnected =
-            if (TailscaleController.isInstalled(this)) {
-                TailscaleController.isConnected(this)
-            } else {
-                null
-            }
-
         if (
             BasicSyncController.isInstalled(this) &&
             BasicSyncController.supportsStateApi(this)
@@ -592,6 +653,7 @@ class MainActivity : ComponentActivity() {
         manageSyncthingEnabledState = AppPreferences.manageSyncthing(this)
         manageTailscaleEnabledState = AppPreferences.manageTailscale(this)
         manageJamesDspEnabledState = AppPreferences.manageJamesDsp(this)
+        manageKeyMapperEnabledState = AppPreferences.manageKeyMapper(this)
         manageBasicSyncEnabledState = AppPreferences.manageBasicSync(this)
         manageRaOfflineProxyEnabledState =
             AppPreferences.manageRaOfflineProxy(this)
@@ -713,6 +775,13 @@ class MainActivity : ComponentActivity() {
                     onManageJamesDspChange = { enabled ->
                         AppPreferences.setManageJamesDsp(this@MainActivity, enabled)
                         manageJamesDspEnabledState = enabled
+                    },
+                    onManageKeyMapperChange = { enabled ->
+                        AppPreferences.setManageKeyMapper(this@MainActivity, enabled)
+                        manageKeyMapperEnabledState = enabled
+                        if (!enabled && managerEnabledState) {
+                            refreshRunningService()
+                        }
                     },
                     onManageBasicSyncChange = { enabled ->
                         if (
@@ -1041,11 +1110,16 @@ class MainActivity : ComponentActivity() {
         refreshBackgroundReliabilityAsync()
         refreshDeviceCapabilitiesAsync()
 
+        uiRefreshActive = true
+        uiRefreshGeneration++
+        previousUiSnapshot = null
         statusRefreshHandler.removeCallbacks(statusRefreshRunnable)
         statusRefreshRunnable.run()
     }
 
     override fun onPause() {
+        uiRefreshActive = false
+        uiRefreshGeneration++
         statusRefreshHandler.removeCallbacks(statusRefreshRunnable)
         if (!AppPreferences.manageBasicSync(this)) {
             BasicSyncController.stopStateObserver()
@@ -1053,7 +1127,17 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onDestroy() {
+        uiRefreshActive = false
+        uiRefreshGeneration++
+        statusRefreshHandler.removeCallbacks(statusRefreshRunnable)
+        uiRefreshExecutor.shutdownNow()
+        super.onDestroy()
+    }
+
     override fun onStop() {
+        uiRefreshActive = false
+        uiRefreshGeneration++
         statusRefreshHandler.removeCallbacks(statusRefreshRunnable)
 
         if (helperStateReceiverRegistered) {

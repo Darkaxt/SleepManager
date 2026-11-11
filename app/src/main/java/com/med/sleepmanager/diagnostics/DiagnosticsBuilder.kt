@@ -20,6 +20,7 @@ import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.JamesDspController
+import com.med.sleepmanager.integration.KeyMapperController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
 import com.med.sleepmanager.integration.connector.BasicSyncConnector
@@ -81,6 +82,8 @@ object DiagnosticsBuilder {
         val jamesDsp = JamesDspController.selectedTarget(context)
         val jamesDspPending =
             SleepCycleStore.connectorChange(context, JamesDspConnector.id)
+        val keyMapperPending =
+            SleepCycleStore.connectorChange(context, KeyMapperController.CONNECTOR_ID)
         val basicSyncVersion = BasicSyncController.versionName(context)
         val basicSyncState = BasicSyncController.lastObservedState()
         val basicSyncPending =
@@ -145,6 +148,7 @@ object DiagnosticsBuilder {
                 if (syncthingPending) add("Syncthing-Fork")
                 if (tailscalePending != null) add("Tailscale")
                 if (jamesDspPending != null) add("JamesDSP")
+                if (keyMapperPending != null) add("Key Mapper")
                 if (basicSyncPending != null) add("BasicSync")
                 if (raOfflineProxyPending != null) add("RAOfflineProxy")
                 if (batterySaverOwned.owned) add("Battery Saver")
@@ -464,6 +468,7 @@ object DiagnosticsBuilder {
             appendLine("- Syncthing-Fork: ${AppPreferences.manageSyncthing(context)}")
             appendLine("- Tailscale: ${AppPreferences.manageTailscale(context)}")
             appendLine("- JamesDSP: ${AppPreferences.manageJamesDsp(context)}")
+            appendLine("- Key Mapper: ${AppPreferences.manageKeyMapper(context)}")
             appendLine("- BasicSync: ${AppPreferences.manageBasicSync(context)}")
             appendLine("- RAOfflineProxy: ${AppPreferences.manageRaOfflineProxy(context)}")
             appendLine("- Closed-lid protection: ${AppPreferences.manageClosedLidProtection(context)}")
@@ -576,6 +581,13 @@ object DiagnosticsBuilder {
                     } else {
                         "not installed"
                     }
+            )
+            appendLine(
+                "- Key Mapper: " +
+                    (KeyMapperController.versionName(context)?.let { "installed • $it" }
+                        ?: "not installed") +
+                    " · state=${KeyMapperController.currentState(context)}" +
+                    " · compatible=${KeyMapperController.isCompatible(context)}"
             )
             appendLine(
                 "- BasicSync: " +
@@ -717,6 +729,10 @@ object DiagnosticsBuilder {
             appendLine(
                 "- Tailscale transaction: " +
                     (tailscalePending?.restoreToken ?: "none")
+            )
+            appendLine(
+                "- Key Mapper transaction: " +
+                    (keyMapperPending?.restoreToken ?: "none")
             )
             appendLine(
                 "- JamesDSP transaction: " +

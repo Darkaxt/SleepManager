@@ -32,6 +32,7 @@
         <package android:name="com.raofflineproxy" />
         <package android:name="james.dsp" />
         <package android:name="me.timschneeberger.rootlessjamesdsp" />
+        <package android:name="io.github.sds100.keymapper" />
         <provider android:authorities="com.raofflineproxy.config" />
     </queries>
 
@@ -117,6 +118,15 @@
             android:name=".service.PeriodicSyncReceiver"
             android:enabled="true"
             android:exported="false" />
+
+        <!-- Key Mapper 4.7+ publishes mappings state; never mutates it by itself. -->
+        <receiver
+            android:name=".integration.KeyMapperStateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.github.sds100.keymapper.ACTION_MAPPINGS_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".service.BootReceiver"
