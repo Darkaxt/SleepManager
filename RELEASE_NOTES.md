@@ -1,4 +1,4 @@
-# SleepManager 0.8.0.1 / Helper 1.1.7.1
+# SleepManager 0.8.0.2 / Helper 1.1.7.1
 
 SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **Home screen smoother**, especially on high-refresh-rate Android handhelds.
 
@@ -11,7 +11,13 @@ SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **H
 > [!WARNING]
 > **AYANEO / KONKR devices with DuraSpeed:** disable **DuraSpeed** in Android Settings. Battery usage set to Unrestricted does not override DuraSpeed's background restrictions.
 
-## What's New
+## Maintained history update
+
+This fork update incorporates three upstream badge/documentation commits. Main and
+Helper runtime behavior is unchanged; the upstream base remains0.8.0. Existing
+fork compatibility, settings, package IDs and paired signing identities remain.
+
+## Existing upstream0.8.0 features
 
 ### Key Mapper 4.7+ Integration
 
@@ -31,7 +37,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Compatibility
 
-- SleepManager **0.8.0.1 / versionCode 571**
+- SleepManager **0.8.0.2 / versionCode 572**
 - SleepManager Helper **1.1.7.1 / versionCode 1122** (unchanged)
 - Android **9 / API 28 or newer**
 - Key Mapper **4.7.0+** for the new integration
@@ -40,7 +46,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Installation and Updating
 
-Install **SleepManager-0.8.0.1.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+Install **SleepManager-0.8.0.2.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
 
 On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
 
@@ -48,7 +54,7 @@ To use Key Mapper integration, install **Key Mapper 4.7.0+** and enable its inte
 
 ## Maintained fork compatibility
 
-This release merges exact upstream76d1f0ca689a259bdbf87ca40fe526ae1cc0190b.
+This release merges exact upstream1be00c5680d729d17b51908e427f75466712c17a.
 Official Tailscale and TailDNS retain package-aware active-VPN selection and exact
 disconnect/restore ownership. Both APKs use the existing permanent fork certificate
 and signature-protected Helper contract. Updates come only from Darkaxt/SleepManager;

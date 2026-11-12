@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0.2 — 2026-11-12
+
+- Merge all three upstream badge/documentation commits through `1be00c5680d7`.
+- Preserve upstream base0.8.0 and existing Main/Helper behavior; no new runtime feature.
+- Main0.8.0.2/code572; unchanged Helper1.1.7.1/code1122, package IDs, permanent
+  common signer, signature-protected pairing, retained settings and fork update origin.
+
 ## 0.8.0.1 — 2026-11-11
 
 - Incorporate upstream 0.8.0 through `76d1f0ca689a`: optional Key Mapper 4.7+

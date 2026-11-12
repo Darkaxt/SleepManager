@@ -1,5 +1,30 @@
 # TailDNS integration implementation plan
 
+## November 12 maintained upstream synchronization
+
+Authoritative maintained-upstream-sync/TD-1 through TD-9 apply. source-integration
+is COMPLETE; final-delivery is ACTIVE. Focused integration/updater/UI-state unit
+contracts, Python artifact contracts, release lint-vital and clean signed Main/Helper
+assemblies pass. Native readiness3c09b9d2b43bd22a437dd7089292fa9b attempt1/workflow3dc7a9d9ee6e431b1e8fdd725ca75022
+verifies whole-tree/daemon exit and the required resource profile. Local APKs verify
+package IDs, versions/codes, common pinned signer, paired permissions and preserved
+compiled integration/update markers. Exact upstream1be00c5680d729d17b51908e427f75466712c17a is three commits
+ahead of forkca0f1d08efdc1f98b539e9a4d1d9e671e4109d31; only badge metadata and a README badge cache URL change.
+The conflict-free history merge preserves all runtime/shared/Helper/update/signing
+source. Actual upstream remains0.8.0/code570; fork Main0.8.0.2/code572, unchanged
+Helper1.1.7.1/code1122. No new runtime behavior or real-device acceptance is claimed.
+
+The ordered prerequisite TailDNS Windows+56, Android+54 and TailD Windows+58
+normal releases are independently verified. TailD Stage10/B12 and original TD-10
+remain open. No device, provider-policy or production-history actions occur.
+
+Verified source acceptance: focused fork-contract unit tests, Python artifact
+contracts, release lint-vital and clean signed Main/Helper assemblies, then local
+package/version/code/common-signer/source verification before commit/push.
+Final delivery requires existing GitHub signing/emulator/publication gates and
+independently retrieved normal paired0.8.0.2 release/manifest/source verification.
+Compact receipts: D:/Projects/TailD-support/maintenance/20261112.
+
 ## November 11 maintained upstream synchronization
 
 source-integration is COMPLETE; final-delivery is COMPLETE for this maintenance.
