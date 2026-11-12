@@ -2,28 +2,30 @@
 
 ## November 12 maintained upstream synchronization
 
-Authoritative maintained-upstream-sync/TD-1 through TD-9 apply. source-integration
-is COMPLETE; final-delivery is ACTIVE. Focused integration/updater/UI-state unit
-contracts, Python artifact contracts, release lint-vital and clean signed Main/Helper
-assemblies pass. Native readiness3c09b9d2b43bd22a437dd7089292fa9b attempt1/workflow3dc7a9d9ee6e431b1e8fdd725ca75022
-verifies whole-tree/daemon exit and the required resource profile. Local APKs verify
-package IDs, versions/codes, common pinned signer, paired permissions and preserved
-compiled integration/update markers. Exact upstream1be00c5680d729d17b51908e427f75466712c17a is three commits
-ahead of forkca0f1d08efdc1f98b539e9a4d1d9e671e4109d31; only badge metadata and a README badge cache URL change.
-The conflict-free history merge preserves all runtime/shared/Helper/update/signing
-source. Actual upstream remains0.8.0/code570; fork Main0.8.0.2/code572, unchanged
-Helper1.1.7.1/code1122. No new runtime behavior or real-device acceptance is claimed.
+source-integration is COMPLETE; final-delivery is COMPLETE for this maintenance.
+Authoritative maintained-upstream-sync/TD-1 through TD-9 are reconciled. All3exact
+upstream badge/README commits through1be00c5680d729d17b51908e427f75466712c17a merge
+without conflicts inf9b8be4065a3ad67655ee142533161bb524d47dc. No runtime/shared/Helper/update/signing
+source changes. Upstream remains0.8.0/code570; fork Main0.8.0.2/code572 and unchanged
+Helper1.1.7.1/code1122 preserve package-aware VPN/exact restore tokens, settings,
+signature permissions/common signer, stable identities and fork-only update origin.
 
-The ordered prerequisite TailDNS Windows+56, Android+54 and TailD Windows+58
-normal releases are independently verified. TailD Stage10/B12 and original TD-10
-remain open. No device, provider-policy or production-history actions occur.
+Focused integration/updater/UI-state tests, Python artifact contracts, release
+lint-vital and clean signed assemblies pass via native readiness3c09b9d2b43bd22a437dd7089292fa9b,
+attempt1/workflow3dc7a9d9ee6e431b1e8fdd725ca75022. Actual required profile, whole-tree
+exit and single-use daemon retirement verify; local APKs verify identities, codes,
+v2/common signer/paired permissions and preserved compiled integration markers.
+GitHub43183000541 passes signing, Helper compatibility, instrumentation, emulator
+screen-off/on E2E, responsive UI and normal publication. Four independently retrieved
+assets verify package IDs, names/codes, common signer/v2/permissions, hashes,
+manifest URLs and exact source/tag. Upstream history has zero behind.
 
-Verified source acceptance: focused fork-contract unit tests, Python artifact
-contracts, release lint-vital and clean signed Main/Helper assemblies, then local
-package/version/code/common-signer/source verification before commit/push.
-Final delivery requires existing GitHub signing/emulator/publication gates and
-independently retrieved normal paired0.8.0.2 release/manifest/source verification.
-Compact receipts: D:/Projects/TailD-support/maintenance/20261112.
+This follows independently verified TailDNS Windows+56/Android+54 and TailD Windows+58.
+Previous releases remain; no device installation/control or TD-10/B12 acceptance
+is inferred from CI. Scoped private signing input and spent task output are cleaned
+transactionally after consumers exit. Compact receipts: `D:/Projects/TailD-support/maintenance/20261112`.
+No source/release blocker remains for this maintenance. Evidence-only changes need
+no additional APK payload release.
 
 ## November 11 maintained upstream synchronization
 
