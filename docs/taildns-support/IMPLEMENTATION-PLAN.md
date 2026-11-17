@@ -2,29 +2,39 @@
 
 ## November 17 maintained upstream synchronization
 
-Authoritative maintained-upstream-sync/TD-1 through TD-9 apply. source-integration
-is COMPLETE; final-delivery is ACTIVE. Focused integration/updater/UI-state unit
-contracts, Python artifact contracts, release lint-vital and clean signed Main/Helper
-assemblies pass. Native readinessce38ce2d1593d1f5f6bf819915194f11 attempt1/workflow1cb64f2845694479d7434266b5e6e702
-verifies whole-tree/daemon exit and the required resource profile. Local APKs verify
-package IDs, versions/codes, common pinned signer, paired permissions and preserved
-compiled integration/update markers. Exact upstreamfb2cc3a4c228bb4bea960c906d1be150cbfa555c is one commit ahead
-of fork0eaa546bea6f9bd7ac84f618a869687da70296e0, with31fork-only commits. Only download-badge metadata changes.
-The conflict-free history merge preserves all runtime/shared/Helper/update/signing
-source. Upstream stays0.8.0/code570; Main0.8.0.6/code576, unchanged
-Helper1.1.7.1/code1122. No new runtime behavior or device acceptance is claimed.
+source-integration is COMPLETE; final-delivery is COMPLETE for this maintenance.
+Authoritative maintained-upstream-sync/TD-1 through TD-9 are reconciled. Exact
+upstreamfb2cc3a4c228bb4bea960c906d1be150cbfa555c merges without conflicts in
+`7f72d0f43d063e61c79b84b4310efed989f7917a`, preserving both histories. The fork started31ahead/1behind
+and now contains every upstream commit. The incoming commit changes only download-
+badge metadata. No application/shared/Helper/updater/workflow/signing behavior
+changes. Actual upstream remains0.8.0/code570; Main0.8.0.6/code576 and unchanged
+Helper1.1.7.1/code1122 retain active-client selection, exact disconnect/restore
+tokens, official Tailscale support, settings/data compatibility, paired signature
+permissions, common permanent certificate and Darkaxt-only update origin.
 
-TailDNS Windows+59/Android+57 and TailD Windows+61 independently verify. TailD
-Stage10/B12 and original TD-10 remain open. No device, provider-policy or live
-history action is authorized. Git/dependency/build small-file I/O uses exact
-D:/Temp/taildns-maintenance-20261117/sleepmanager; canonical dirty wrappers remain.
+Focused integration/updater/UI-state tests, Python release contracts, release
+lint-vital and clean signed assemblies pass under readinessce38ce2d1593d1f5f6bf819915194f11,
+attempt1/workflow1cb64f2845694479d7434266b5e6e702. Actual required
+Gradle resource profile, native whole-tree exit and single-use daemon retirement
+verify. Local APK package/version/code, pinned common signer/v2, paired permissions
+and compiled integration/update markers verify. Scoped PATH selects the full
+installed Python runtime for the registered gate adapter; global PATH and the
+signing identity remain unchanged.
 
-Verified source acceptance: focused integration/updater/UI-state unit tests,
-Python artifact contracts, release lint-vital, clean signed Main/Helper assemblies
-and local package/version/code/common-certificate verification before commit/push.
-Final delivery requires the existing signing/emulator/publication workflow and
-independent normal paired0.8.0.6 assets/manifest/source verification.
-Compact receipts: D:/Projects/TailD-support/maintenance/20261117.
+GitHub44039897676 passes signing, Helper compatibility, instrumentation, emulator
+sleep/wake E2E, responsive UI and normal paired publication. Independent public
+retrieval verifies all four assets, exact source/tag/normal/latest state, both APK
+identities/versions/codes/common signer/v2/permissions, hashes and manifest URLs.
+Prerequisite TailDNS Windows+59/Android+57 and TailD Windows+61 remain independently
+verified and unchanged. No maintenance blocker or tracked deferral remains.
+
+No physical device is installed or controlled. Original TD-10 and TailD Stage10/
+B12/real rollout/rollback acceptance remain open. Previous verified releases and
+canonical dirty work survive; spent private input/build/public scratch is cleaned
+transactionally after its last consumer. Compact receipts:
+`D:/Projects/TailD-support/maintenance/20261117`. This evidence-only closure changes
+no payload and requires no additional release.
 
 ## November 16 maintained upstream synchronization
 
