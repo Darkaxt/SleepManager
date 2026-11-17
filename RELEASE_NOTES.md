@@ -1,4 +1,4 @@
-# SleepManager 0.8.0.5 / Helper 1.1.7.1
+# SleepManager 0.8.0.6 / Helper 1.1.7.1
 
 SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **Home screen smoother**, especially on high-refresh-rate Android handhelds.
 
@@ -37,7 +37,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Compatibility
 
-- SleepManager **0.8.0.5 / versionCode 575**
+- SleepManager **0.8.0.6 / versionCode 576**
 - SleepManager Helper **1.1.7.1 / versionCode 1122** (unchanged)
 - Android **9 / API 28 or newer**
 - Key Mapper **4.7.0+** for the new integration
@@ -46,7 +46,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Installation and Updating
 
-Install **SleepManager-0.8.0.5.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+Install **SleepManager-0.8.0.6.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
 
 On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
 
@@ -54,7 +54,7 @@ To use Key Mapper integration, install **Key Mapper 4.7.0+** and enable its inte
 
 ## Maintained fork compatibility
 
-This release merges exact upstream7d11974a1852a833d1c54a6cac9bbca65e63c518.
+This release merges exact upstreamfb2cc3a4c228bb4bea960c906d1be150cbfa555c.
 Official Tailscale and TailDNS retain package-aware active-VPN selection and exact
 disconnect/restore ownership. Both APKs use the existing permanent fork certificate
 and signature-protected Helper contract. Updates come only from Darkaxt/SleepManager;
