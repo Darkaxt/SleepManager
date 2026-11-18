@@ -1,5 +1,18 @@
 # TailDNS integration implementation plan
 
+## November 18 maintained upstream synchronization
+
+Authoritative maintained-upstream-sync/TD-1 through TD-9 apply. Exact upstream
+1ccfe82ae4650efce47a04a7e503a79fc8e68732 is one commit ahead of fork
+a2ddf810897856e8d19f8fdad9973c3a05123495 (33 fork-only commits) and changes only
+download-badge metadata. The conflict-free history merge preserves all runtime,
+shared, Helper, update and signing source. Upstream stays 0.8.0/code 570; Main
+0.8.0.7/code 577, unchanged Helper 1.1.7.1/code 1122. Application source is
+identical to verified 0.8.0.6, so the repository's signed CI build (artifact
+contracts, tests, lint and signed Main/Helper assemblies with package/signature
+verification) is the source gate for this metadata-only release. No new runtime
+behavior or device acceptance is claimed; Stage10/B12 and TD-10 remain open.
+
 ## November 17 maintained upstream synchronization
 
 source-integration is COMPLETE; final-delivery is COMPLETE for this maintenance.
