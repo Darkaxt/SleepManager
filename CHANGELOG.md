@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0.10 — 2026-11-21
+
+- Merge the exact upstream download-badge refresh `74d3bf5b9182` with history intact.
+- Upstream base remains 0.8.0; no new runtime feature or Helper change.
+- Main 0.8.0.10/code 580; Helper 1.1.7.1/code 1122, existing package IDs, settings,
+  signature-protected pairing, permanent common certificate and fork update origin.
+
 ## 0.8.0.9 — 2026-11-20
 
 - Merge the exact upstream download-badge refresh `f410a2dd83bc` with history intact.
