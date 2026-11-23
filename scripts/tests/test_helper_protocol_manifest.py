@@ -15,6 +15,16 @@ APP_MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
 HELPER_MANIFEST = ROOT / "helper/src/main/AndroidManifest.xml"
 ANDROID_NAME = "{http://schemas.android.com/apk/res/android}name"
 ANDROID_PERMISSION = "{http://schemas.android.com/apk/res/android}permission"
+ANDROID_PROTECTION_LEVEL = (
+    "{http://schemas.android.com/apk/res/android}protectionLevel"
+)
+
+
+def declared_protection_levels(manifest):
+    return {
+        node.get(ANDROID_NAME): node.get(ANDROID_PROTECTION_LEVEL)
+        for node in manifest.findall("permission")
+    }
 
 
 def protocol_constants():
@@ -69,6 +79,20 @@ class HelperProtocolManifestTest(unittest.TestCase):
         self.assertIn(self.contract["HELPER_PACKAGE"], queried_packages)
 
 
+    def test_both_apps_define_v1_permission_with_signature_protection(self):
+        # The V1 Helper components are guarded by PERMISSION. If only the main
+        # app defined it, another app installed first could define it with a
+        # weaker protection level and reach the Helper without the main app.
+        for manifest in (self.app, self.helper):
+            levels = declared_protection_levels(manifest)
+            self.assertEqual(levels.get(self.contract["PERMISSION"]), "signature")
+        self.assertEqual(
+            declared_protection_levels(self.helper).get(
+                self.contract["PERMISSION_V2"]
+            ),
+            "signature",
+        )
+
     def test_helper_v2_command_service_is_signature_protected(self):
         services = {
             node.get(ANDROID_NAME): node
@@ -90,6 +114,7 @@ class HelperProtocolManifestTest(unittest.TestCase):
             for node in self.helper.findall("uses-permission")
         }
         self.assertIn(self.contract["PERMISSION_V2"], declared_permissions)
+        self.assertIn(self.contract["PERMISSION"], declared_permissions)
         self.assertIn(self.contract["PERMISSION"], used_permissions)
         self.assertIn(self.contract["PERMISSION_V2"], used_permissions)
 

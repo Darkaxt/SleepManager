@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        Also declared by the main app. Both APKs share one signing certificate,
+        so the duplicate signature definition is accepted by PackageManager and
+        prevents a third-party app from defining the V1 permission first.
+    -->
+    <permission
+        android:name="com.med.sleepmanager.permission.CONTROL_HELPER"
+        android:protectionLevel="signature" />
+
     <permission
         android:name="com.med.sleepmanager.helper.permission.CONTROL"
         android:protectionLevel="signature" />
