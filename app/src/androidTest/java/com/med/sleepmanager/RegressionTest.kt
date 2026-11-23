@@ -438,7 +438,9 @@ class RegressionTest {
             .assertTextEquals("SleepManager")
 
         openSection("Advanced settings", "Advanced")
-        composeRule.onNodeWithText("Advanced sync behavior")
+        composeRule.onNodeWithTag("main_list")
+            .performScrollToNode(hasText("Conditions"))
+        composeRule.onNodeWithText("Conditions")
             .assertIsDisplayed()
 
         openSection("Stats", "Stats")

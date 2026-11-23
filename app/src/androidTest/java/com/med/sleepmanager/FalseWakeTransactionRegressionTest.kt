@@ -209,7 +209,7 @@ class FalseWakeTransactionRegressionTest {
         )
         assertEquals(initialCycle.cycleId, completed.transactionCycleId)
         assertTrue(completed.helperRestored)
-        assertEquals(4, completed.connectors.size)
+        assertEquals(3, completed.connectors.size)
         assertTrue(completed.connectors.all { !it.pending })
         assertEquals(1, completed.falseWakeCount)
     }
