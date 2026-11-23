@@ -60,6 +60,47 @@ enum class RecoveryEvent {
     DESTROY_ENABLED
 }
 
+/** What a participant's recovery does at one [RecoveryEvent]. */
+enum class RecoveryBehaviour {
+    /** Restores the owned state, but only on a real wake (screen on, no suppressed false wake). */
+    RESTORE_ON_REAL_WAKE,
+
+    /**
+     * Restores owned state the app or its integration no longer manages,
+     * whatever the screen state. The action itself checks that condition and
+     * always runs, because it also resets its retry state when nothing is owned.
+     */
+    RESTORE_WHEN_UNMANAGED,
+
+    /**
+     * The participant's own recovery policy chooses between restoring the
+     * previous state (real wake) and re-applying the sleep state (still asleep).
+     */
+    RESTORE_OR_REAPPLY,
+
+    /**
+     * Re-asserts the sleep state while effectively sleeping, if pending. Only
+     * the first pending participant in [RestoreParticipants.recoveryOrder]
+     * runs: they are alternative ways of re-asserting the same radio state.
+     */
+    REAPPLY_WHILE_SLEEPING,
+
+    /**
+     * Recovered by replaying the current screen state once: the screen-on flow
+     * restores it on a real wake, the screen-off flow resumes it while asleep.
+     */
+    REPLAY_SCREEN_STATE
+}
+
+data class RecoveryStep(val event: RecoveryEvent, val behaviour: RecoveryBehaviour) {
+    init {
+        require(
+            (event == RecoveryEvent.SCREEN_STATE_REPLAY) ==
+                (behaviour == RecoveryBehaviour.REPLAY_SCREEN_STATE)
+        ) { "$behaviour cannot run at $event" }
+    }
+}
+
 /**
  * One piece of state SleepManager changes during sleep and must restore or
  * explicitly abandon. Every participant is registered once in
@@ -75,6 +116,11 @@ class RestoreParticipant(
     val blocksCycleCompletion: Boolean,
     /** A connector whose ownership is recorded in SleepCycleStore. */
     val cycleConnector: Boolean = false,
+    /**
+     * How service process-death recovery handles this participant. Required:
+     * an empty list is an explicit "no recovery" declaration.
+     */
+    val recovery: List<RecoveryStep>,
     private val pending: (Context, SleepCycleStore.Snapshot) -> Boolean,
     /**
      * Abandons the state on Forget. Null only for cycle connectors, whose
@@ -83,8 +129,17 @@ class RestoreParticipant(
      */
     val forget: ((Context) -> Unit)?
 ) {
+    init {
+        require(recovery.map { it.event }.toSet().size == recovery.size) {
+            "$id declares more than one recovery step for one event"
+        }
+    }
+
     fun isPending(context: Context, cycle: SleepCycleStore.Snapshot): Boolean =
         pending(context, cycle)
+
+    fun recoveryAt(event: RecoveryEvent): RecoveryStep? =
+        recovery.singleOrNull { it.event == event }
 }
 
 object RestoreParticipants {
@@ -96,13 +151,21 @@ object RestoreParticipants {
     const val CHARGING_SEPARATION = "charging_separation"
     const val BASIC_SYNC_STOP_OWNERSHIP = "basicsync_stop_ownership"
 
-    private fun connector(id: String, route: RestoreRoute) =
+    private val replayScreenState =
+        RecoveryStep(RecoveryEvent.SCREEN_STATE_REPLAY, RecoveryBehaviour.REPLAY_SCREEN_STATE)
+
+    private fun connector(
+        id: String,
+        route: RestoreRoute,
+        vararg recovery: RecoveryStep
+    ) =
         RestoreParticipant(
             id = id,
             scope = RestoreScope.SLEEP_CYCLE,
             route = route,
             blocksCycleCompletion = true,
             cycleConnector = true,
+            recovery = listOf(*recovery) + replayScreenState,
             pending = { context, _ -> SleepCycleStore.hasConnectorChange(context, id) },
             forget = null
         )
@@ -117,14 +180,32 @@ object RestoreParticipants {
             scope = RestoreScope.SLEEP_CYCLE,
             route = RestoreRoute.HELPER_RESULT,
             blocksCycleCompletion = true,
+            recovery = listOf(
+                replayScreenState,
+                // Create-time re-apply also requires a Wi-Fi-managing cycle and
+                // an installed Helper; the service action checks both.
+                RecoveryStep(RecoveryEvent.CREATE_ENABLED, RecoveryBehaviour.REAPPLY_WHILE_SLEEPING),
+                RecoveryStep(RecoveryEvent.DESTROY_ENABLED, RecoveryBehaviour.REAPPLY_WHILE_SLEEPING)
+            ),
             pending = { _, cycle ->
                 cycle.active && cycle.helperExpected && !cycle.helperRestored
             },
             forget = { context -> HelperController.forgetPendingState(context) }
         ),
         connector(JamesDspConnector.id, RestoreRoute.IMMEDIATE),
-        connector(KeyMapperController.CONNECTOR_ID, RestoreRoute.IMMEDIATE),
-        connector(RaOfflineProxyConnector.id, RestoreRoute.IMMEDIATE),
+        connector(
+            KeyMapperController.CONNECTOR_ID,
+            RestoreRoute.IMMEDIATE,
+            RecoveryStep(RecoveryEvent.START_ENABLED, RecoveryBehaviour.RESTORE_ON_REAL_WAKE)
+        ),
+        connector(
+            RaOfflineProxyConnector.id,
+            RestoreRoute.IMMEDIATE,
+            // Also in restore-only mode, while the integration is unmanaged
+            // (the service action checks that); a managed integration is
+            // restored by the regular wake flow.
+            RecoveryStep(RecoveryEvent.CREATE, RecoveryBehaviour.RESTORE_ON_REAL_WAKE)
+        ),
         connector(BasicSyncConnector.id, RestoreRoute.IMMEDIATE),
         connector(SyncthingConnector.id, RestoreRoute.AFTER_NETWORK),
         connector(TailscaleConnector.id, RestoreRoute.AFTER_NETWORK),
@@ -133,6 +214,7 @@ object RestoreParticipants {
             scope = RestoreScope.SLEEP_CYCLE,
             route = RestoreRoute.NONE,
             blocksCycleCompletion = false,
+            recovery = listOf(replayScreenState),
             pending = { _, cycle -> cycle.active },
             forget = { context -> SleepCycleStore.clear(context) }
         ),
@@ -141,6 +223,11 @@ object RestoreParticipants {
             scope = RestoreScope.SLEEP_CYCLE,
             route = RestoreRoute.IMMEDIATE,
             blocksCycleCompletion = true,
+            recovery = listOf(
+                replayScreenState,
+                RecoveryStep(RecoveryEvent.CREATE_ENABLED, RecoveryBehaviour.REAPPLY_WHILE_SLEEPING),
+                RecoveryStep(RecoveryEvent.DESTROY_ENABLED, RecoveryBehaviour.REAPPLY_WHILE_SLEEPING)
+            ),
             pending = { context, cycle ->
                 cycle.active && DirectRadioStore.isPendingForCycle(context, cycle.cycleId)
             },
@@ -151,6 +238,11 @@ object RestoreParticipants {
             scope = RestoreScope.SLEEP_CYCLE,
             route = RestoreRoute.NONE,
             blocksCycleCompletion = false,
+            recovery = listOf(
+                replayScreenState,
+                // Resumed on create only; onDestroy re-asserts radios alone.
+                RecoveryStep(RecoveryEvent.CREATE_ENABLED, RecoveryBehaviour.REAPPLY_WHILE_SLEEPING)
+            ),
             pending = { context, cycle ->
                 cycle.active &&
                     RaOfflineProxySleepStore.isPendingForCycle(context, cycle.cycleId)
@@ -162,6 +254,10 @@ object RestoreParticipants {
             scope = RestoreScope.OWNED_STATE,
             route = RestoreRoute.OWNED_STATE_RETRY,
             blocksCycleCompletion = false,
+            recovery = listOf(
+                RecoveryStep(RecoveryEvent.CREATE_ENABLED, RecoveryBehaviour.RESTORE_OR_REAPPLY),
+                replayScreenState
+            ),
             pending = { context, _ -> DeviceControlStore.batterySaver(context).owned },
             forget = null
         ),
@@ -170,6 +266,10 @@ object RestoreParticipants {
             scope = RestoreScope.OWNED_STATE,
             route = RestoreRoute.OWNED_STATE_RETRY,
             blocksCycleCompletion = false,
+            // Lid-driven, not screen-driven: the lid monitor handles it afterwards.
+            recovery = listOf(
+                RecoveryStep(RecoveryEvent.CREATE_ENABLED, RecoveryBehaviour.RESTORE_OR_REAPPLY)
+            ),
             pending = { context, _ -> DeviceControlStore.chargingSeparation(context).owned },
             forget = null
         ),
@@ -178,6 +278,10 @@ object RestoreParticipants {
             scope = RestoreScope.OWNED_STATE,
             route = RestoreRoute.OWNED_STATE_RETRY,
             blocksCycleCompletion = false,
+            recovery = listOf(
+                RecoveryStep(RecoveryEvent.CREATE, RecoveryBehaviour.RESTORE_WHEN_UNMANAGED),
+                RecoveryStep(RecoveryEvent.START_ENABLED, RecoveryBehaviour.RESTORE_WHEN_UNMANAGED)
+            ),
             pending = { context, _ -> SyncStopOwnershipStore.hasBasicSyncOwnership(context) },
             forget = null
         )
@@ -185,6 +289,36 @@ object RestoreParticipants {
 
     fun withRoute(route: RestoreRoute): List<RestoreParticipant> =
         all.filter { it.route == route }
+
+    /**
+     * Execution order of each recovery event, as data. Order matters: device
+     * controls are reconciled before radios are re-asserted, and for
+     * REAPPLY_WHILE_SLEEPING only the first pending participant runs (the
+     * RAOfflineProxy gate, then Direct radios, then the Helper). The screen
+     * replay is one shared action and has no per-participant order. Every
+     * participant declaring a step for an event must appear exactly once.
+     */
+    val recoveryOrder: Map<RecoveryEvent, List<String>> = mapOf(
+        RecoveryEvent.CREATE to listOf(
+            BASIC_SYNC_STOP_OWNERSHIP,
+            RaOfflineProxyConnector.id
+        ),
+        RecoveryEvent.CREATE_ENABLED to listOf(
+            BATTERY_SAVER,
+            CHARGING_SEPARATION,
+            RA_OFFLINE_PROXY_SLEEP_GATE,
+            DIRECT_RADIO,
+            HELPER
+        ),
+        RecoveryEvent.START_ENABLED to listOf(
+            BASIC_SYNC_STOP_OWNERSHIP,
+            KeyMapperController.CONNECTOR_ID
+        ),
+        RecoveryEvent.DESTROY_ENABLED to listOf(
+            DIRECT_RADIO,
+            HELPER
+        )
+    )
 
     fun isRegisteredConnector(connectorId: String): Boolean =
         all.any { it.cycleConnector && it.id == connectorId }

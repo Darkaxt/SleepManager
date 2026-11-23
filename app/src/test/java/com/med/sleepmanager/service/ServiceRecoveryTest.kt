@@ -1,10 +1,26 @@
 package com.med.sleepmanager.service
 
+import com.med.sleepmanager.data.RecoveryBehaviour
+import com.med.sleepmanager.data.RecoveryBehaviour.REAPPLY_WHILE_SLEEPING
+import com.med.sleepmanager.data.RecoveryBehaviour.REPLAY_SCREEN_STATE
+import com.med.sleepmanager.data.RecoveryBehaviour.RESTORE_ON_REAL_WAKE
+import com.med.sleepmanager.data.RecoveryBehaviour.RESTORE_OR_REAPPLY
+import com.med.sleepmanager.data.RecoveryBehaviour.RESTORE_WHEN_UNMANAGED
 import com.med.sleepmanager.data.RecoveryEvent
+import com.med.sleepmanager.data.RecoveryEvent.CREATE
+import com.med.sleepmanager.data.RecoveryEvent.CREATE_ENABLED
+import com.med.sleepmanager.data.RecoveryEvent.DESTROY_ENABLED
+import com.med.sleepmanager.data.RecoveryEvent.SCREEN_STATE_REPLAY
+import com.med.sleepmanager.data.RecoveryEvent.START_ENABLED
 import com.med.sleepmanager.data.RestoreParticipants
 import com.med.sleepmanager.integration.KeyMapperController
+import com.med.sleepmanager.integration.connector.BasicSyncConnector
+import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
+import com.med.sleepmanager.integration.connector.SyncthingConnector
+import com.med.sleepmanager.integration.connector.TailscaleConnector
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -76,7 +92,7 @@ class ServiceRecoveryTest {
 
     private fun production(event: RecoveryEvent, scenario: Scenario): List<String> {
         val host = RecordingHost(scenario)
-        LegacyServiceRecovery.run(event, host)
+        ServiceRecoveryCoordinator.create(host).run(event)
         return host.effects
     }
 
@@ -244,6 +260,154 @@ class ServiceRecoveryTest {
         assertEquals(
             listOf("${RestoreParticipants.HELPER}:reapply@${RecoveryEvent.DESTROY_ENABLED}"),
             production(RecoveryEvent.DESTROY_ENABLED, helperOnly)
+        )
+    }
+
+    /**
+     * Every participant's declared recovery, as the 0.8.0.12 service wired it:
+     * CREATE = onCreate before the enabled check, CREATE_ENABLED =
+     * recoverOwnedDeviceControls + recoverInterruptedSleepWifiMaintenance,
+     * START_ENABLED = onStartCommand, SCREEN_STATE_REPLAY =
+     * applyCurrentScreenState (onScreenOn restores / onScreenOff resumes),
+     * DESTROY_ENABLED = onDestroy's sleep re-assert.
+     */
+    private val expectedDeclarations: Map<String, Map<RecoveryEvent, RecoveryBehaviour>> = mapOf(
+        RestoreParticipants.HELPER to mapOf(
+            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE,
+            CREATE_ENABLED to REAPPLY_WHILE_SLEEPING,
+            DESTROY_ENABLED to REAPPLY_WHILE_SLEEPING
+        ),
+        JamesDspConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
+        KeyMapperController.CONNECTOR_ID to mapOf(
+            START_ENABLED to RESTORE_ON_REAL_WAKE,
+            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE
+        ),
+        RaOfflineProxyConnector.id to mapOf(
+            CREATE to RESTORE_ON_REAL_WAKE,
+            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE
+        ),
+        BasicSyncConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
+        SyncthingConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
+        TailscaleConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
+        RestoreParticipants.SLEEP_CYCLE_RECORD to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
+        RestoreParticipants.DIRECT_RADIO to mapOf(
+            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE,
+            CREATE_ENABLED to REAPPLY_WHILE_SLEEPING,
+            DESTROY_ENABLED to REAPPLY_WHILE_SLEEPING
+        ),
+        RestoreParticipants.RA_OFFLINE_PROXY_SLEEP_GATE to mapOf(
+            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE,
+            CREATE_ENABLED to REAPPLY_WHILE_SLEEPING
+        ),
+        RestoreParticipants.BATTERY_SAVER to mapOf(
+            CREATE_ENABLED to RESTORE_OR_REAPPLY,
+            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE
+        ),
+        RestoreParticipants.CHARGING_SEPARATION to mapOf(CREATE_ENABLED to RESTORE_OR_REAPPLY),
+        RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP to mapOf(
+            CREATE to RESTORE_WHEN_UNMANAGED,
+            START_ENABLED to RESTORE_WHEN_UNMANAGED
+        )
+    )
+
+    @Test
+    fun everyParticipantDeclaresItsPreviousRecoveryBehaviour() {
+        assertEquals(
+            "every registered participant needs a recovery declaration",
+            RestoreParticipants.all.map { it.id }.toSet(),
+            expectedDeclarations.keys
+        )
+        RestoreParticipants.all.forEach { participant ->
+            assertEquals(
+                participant.id,
+                expectedDeclarations.getValue(participant.id),
+                participant.recovery.associate { it.event to it.behaviour }
+            )
+        }
+    }
+
+    @Test
+    fun recoveryOrderIsExplicitData() {
+        assertEquals(
+            mapOf(
+                CREATE to listOf(
+                    RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP,
+                    RaOfflineProxyConnector.id
+                ),
+                // Device controls first, then the first-match sleep re-apply
+                // group: RAOfflineProxy gate, Direct radios, Helper.
+                CREATE_ENABLED to listOf(
+                    RestoreParticipants.BATTERY_SAVER,
+                    RestoreParticipants.CHARGING_SEPARATION,
+                    RestoreParticipants.RA_OFFLINE_PROXY_SLEEP_GATE,
+                    RestoreParticipants.DIRECT_RADIO,
+                    RestoreParticipants.HELPER
+                ),
+                START_ENABLED to listOf(
+                    RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP,
+                    KeyMapperController.CONNECTOR_ID
+                ),
+                DESTROY_ENABLED to listOf(
+                    RestoreParticipants.DIRECT_RADIO,
+                    RestoreParticipants.HELPER
+                )
+            ),
+            RestoreParticipants.recoveryOrder
+        )
+    }
+
+    @Test
+    fun screenReplayRunsOnceForAllReplayedParticipants() {
+        val host = RecordingHost(Scenario(true, false, emptySet(), true))
+        val replayed = ServiceRecoveryCoordinator.create(host).run(SCREEN_STATE_REPLAY)
+        assertEquals(listOf("replay-screen-state"), host.effects)
+        assertEquals(
+            RestoreParticipants.all.filter { it.recoveryAt(SCREEN_STATE_REPLAY) != null }.map { it.id },
+            replayed
+        )
+        assertTrue(RestoreParticipants.DIRECT_RADIO in replayed)
+    }
+
+    private val noopHost = RecordingHost(Scenario(false, false, emptySet(), false))
+
+    @Test(expected = IllegalArgumentException::class)
+    fun missingRecoveryActionIsRejected() {
+        ServiceRecoveryCoordinator(
+            participants = RestoreParticipants.all,
+            order = RestoreParticipants.recoveryOrder,
+            actions = ServiceRecoveryCoordinator.actions(noopHost) -
+                RecoveryActionKey(RestoreParticipants.HELPER, DESTROY_ENABLED),
+            host = noopHost
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun orderMissingADeclaredParticipantIsRejected() {
+        ServiceRecoveryCoordinator(
+            participants = RestoreParticipants.all,
+            order = RestoreParticipants.recoveryOrder +
+                (START_ENABLED to listOf(RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP)),
+            actions = ServiceRecoveryCoordinator.actions(noopHost),
+            host = noopHost
+        )
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun splitFirstMatchGroupIsRejected() {
+        ServiceRecoveryCoordinator(
+            participants = RestoreParticipants.all,
+            order = RestoreParticipants.recoveryOrder +
+                (
+                    CREATE_ENABLED to listOf(
+                        RestoreParticipants.RA_OFFLINE_PROXY_SLEEP_GATE,
+                        RestoreParticipants.BATTERY_SAVER,
+                        RestoreParticipants.CHARGING_SEPARATION,
+                        RestoreParticipants.DIRECT_RADIO,
+                        RestoreParticipants.HELPER
+                    )
+                    ),
+            actions = ServiceRecoveryCoordinator.actions(noopHost),
+            host = noopHost
         )
     }
 }

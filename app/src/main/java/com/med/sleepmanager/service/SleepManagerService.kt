@@ -823,8 +823,18 @@ class SleepManagerService : Service() {
         Log.i(TAG, "Service started")
     }
 
+    /**
+     * Process-death recovery. Which participants recover, how and in what
+     * order is declared in RestoreParticipants; ServiceRecoveryCoordinator
+     * refuses to start if an action is missing for a declared step.
+     */
     private fun runRecovery(event: RecoveryEvent) {
-        LegacyServiceRecovery.run(event, serviceRecoveryHost)
+        val ran = serviceRecoveryCoordinator.run(event)
+        if (ran.isNotEmpty()) Log.i(TAG, "Recovery $event -> $ran")
+    }
+
+    private val serviceRecoveryCoordinator: ServiceRecoveryCoordinator by lazy {
+        ServiceRecoveryCoordinator.create(serviceRecoveryHost)
     }
 
     private val serviceRecoveryHost =
