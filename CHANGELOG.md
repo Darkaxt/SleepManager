@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0.12 — 2026-11-23
+
+- Audit follow-ups: strict BasicSync/Key Mapper state validation with API 34+ sender
+  attribution checks (`BroadcastSenderPolicy`); `RestoreTransaction` participant registry
+  and `RestoreCoordinator` for wake/disable immediate restores, Forget and completion.
+  Syncthing unchanged (stop already verified; FOLLOW has no reliable success signal).
+- Main 0.8.0.12/code 582; Helper unchanged 1.1.7.2/code 1123.
+
 ## 0.8.0.11 — 2026-11-23
 
 - Design-audit fixes: disabled-state restore retry with bounded backoff; verified-disconnect
