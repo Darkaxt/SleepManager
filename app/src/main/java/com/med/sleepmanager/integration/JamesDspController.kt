@@ -55,6 +55,11 @@ object JamesDspController {
         }.getOrDefault(false)
     }
 
+    /**
+     * Sends a power command. Fire-and-forget by necessity: true means the
+     * explicit broadcast was handed to Android, not that JamesDSP applied it.
+     * JamesDSP exposes no state readback; see JamesDspConnector.currentState.
+     */
     fun setPowered(
         context: Context,
         packageName: String,

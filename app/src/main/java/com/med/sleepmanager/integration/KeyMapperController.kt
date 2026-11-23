@@ -13,6 +13,10 @@ import android.util.Log
  * The last observation is valid only for the Android boot it was received in.
  * If SleepManager missed an initial broadcast, state remains UNKNOWN and no
  * pause command is sent. No polling or wakelock is used.
+ *
+ * The state broadcast is unauthenticated and Key Mapper offers no query or
+ * reply that could corroborate it; see [BroadcastSenderPolicy] for the checked
+ * upstream sources and the upstream change that would close this.
  */
 internal object KeyMapperController {
     const val PACKAGE = "io.github.sds100.keymapper"

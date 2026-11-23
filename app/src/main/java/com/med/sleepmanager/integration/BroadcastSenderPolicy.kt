@@ -39,6 +39,34 @@ internal enum class BroadcastSenderVerdict {
  * Key Mapper or stop/start BasicSync directly. Forged state can only skew
  * SleepManager's own decisions (whether to pause/stop at sleep, when a
  * maintenance sync looks complete, when a restore looks confirmed).
+ *
+ * No local mechanism can authenticate or corroborate that state, so closing the
+ * residual needs an upstream change. Checked sources:
+ * - BasicSync (chenxiaolong/BasicSync master 74b1dea70d9d, 2026-11-21):
+ *   SyncthingService.sendStateBroadcast uses a plain implicit sendBroadcast with
+ *   no BroadcastOptions and no permission. REQUEST_STATE (RemoteControlReceiver)
+ *   only re-sends that same broadcast, so it carries no nonce and has no
+ *   ordered-broadcast reply. SyncthingService is exported="false"; besides
+ *   activities, the only exported components are RemoteControlReceiver and
+ *   the QS tile service (BIND_QUICK_SETTINGS_TILE); there is no content
+ *   provider or bindable service. BasicSync declares no permission of its own that a receiver could
+ *   require of the sender.
+ * - Key Mapper (keymapperorg/KeyMapper develop 8073a40dd548, 2026-11-19):
+ *   MappingsStateBroadcastController sends ACTION_MAPPINGS_STATE_CHANGED with
+ *   plain sendBroadcast plus explicit copies, without BroadcastOptions or a
+ *   permission, and only on state change, process start or accessibility
+ *   service start. PauseMappingsBroadcastReceiver handles only
+ *   PAUSE/RESUME/TOGGLE and returns no result, so there is no request/reply to
+ *   carry a nonce. The exported KeyEventRelayService (IKeyEventRelayService)
+ *   relays key and motion events only, with no paused-state method. Key Mapper
+ *   declares no permission of its own and has no exported provider.
+ * - Platform: since API 26 Android does not let SleepManager list another
+ *   app's running services or processes; other apps' notifications need
+ *   notification-listener access and do not carry these states anyway.
+ * Upstream fixes that would close it: send the state broadcast with
+ * BroadcastOptions.setShareIdentityEnabled(true) (API 34+), after which a
+ * genuine broadcast arrives VERIFIED and an UNATTRIBUTED one can be refused, or
+ * answer a nonce-carrying request with an ordered-broadcast result.
  */
 internal object BroadcastSenderPolicy {
     const val INVALID_UID = -1
