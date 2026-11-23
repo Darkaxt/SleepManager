@@ -6,10 +6,7 @@ import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.EventHistoryStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.RadioController
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.integration.JamesDspController
-import com.med.sleepmanager.integration.KeyMapperController
 import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
@@ -44,7 +41,6 @@ internal data class LiveUiRefreshSnapshot(
         fun read(context: Context): LiveUiRefreshSnapshot {
             val directRadio = RadioController.directAvailable()
             val helperInstalled = HelperController.isInstalled(context)
-            val basicSyncInstalled = BasicSyncController.isInstalled(context)
             val tailscaleInstalled = TailscaleController.isInstalled(context)
             val raInstalled = RaOfflineProxyController.isInstalled(context)
 
@@ -66,13 +62,6 @@ internal data class LiveUiRefreshSnapshot(
                 SyncthingController.selectedTarget(context),
                 tailscaleInstalled,
                 if (tailscaleInstalled) TailscaleController.versionName(context) else null,
-                JamesDspController.selectedTarget(context),
-                KeyMapperController.versionName(context),
-                KeyMapperController.currentState(context),
-                basicSyncInstalled,
-                if (basicSyncInstalled) BasicSyncController.versionName(context) else null,
-                if (basicSyncInstalled) BasicSyncController.isStopped(context) else false,
-                if (basicSyncInstalled) BasicSyncController.supportsStateApi(context) else false,
                 raInstalled,
                 if (raInstalled) RaOfflineProxyController.versionName(context) else null,
                 if (raInstalled) RaOfflineProxyController.providerAvailable(context) else false,

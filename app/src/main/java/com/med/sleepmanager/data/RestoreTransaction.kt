@@ -3,14 +3,10 @@ package com.med.sleepmanager.data
 import android.content.Context
 import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.integration.KeyMapperController
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
 import com.med.sleepmanager.service.DisableRestoreRetryScheduler
-import com.med.sleepmanager.sync.SyncStopOwnershipStore
 
 /** Lifecycle that owns a participant's restore state. */
 enum class RestoreScope {
@@ -32,7 +28,7 @@ enum class RestoreRoute {
     /** Helper wake/restore protocol and its acknowledgement retries. */
     HELPER_RESULT,
 
-    /** Device controls and BasicSync stop ownership, with their own retry runnables. */
+    /** Device controls, with their own retry runnables. */
     OWNED_STATE_RETRY,
 
     /** Bookkeeping only; nothing is restored (pre-sleep gate, the cycle record). */
@@ -50,9 +46,6 @@ enum class RecoveryEvent {
     /** onCreate while enabled, after screen and lid monitoring are registered. */
     CREATE_ENABLED,
 
-    /** Every onStartCommand while enabled. */
-    START_ENABLED,
-
     /** The first enabled onStartCommand: the current screen state is replayed once. */
     SCREEN_STATE_REPLAY,
 
@@ -64,13 +57,6 @@ enum class RecoveryEvent {
 enum class RecoveryBehaviour {
     /** Restores the owned state, but only on a real wake (screen on, no suppressed false wake). */
     RESTORE_ON_REAL_WAKE,
-
-    /**
-     * Restores owned state the app or its integration no longer manages,
-     * whatever the screen state. The action itself checks that condition and
-     * always runs, because it also resets its retry state when nothing is owned.
-     */
-    RESTORE_WHEN_UNMANAGED,
 
     /**
      * The participant's own recovery policy chooses between restoring the
@@ -149,7 +135,14 @@ object RestoreParticipants {
     const val RA_OFFLINE_PROXY_SLEEP_GATE = "raofflineproxy_sleep_gate"
     const val BATTERY_SAVER = "battery_saver"
     const val CHARGING_SEPARATION = "charging_separation"
-    const val BASIC_SYNC_STOP_OWNERSHIP = "basicsync_stop_ownership"
+
+    /**
+     * Connector ids of the BasicSync, Key Mapper and JamesDSP integrations,
+     * removed after 0.8.0.13. A sleep cycle persisted by 0.8.0.13 may still
+     * record ownership for them; nothing can restore it any more, so those
+     * records are ignored and dropped instead of blocking cycle completion.
+     */
+    val RETIRED_CONNECTOR_IDS: Set<String> = setOf("jamesdsp", "keymapper", "basicsync")
 
     private val replayScreenState =
         RecoveryStep(RecoveryEvent.SCREEN_STATE_REPLAY, RecoveryBehaviour.REPLAY_SCREEN_STATE)
@@ -192,12 +185,6 @@ object RestoreParticipants {
             },
             forget = { context -> HelperController.forgetPendingState(context) }
         ),
-        connector(JamesDspConnector.id, RestoreRoute.IMMEDIATE),
-        connector(
-            KeyMapperController.CONNECTOR_ID,
-            RestoreRoute.IMMEDIATE,
-            RecoveryStep(RecoveryEvent.START_ENABLED, RecoveryBehaviour.RESTORE_ON_REAL_WAKE)
-        ),
         connector(
             RaOfflineProxyConnector.id,
             RestoreRoute.IMMEDIATE,
@@ -206,7 +193,6 @@ object RestoreParticipants {
             // restored by the regular wake flow.
             RecoveryStep(RecoveryEvent.CREATE, RecoveryBehaviour.RESTORE_ON_REAL_WAKE)
         ),
-        connector(BasicSyncConnector.id, RestoreRoute.IMMEDIATE),
         connector(SyncthingConnector.id, RestoreRoute.AFTER_NETWORK),
         connector(TailscaleConnector.id, RestoreRoute.AFTER_NETWORK),
         RestoreParticipant(
@@ -272,18 +258,6 @@ object RestoreParticipants {
             ),
             pending = { context, _ -> DeviceControlStore.chargingSeparation(context).owned },
             forget = null
-        ),
-        RestoreParticipant(
-            id = BASIC_SYNC_STOP_OWNERSHIP,
-            scope = RestoreScope.OWNED_STATE,
-            route = RestoreRoute.OWNED_STATE_RETRY,
-            blocksCycleCompletion = false,
-            recovery = listOf(
-                RecoveryStep(RecoveryEvent.CREATE, RecoveryBehaviour.RESTORE_WHEN_UNMANAGED),
-                RecoveryStep(RecoveryEvent.START_ENABLED, RecoveryBehaviour.RESTORE_WHEN_UNMANAGED)
-            ),
-            pending = { context, _ -> SyncStopOwnershipStore.hasBasicSyncOwnership(context) },
-            forget = null
         )
     )
 
@@ -300,7 +274,6 @@ object RestoreParticipants {
      */
     val recoveryOrder: Map<RecoveryEvent, List<String>> = mapOf(
         RecoveryEvent.CREATE to listOf(
-            BASIC_SYNC_STOP_OWNERSHIP,
             RaOfflineProxyConnector.id
         ),
         RecoveryEvent.CREATE_ENABLED to listOf(
@@ -309,10 +282,6 @@ object RestoreParticipants {
             RA_OFFLINE_PROXY_SLEEP_GATE,
             DIRECT_RADIO,
             HELPER
-        ),
-        RecoveryEvent.START_ENABLED to listOf(
-            BASIC_SYNC_STOP_OWNERSHIP,
-            KeyMapperController.CONNECTOR_ID
         ),
         RecoveryEvent.DESTROY_ENABLED to listOf(
             DIRECT_RADIO,

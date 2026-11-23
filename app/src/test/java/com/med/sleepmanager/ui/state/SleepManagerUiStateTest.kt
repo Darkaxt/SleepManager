@@ -18,14 +18,10 @@ class SleepManagerUiStateTest {
         assertFalse(state.chargingSeparationWithLidEnabled)
         assertFalse(state.manageSyncthingEnabled)
         assertFalse(state.manageTailscaleEnabled)
-        assertFalse(state.manageJamesDspEnabled)
-        assertFalse(state.manageBasicSyncEnabled)
         assertFalse(state.manageRaOfflineProxyEnabled)
         assertFalse(state.closedLidProtectionEnabled)
         assertFalse(state.dockDisconnectSleeps)
         assertFalse(state.closedLidPowerSleeps)
-        assertFalse(state.periodicSyncWhileSleeping)
-        assertFalse(state.syncThenStopOnSleepWake)
         assertEquals(0L, state.sleepGraceMs)
         assertFalse(state.customDelayEnabled)
         assertEquals(60_000L, state.customDelayMs)
@@ -41,7 +37,6 @@ class SleepManagerUiStateTest {
         assertNull(state.currentBluetoothState)
         assertNull(state.currentSyncthingState)
         assertNull(state.currentTailscaleConnected)
-        assertNull(state.currentBasicSyncState)
         assertNull(state.currentRaOfflineProxyStatus)
         assertFalse(state.raOfflineProxyStatusProbeComplete)
         assertNull(state.currentBackgroundReliability)
@@ -63,14 +58,10 @@ class SleepManagerUiStateTest {
                     chargingSeparationWithLidEnabled = true,
                     manageSyncthingEnabled = true,
                     manageTailscaleEnabled = true,
-                    manageJamesDspEnabled = true,
-                    manageBasicSyncEnabled = true,
                     manageRaOfflineProxyEnabled = true,
                     closedLidProtectionEnabled = true,
                     dockDisconnectSleeps = true,
                     closedLidPowerSleeps = true,
-                    periodicSyncWhileSleeping = true,
-                    syncThenStopOnSleepWake = true,
                     sleepGraceMs = 10_000L,
                     customDelayEnabled = true,
                     customDelayMs = 300_000L,
@@ -93,14 +84,10 @@ class SleepManagerUiStateTest {
         assertEquals(true, updated.chargingSeparationWithLidEnabled)
         assertEquals(true, updated.manageSyncthingEnabled)
         assertEquals(true, updated.manageTailscaleEnabled)
-        assertEquals(true, updated.manageJamesDspEnabled)
-        assertEquals(true, updated.manageBasicSyncEnabled)
         assertEquals(true, updated.manageRaOfflineProxyEnabled)
         assertEquals(true, updated.closedLidProtectionEnabled)
         assertEquals(true, updated.dockDisconnectSleeps)
         assertEquals(true, updated.closedLidPowerSleeps)
-        assertEquals(true, updated.periodicSyncWhileSleeping)
-        assertEquals(true, updated.syncThenStopOnSleepWake)
         assertEquals(10_000L, updated.sleepGraceMs)
         assertEquals(true, updated.customDelayEnabled)
         assertEquals(300_000L, updated.customDelayMs)

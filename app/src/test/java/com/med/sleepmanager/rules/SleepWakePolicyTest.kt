@@ -96,21 +96,19 @@ class SleepWakePolicyTest {
                 wifiManaged = false,
                 radioControlAvailable = false,
                 batterySaverWillEnable = true,
-                syncthingStopRequested = true,
-                basicSyncStopRequested = false
+                syncthingStopRequested = true
             )
         )
     }
 
     @Test
-    fun batterySaverAlone_waitsForBasicSyncStop() {
-        assertTrue(
+    fun batterySaverWithoutManagedStop_doesNotWait() {
+        assertFalse(
             SleepWakePolicy.shouldWaitForManagedStopsBeforeDisruptiveSleepAction(
-                wifiManaged = false,
-                radioControlAvailable = false,
+                wifiManaged = true,
+                radioControlAvailable = true,
                 batterySaverWillEnable = true,
-                syncthingStopRequested = false,
-                basicSyncStopRequested = true
+                syncthingStopRequested = false
             )
         )
     }
@@ -122,8 +120,7 @@ class SleepWakePolicyTest {
                 wifiManaged = true,
                 radioControlAvailable = true,
                 batterySaverWillEnable = false,
-                syncthingStopRequested = true,
-                basicSyncStopRequested = false
+                syncthingStopRequested = true
             )
         )
     }
@@ -135,8 +132,7 @@ class SleepWakePolicyTest {
                 wifiManaged = true,
                 radioControlAvailable = false,
                 batterySaverWillEnable = false,
-                syncthingStopRequested = true,
-                basicSyncStopRequested = false
+                syncthingStopRequested = true
             )
         )
     }
@@ -148,8 +144,7 @@ class SleepWakePolicyTest {
                 wifiManaged = false,
                 radioControlAvailable = true,
                 batterySaverWillEnable = false,
-                syncthingStopRequested = true,
-                basicSyncStopRequested = false
+                syncthingStopRequested = true
             )
         )
     }

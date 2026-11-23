@@ -3,9 +3,6 @@ package com.med.sleepmanager.service
 import com.med.sleepmanager.data.RestoreParticipant
 import com.med.sleepmanager.data.RestoreParticipants
 import com.med.sleepmanager.data.RestoreRoute
-import com.med.sleepmanager.integration.KeyMapperController
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 
 internal enum class RestoreReason(val label: String) {
@@ -30,10 +27,7 @@ internal enum class RestoreStepOutcome {
  * behaviour; the coordinator only owns which ones run and in what order.
  */
 internal interface ImmediateRestoreHost {
-    fun restoreJamesDsp(reason: RestoreReason)
-    fun restoreKeyMapper(reason: RestoreReason)
     fun restoreRaOfflineProxy(reason: RestoreReason)
-    fun restoreBasicSync(reason: RestoreReason)
     fun restoreDirectRadios(reason: RestoreReason)
 }
 
@@ -89,10 +83,7 @@ internal class RestoreCoordinator(
             host: ImmediateRestoreHost
         ): Map<String, (RestoreReason) -> Unit> =
             mapOf(
-                JamesDspConnector.id to host::restoreJamesDsp,
-                KeyMapperController.CONNECTOR_ID to host::restoreKeyMapper,
                 RaOfflineProxyConnector.id to host::restoreRaOfflineProxy,
-                BasicSyncConnector.id to host::restoreBasicSync,
                 RestoreParticipants.DIRECT_RADIO to host::restoreDirectRadios
             )
 

@@ -13,10 +13,8 @@ import com.med.sleepmanager.device.DeviceControlStore
 object DiagnosticsTransitionStore {
     const val COMPONENT_HELPER = "helper"
     const val COMPONENT_SYNCTHING = "syncthing"
-    const val COMPONENT_BASIC_SYNC = "basicsync"
     const val COMPONENT_RA_OFFLINE_PROXY = "raofflineproxy"
     const val COMPONENT_TAILSCALE = "tailscale"
-    const val COMPONENT_JAMES_DSP = "jamesdsp"
     const val COMPONENT_BATTERY_SAVER = "battery_saver"
     const val COMPONENT_CHARGING_SEPARATION = "charging_separation"
 
@@ -27,10 +25,8 @@ object DiagnosticsTransitionStore {
         listOf(
             COMPONENT_HELPER,
             COMPONENT_SYNCTHING,
-            COMPONENT_BASIC_SYNC,
             COMPONENT_RA_OFFLINE_PROXY,
             COMPONENT_TAILSCALE,
-            COMPONENT_JAMES_DSP,
             COMPONENT_BATTERY_SAVER,
             COMPONENT_CHARGING_SEPARATION
         )
@@ -276,51 +272,6 @@ object DiagnosticsTransitionStore {
             }
         }
 
-        if ("basicsync" in lower || "pre-sleep sync" in lower || "wake sync" in lower) {
-            when {
-                "restore retries exhausted" in lower -> record(
-                    context,
-                    COMPONENT_BASIC_SYNC,
-                    restoreResult = event,
-                    finalState = "RESTORE_PENDING",
-                    note = event
-                )
-                event.startsWith("Wake") || event.startsWith("Disable") || "wake sync" in lower -> record(
-                    context,
-                    COMPONENT_BASIC_SYNC,
-                    restoreResult = event,
-                    finalState =
-                        if ("restored" in lower || "clients stopped" in lower) "RESTORE_REQUESTED"
-                        else "RESTORE_PENDING",
-                    note = event
-                )
-                else -> record(
-                    context,
-                    COMPONENT_BASIC_SYNC,
-                    reset = "stop sent" in lower,
-                    sleepRequest =
-                        when {
-                            "stop" in lower -> "STOP"
-                            "sync" in lower -> "SYNC / WAIT"
-                            else -> null
-                        },
-                    sleepResult = event,
-                    sleepState =
-                        when {
-                            "stop not confirmed" in lower -> "UNKNOWN"
-                            "stop sent" in lower -> "STOP_REQUESTED"
-                            "sync finished" in lower -> "SYNC_FINISHED"
-                            "timed out" in lower -> "TIMEOUT"
-                            else -> null
-                        },
-                    restoreTarget =
-                        event.substringAfter("restore ", "")
-                            .takeIf { it.isNotBlank() },
-                    note = event
-                )
-            }
-        }
-
         if ("raofflineproxy" in lower) {
             when {
                 "stop accepted" in lower -> record(
@@ -412,37 +363,6 @@ object DiagnosticsTransitionStore {
                     note = event
                 )
                 else -> record(context, COMPONENT_TAILSCALE, note = event)
-            }
-        }
-
-        if ("jamesdsp" in lower) {
-            when {
-                event.startsWith("Sleep") -> record(
-                    context,
-                    COMPONENT_JAMES_DSP,
-                    reset = true,
-                    initialState = "UNKNOWN · no public state API",
-                    sleepRequest =
-                        if ("off sent" in lower) "POWER_OFF" else "none",
-                    sleepResult = event,
-                    sleepState =
-                        if ("off sent" in lower) "OFF_REQUESTED"
-                        else "UNCHANGED_OR_UNKNOWN",
-                    restoreTarget =
-                        if ("off sent" in lower) "POWER_ON" else "none",
-                    note = event
-                )
-                event.startsWith("Wake") || event.startsWith("Disable") -> record(
-                    context,
-                    COMPONENT_JAMES_DSP,
-                    restoreTarget = "POWER_ON",
-                    restoreResult = event,
-                    finalState =
-                        if ("restored" in lower) "ON_REQUESTED"
-                        else "RESTORE_PENDING",
-                    note = event
-                )
-                else -> record(context, COMPONENT_JAMES_DSP, note = event)
             }
         }
 
@@ -617,10 +537,8 @@ object DiagnosticsTransitionStore {
         when (componentId) {
             COMPONENT_HELPER -> "Wi-Fi / Bluetooth"
             COMPONENT_SYNCTHING -> "Syncthing-Fork"
-            COMPONENT_BASIC_SYNC -> "BasicSync"
             COMPONENT_RA_OFFLINE_PROXY -> "RAOfflineProxy"
             COMPONENT_TAILSCALE -> "Tailscale"
-            COMPONENT_JAMES_DSP -> "JamesDSP"
             COMPONENT_BATTERY_SAVER -> "Battery Saver"
             COMPONENT_CHARGING_SEPARATION -> "Charging Separation"
             else -> componentId

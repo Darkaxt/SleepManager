@@ -5,7 +5,6 @@ import com.med.sleepmanager.data.EventHistoryStore
 internal enum class ActivityTimelineKind {
     SLEEP,
     WAKE,
-    MAINTENANCE,
     PROTECTION,
     RECOVERY,
     SYSTEM
@@ -98,16 +97,11 @@ internal object ActivityTimelineBuilder {
         when {
             message.startsWith("Sleep →") ||
                 message.startsWith("Sleep skipped →") ||
-                message.startsWith("Pre-sleep sync →") ||
                 message.startsWith("Sleep power ") ->
                 ActivityTimelineKind.SLEEP
 
-            message.startsWith("Wake →") ||
-                message.startsWith("Wake sync →") ->
+            message.startsWith("Wake →") ->
                 ActivityTimelineKind.WAKE
-
-            message.startsWith("Periodic sync") ->
-                ActivityTimelineKind.MAINTENANCE
 
             message.startsWith("Closed-lid") ||
                 message.startsWith("Lid closed") ||
@@ -202,66 +196,8 @@ internal object ActivityTimelineBuilder {
             message.startsWith("Recovery → pending restore forgotten") ->
                 return listOf("Pending restoration cleared")
 
-            message.startsWith("Pre-sleep sync →") ->
-                return listOf(
-                    syncOutcomeText(
-                        label = "Pre-sleep sync",
-                        outcome = message.substringAfter("→").trim()
-                    )
-                )
-
-            message.startsWith("Wake sync →") ->
-                return listOf(
-                    syncOutcomeText(
-                        label = "Wake sync",
-                        outcome =
-                            message.substringAfter("→")
-                                .substringBefore("·")
-                                .trim()
-                    )
-                )
-
-            message.startsWith("Periodic sync →") ->
-                return listOf(
-                    syncOutcomeText(
-                        label = "Periodic sync",
-                        outcome = message.substringAfter("→").trim()
-                    )
-                )
-
-            message.startsWith("Periodic sync skipped →") ->
-                return listOf("Periodic sync skipped")
-
             message.startsWith("Sleep skipped →") ->
                 return listOf("Sleep actions skipped")
-
-            message.startsWith(
-                "Sleep → waiting for active BasicSync sync to finish"
-            ) ->
-                return listOf("Waiting for BasicSync to finish")
-
-            message.startsWith("Sleep → active BasicSync sync finished") ->
-                return listOf("BasicSync finished syncing")
-
-            message.startsWith("Sleep → BasicSync active sync wait timed out") ->
-                return listOf("BasicSync did not finish in time")
-
-            message.startsWith("Sleep → BasicSync STOP sent") ->
-                return listOf("BasicSync paused")
-
-            message.startsWith(
-                "Sleep → BasicSync STOP not confirmed"
-            ) ->
-                return listOf("BasicSync pause could not be confirmed")
-
-            message.startsWith("Sleep → JamesDSP OFF sent") ->
-                return listOf("JamesDSP turned off")
-
-            message.startsWith("Sleep → JamesDSP OFF not confirmed") ->
-                return listOf("JamesDSP turn-off could not be confirmed")
-
-            message.startsWith("Sleep → JamesDSP unchanged") ->
-                return listOf("JamesDSP left unchanged")
 
             message.startsWith(
                 "Sleep → Syncthing STOP not confirmed"
@@ -333,17 +269,8 @@ internal object ActivityTimelineBuilder {
                     )
                 )
 
-            message.startsWith("Wake → BasicSync restored") ->
-                return listOf("BasicSync restored")
-
             message.startsWith("Wake → RAOfflineProxy restore pending") ->
                 return listOf("RAOfflineProxy could not be restored yet")
-
-            message.startsWith("Wake → JamesDSP restore pending") ->
-                return listOf("JamesDSP could not be restored yet")
-
-            message.startsWith("Wake → BasicSync restore pending") ->
-                return listOf("BasicSync could not be restored yet")
 
             message.startsWith("Wake → Syncthing restore pending") ->
                 return listOf("Syncthing could not resume yet")
@@ -392,13 +319,6 @@ internal object ActivityTimelineBuilder {
             message.startsWith("Disable → RAOfflineProxy restore pending") ->
                 return listOf("RAOfflineProxy could not be restored yet")
 
-            message.startsWith("Disable → JamesDSP restore pending") ->
-                return listOf("JamesDSP could not be restored yet")
-
-            message.startsWith("Disable → BasicSync") &&
-                message.contains("restore pending") ->
-                return listOf("BasicSync could not be restored yet")
-
             message.startsWith("Disable → Syncthing restore pending") ->
                 return listOf("Syncthing could not resume yet")
 
@@ -410,17 +330,8 @@ internal object ActivityTimelineBuilder {
                     "SleepManager is restoring settings before turning off"
                 )
 
-            message.startsWith("BasicSync → original state restore retries exhausted") ->
-                return listOf("BasicSync could not be restored")
-
             message == "Syncthing restore pending" ->
                 return listOf("Syncthing could not be restored yet")
-
-            message == "JamesDSP restore pending" ->
-                return listOf("JamesDSP could not be restored yet")
-
-            message == "BasicSync restore pending" ->
-                return listOf("BasicSync could not be restored yet")
 
             message.startsWith("Memory pressure → Android lowMemory=true") ->
                 return listOf("Android reported low memory")
@@ -509,9 +420,6 @@ internal object ActivityTimelineBuilder {
                 "Tailscale already in the right state"
             action == "Tailscale restored" -> "Tailscale restored"
 
-            action == "JamesDSP restored" -> "JamesDSP restored"
-            action.startsWith("BasicSync restored") -> "BasicSync restored"
-
             action == "previous state unknown" -> ""
             action == "radio=PServer" -> ""
             action == "radioError" ->
@@ -541,32 +449,10 @@ internal object ActivityTimelineBuilder {
             action == "Helper restore pending" ->
                 "Restoring Wi-Fi and Bluetooth"
 
-            action.startsWith("BasicSync original state restore") ->
-                "Restoring BasicSync"
-
             else ->
                 action
                     .replace("STOP", "stop")
                     .replace("FOLLOW", "resume")
                     .replace("restore owned", "will be restored on wake")
-        }
-
-    private fun syncOutcomeText(
-        label: String,
-        outcome: String
-    ): String =
-        when (outcome.trim().uppercase()) {
-            "COMPLETED" -> "$label completed"
-            "COMPLETED_WITH_ERRORS" -> "$label completed with some errors"
-            "NO_TARGETS" -> "$label skipped — nothing to sync"
-            "COMPLETION_UNAVAILABLE" ->
-                "$label skipped — sync status unavailable"
-            "NETWORK_UNAVAILABLE" ->
-                "$label skipped — no network"
-            "START_FAILED" -> "$label could not start"
-            "SYNC_TIMEOUT" -> "$label timed out"
-            "CANCELLED" -> "$label cancelled"
-            "NONE" -> "$label finished"
-            else -> "$label finished"
         }
 }

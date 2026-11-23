@@ -9,11 +9,9 @@ internal class SleepStopWaitState {
     var pendingWifi = false
     var pendingBluetooth = false
     var pendingSyncthing = false
-    var pendingBasicSync = false
     var pendingPostStopActions = false
 
     var startedAtElapsed = 0L
-    var lastBasicSyncStateRequestAtElapsed = 0L
     var syncthingProbeInFlight = false
     var syncthingConfirmed = false
     var generation = 0L
@@ -26,7 +24,6 @@ internal class SleepStopWaitState {
         val recoveredElapsed = elapsedBeforeRecoveryMs.coerceIn(0L, timeoutMs)
         generation++
         startedAtElapsed = nowElapsed - recoveredElapsed
-        lastBasicSyncStateRequestAtElapsed = 0L
         syncthingProbeInFlight = false
         syncthingConfirmed = !pendingSyncthing
     }
@@ -35,7 +32,6 @@ internal class SleepStopWaitState {
         pendingWifi = false
         pendingBluetooth = false
         pendingSyncthing = false
-        pendingBasicSync = false
         pendingPostStopActions = false
     }
 
@@ -43,7 +39,6 @@ internal class SleepStopWaitState {
         generation++
         clearPendingActions()
         startedAtElapsed = 0L
-        lastBasicSyncStateRequestAtElapsed = 0L
         syncthingProbeInFlight = false
         syncthingConfirmed = false
     }

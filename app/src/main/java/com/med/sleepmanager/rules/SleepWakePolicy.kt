@@ -93,15 +93,12 @@ object SleepWakePolicy {
         wifiManaged: Boolean,
         radioControlAvailable: Boolean,
         batterySaverWillEnable: Boolean,
-        syncthingStopRequested: Boolean,
-        basicSyncStopRequested: Boolean
+        syncthingStopRequested: Boolean
     ): Boolean {
         val disruptiveActionPending =
             (wifiManaged && radioControlAvailable) || batterySaverWillEnable
-        val managedStopPending =
-            syncthingStopRequested || basicSyncStopRequested
 
-        return disruptiveActionPending && managedStopPending
+        return disruptiveActionPending && syncthingStopRequested
     }
 
     /**

@@ -12,12 +12,7 @@ object AppPreferences {
     private const val KEY_CHARGING_SEPARATION_LID = "charging_separation_lid"
     private const val KEY_SYNCTHING = "syncthing"
     private const val KEY_TAILSCALE = "tailscale"
-    private const val KEY_JAMES_DSP = "james_dsp"
-    private const val KEY_KEY_MAPPER = "key_mapper"
-    private const val KEY_BASICSYNC = "basicsync"
     private const val KEY_RA_OFFLINE_PROXY = "raofflineproxy"
-    private const val KEY_PERIODIC_SYNC_WHILE_SLEEPING = "periodic_sync_while_sleeping"
-    private const val KEY_SYNC_THEN_STOP_ON_SLEEP_WAKE = "sync_then_stop_on_sleep_wake"
     // Keep the original persisted key names so existing 0.6.x installs retain
     // their clamshell settings after the code-level generic naming cleanup.
     private const val KEY_LEGACY_THOR_PROTECTION = "thor_protection"
@@ -85,41 +80,11 @@ object AppPreferences {
     fun setManageTailscale(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_TAILSCALE, value).apply()
 
-    fun manageJamesDsp(context: Context) =
-        prefs(context).getBoolean(KEY_JAMES_DSP, false)
-
-    fun setManageJamesDsp(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_JAMES_DSP, value).apply()
-
-    fun manageKeyMapper(context: Context) =
-        prefs(context).getBoolean(KEY_KEY_MAPPER, false)
-
-    fun setManageKeyMapper(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_KEY_MAPPER, value).apply()
-
-    fun manageBasicSync(context: Context) =
-        prefs(context).getBoolean(KEY_BASICSYNC, false)
-
-    fun setManageBasicSync(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_BASICSYNC, value).apply()
-
     fun manageRaOfflineProxy(context: Context) =
         prefs(context).getBoolean(KEY_RA_OFFLINE_PROXY, false)
 
     fun setManageRaOfflineProxy(context: Context, value: Boolean) =
         prefs(context).edit().putBoolean(KEY_RA_OFFLINE_PROXY, value).apply()
-
-    fun periodicSyncWhileSleeping(context: Context) =
-        prefs(context).getBoolean(KEY_PERIODIC_SYNC_WHILE_SLEEPING, false)
-
-    fun setPeriodicSyncWhileSleeping(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_PERIODIC_SYNC_WHILE_SLEEPING, value).apply()
-
-    fun syncThenStopOnSleepWake(context: Context) =
-        prefs(context).getBoolean(KEY_SYNC_THEN_STOP_ON_SLEEP_WAKE, false)
-
-    fun setSyncThenStopOnSleepWake(context: Context, value: Boolean) =
-        prefs(context).edit().putBoolean(KEY_SYNC_THEN_STOP_ON_SLEEP_WAKE, value).apply()
 
     fun manageClosedLidProtection(context: Context) =
         prefs(context).getBoolean(KEY_LEGACY_THOR_PROTECTION, false)

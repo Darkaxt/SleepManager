@@ -48,23 +48,18 @@ internal fun BehaviorCard(
     batterySaver: Boolean,
     syncthing: Boolean,
     tailscale: Boolean,
-    jamesDsp: Boolean,
-    basicSync: Boolean,
     raOfflineProxy: Boolean,
     closedLidProtection: Boolean,
     chargingSeparationWithLid: Boolean,
     sleepOnExternalDisplayDisconnect: Boolean,
     powerButtonSleepsWithLidClosed: Boolean,
     sleepGraceMs: Long,
-    advancedConditions: List<String>,
-    periodicSyncWhileSleeping: Boolean,
-    syncThenStopOnSleepWake: Boolean
+    advancedConditions: List<String>
 ) {
     var expanded by remember { mutableStateOf(false) }
     val hasSleepAction =
         wifi || bluetooth || batterySaver || syncthing || tailscale ||
-            jamesDsp || basicSync || raOfflineProxy ||
-            syncThenStopOnSleepWake
+            raOfflineProxy
     val hasClamshellBehavior =
         closedLidProtection ||
             chargingSeparationWithLid ||
@@ -82,11 +77,8 @@ internal fun BehaviorCard(
             stringResource(R.string.behavior_wait, it)
         }
     val onlyIfPrefix = stringResource(R.string.behavior_only_if_prefix)
-    val syncBeforeSleep = stringResource(R.string.behavior_sync_before_sleep)
     val pauseSyncthing = stringResource(R.string.behavior_pause_syncthing)
     val disconnectTailscale = stringResource(R.string.behavior_disconnect_tailscale)
-    val powerOffJamesDsp = stringResource(R.string.behavior_power_off_jamesdsp)
-    val stopBasicSync = stringResource(R.string.behavior_stop_basicsync)
     val stopRaOfflineProxy =
         stringResource(R.string.behavior_stop_raofflineproxy)
     val enableBatterySaver = stringResource(R.string.behavior_enable_battery_saver)
@@ -98,11 +90,8 @@ internal fun BehaviorCard(
     val restoreBatterySaver = stringResource(R.string.behavior_restore_battery_saver)
     val resumeSyncthing = stringResource(R.string.behavior_resume_syncthing)
     val restoreTailscale = stringResource(R.string.behavior_restore_tailscale)
-    val restoreJamesDsp = stringResource(R.string.behavior_restore_jamesdsp)
-    val restoreBasicSync = stringResource(R.string.behavior_restore_basicsync)
     val restoreRaOfflineProxy =
         stringResource(R.string.behavior_restore_raofflineproxy)
-    val syncAfterWake = stringResource(R.string.behavior_sync_after_wake)
     val closedLidReturnToSleep =
         stringResource(R.string.behavior_closed_lid_return_to_sleep)
     val disableChargingSeparation =
@@ -110,18 +99,13 @@ internal fun BehaviorCard(
     val sleepOnDisplayDisconnect =
         stringResource(R.string.behavior_sleep_on_display_disconnect)
     val powerButtonSleep = stringResource(R.string.behavior_power_button_sleep)
-    val periodicSyncLine = stringResource(R.string.behavior_periodic_sync)
     val wifiLabel = stringResource(R.string.wifi)
     val bluetoothLabel = stringResource(R.string.bluetooth)
     val batterySaverLabel = stringResource(R.string.battery_saver)
     val syncthingLabel = stringResource(R.string.behavior_syncthing)
     val tailscaleLabel = stringResource(R.string.integration_tailscale)
-    val jamesDspLabel = stringResource(R.string.integration_jamesdsp)
-    val basicSyncLabel = stringResource(R.string.integration_basicsync)
     val raOfflineProxyLabel =
         stringResource(R.string.integration_raofflineproxy)
-    val sleepWakeSyncLabel = stringResource(R.string.behavior_sleep_wake_sync)
-    val periodicSyncLabel = stringResource(R.string.behavior_periodic_sync_short)
     val conditionSummary =
         if (advancedConditions.isNotEmpty()) {
             stringResource(
@@ -144,11 +128,8 @@ internal fun BehaviorCard(
         advancedConditions.forEach {
             add("$onlyIfPrefix $it")
         }
-        if (syncThenStopOnSleepWake) add(syncBeforeSleep)
         if (syncthing) add(pauseSyncthing)
         if (tailscale) add(disconnectTailscale)
-        if (jamesDsp) add(powerOffJamesDsp)
-        if (basicSync && !syncThenStopOnSleepWake) add(stopBasicSync)
         if (raOfflineProxy) add(stopRaOfflineProxy)
         if (batterySaver) add(enableBatterySaver)
         if (wifi) add(wifiOff)
@@ -162,10 +143,7 @@ internal fun BehaviorCard(
         if (batterySaver) add(restoreBatterySaver)
         if (syncthing) add(resumeSyncthing)
         if (tailscale) add(restoreTailscale)
-        if (jamesDsp) add(restoreJamesDsp)
-        if (basicSync && !syncThenStopOnSleepWake) add(restoreBasicSync)
         if (raOfflineProxy) add(restoreRaOfflineProxy)
-        if (syncThenStopOnSleepWake) add(syncAfterWake)
     }
 
     val clamshellLines = buildList {
@@ -175,10 +153,6 @@ internal fun BehaviorCard(
         if (powerButtonSleepsWithLidClosed) add(powerButtonSleep)
     }
 
-    val sleepMaintenanceLines = buildList {
-        if (periodicSyncWhileSleeping) add(periodicSyncLine)
-    }
-
     val compactSleepSummary = buildList {
         sleepDuration?.let(::add)
         if (wifi) add(wifiLabel)
@@ -186,14 +160,10 @@ internal fun BehaviorCard(
         if (batterySaver) add(batterySaverLabel)
         if (syncthing) add(syncthingLabel)
         if (tailscale) add(tailscaleLabel)
-        if (jamesDsp) add(jamesDspLabel)
-        if (basicSync) add(basicSyncLabel)
         if (raOfflineProxy) add(raOfflineProxyLabel)
-        if (syncThenStopOnSleepWake) add(sleepWakeSyncLabel)
-        if (periodicSyncWhileSleeping) add(periodicSyncLabel)
         conditionSummary?.let(::add)
         if (hasClamshellBehavior) add(clamshellLabel)
-        if (!hasSleepAction && !hasClamshellBehavior && !periodicSyncWhileSleeping) {
+        if (!hasSleepAction && !hasClamshellBehavior) {
             add(noActionsLabel)
         }
     }.joinToString(" • ")
@@ -248,13 +218,6 @@ internal fun BehaviorCard(
                     }
                 )
 
-                if (sleepMaintenanceLines.isNotEmpty()) {
-                    BehaviorGroup(
-                        title = stringResource(R.string.behavior_while_sleeping),
-                        lines = sleepMaintenanceLines
-                    )
-                }
-
                 if (clamshellLines.isNotEmpty()) {
                     BehaviorGroup(
                         title = stringResource(R.string.behavior_clamshell_group),
@@ -262,9 +225,7 @@ internal fun BehaviorCard(
                     )
                 }
 
-                if (wifi || bluetooth || batterySaver || basicSync || syncthing ||
-                    tailscale || jamesDsp
-                ) {
+                if (wifi || bluetooth || batterySaver || syncthing || tailscale) {
                     Text(
                         stringResource(R.string.behavior_restore_only_changed),
                         style = MaterialTheme.typography.bodyMedium,
@@ -345,8 +306,6 @@ internal fun LastActivityCard(
                     action.startsWith("Charging Separation ") -> "Charging Separation"
                     action.startsWith("Syncthing ") -> "Syncthing"
                     action.startsWith("Tailscale ") -> "Tailscale"
-                    action.startsWith("JamesDSP ") -> "JamesDSP"
-                    action.startsWith("BasicSync ") -> "BasicSync"
                     else -> null
                 }
                 val subjectLabel = when (subject) {
@@ -357,8 +316,6 @@ internal fun LastActivityCard(
                         context.getString(R.string.charging_separation)
                     "Syncthing" -> context.getString(R.string.behavior_syncthing)
                     "Tailscale" -> context.getString(R.string.integration_tailscale)
-                    "JamesDSP" -> context.getString(R.string.integration_jamesdsp)
-                    "BasicSync" -> context.getString(R.string.integration_basicsync)
                     else -> null
                 }
                 val detail = when (subject) {
@@ -368,8 +325,6 @@ internal fun LastActivityCard(
                     "Charging Separation" -> action.removePrefix("Charging Separation ").replaceFirstChar { it.uppercase() }
                     "Syncthing" -> action.removePrefix("Syncthing ").replaceFirstChar { it.uppercase() }
                     "Tailscale" -> action.removePrefix("Tailscale ").replaceFirstChar { it.uppercase() }
-                    "JamesDSP" -> action.removePrefix("JamesDSP ").replaceFirstChar { it.uppercase() }
-                    "BasicSync" -> action.removePrefix("BasicSync ").replaceFirstChar { it.uppercase() }
                     else -> action
                 }
 

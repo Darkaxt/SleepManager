@@ -1,9 +1,6 @@
 package com.med.sleepmanager.data
 
-import com.med.sleepmanager.integration.KeyMapperController
 import com.med.sleepmanager.integration.connector.AppConnector
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
@@ -25,8 +22,6 @@ class RestoreParticipantsTest {
     // Every AppConnector implementation; a new connector must be added here
     // and to RestoreParticipants.
     private val appConnectors: List<AppConnector> = listOf(
-        BasicSyncConnector,
-        JamesDspConnector,
         RaOfflineProxyConnector,
         SyncthingConnector,
         TailscaleConnector
@@ -50,9 +45,8 @@ class RestoreParticipantsTest {
                 participant.route
             )
         }
-        assertTrue(RestoreParticipants.isRegisteredConnector(KeyMapperController.CONNECTOR_ID))
         assertEquals(
-            appConnectors.map { it.id }.toSet() + KeyMapperController.CONNECTOR_ID,
+            appConnectors.map { it.id }.toSet(),
             all.filter { it.cycleConnector }.map { it.id }.toSet()
         )
     }
@@ -75,8 +69,7 @@ class RestoreParticipantsTest {
         assertEquals(
             setOf(
                 RestoreParticipants.BATTERY_SAVER,
-                RestoreParticipants.CHARGING_SEPARATION,
-                RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP
+                RestoreParticipants.CHARGING_SEPARATION
             ),
             owned.map { it.id }.toSet()
         )
@@ -123,5 +116,13 @@ class RestoreParticipantsTest {
             ),
             forgetting
         )
+    }
+
+    @Test
+    fun retiredConnectorsAreNoLongerRegistered() {
+        RestoreParticipants.RETIRED_CONNECTOR_IDS.forEach { id ->
+            assertFalse("$id must not be a participant", all.any { it.id == id })
+            assertFalse(RestoreParticipants.isRegisteredConnector(id))
+        }
     }
 }

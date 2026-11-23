@@ -114,9 +114,6 @@ object SyncthingController {
             "START"
         )
 
-    fun sendStartTo(context: Context, packageName: String) =
-        send(context, packageName, ".action.START", "START")
-
     fun sendStop(context: Context) =
         send(
             context,

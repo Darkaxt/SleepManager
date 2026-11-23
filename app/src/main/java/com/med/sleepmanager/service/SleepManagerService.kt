@@ -44,17 +44,12 @@ import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.device.RadioBackend
 import com.med.sleepmanager.device.RadioController
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.integration.KeyMapperController
-import com.med.sleepmanager.integration.KeyMapperStateReceiver
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
 import com.med.sleepmanager.integration.TailscaleTransactionToken
 import com.med.sleepmanager.integration.RaOfflineProxyController
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
 import com.med.sleepmanager.network.NetworkReadyGate
@@ -77,18 +72,6 @@ import com.med.sleepmanager.rules.HelperResultCorrelation
 import com.med.sleepmanager.rules.HelperResultPolicy
 import com.med.sleepmanager.rules.SleepConditionEvaluator
 import com.med.sleepmanager.rules.SleepWakePolicy
-import com.med.sleepmanager.sync.ManagedSyncProviders
-import com.med.sleepmanager.sync.PeriodicAlarmDeviceDecision
-import com.med.sleepmanager.sync.PeriodicMaintenanceFollowUp
-import com.med.sleepmanager.sync.OwnedBasicSyncRestoreResult
-import com.med.sleepmanager.sync.SyncMaintenancePolicy
-import com.med.sleepmanager.sync.SyncMaintenanceRunner
-import com.med.sleepmanager.sync.SyncMaintenanceScheduler
-import com.med.sleepmanager.sync.SyncMaintenanceTrigger
-import com.med.sleepmanager.sync.SyncStopOwnershipStore
-import com.med.sleepmanager.sync.SyncTransitionStore
-import com.med.sleepmanager.sync.SyncCompletionState
-import com.med.sleepmanager.sync.basicSyncCompletionState
 
 class SleepManagerService : Service() {
     companion object {
@@ -100,12 +83,6 @@ class SleepManagerService : Service() {
         private const val SYNCTHING_UNVERIFIED_STOP_GRACE_MS = 2500L
         private const val SYNC_STOP_POLL_INTERVAL_MS = 250L
         private const val SYNC_STOP_TIMEOUT_MS = 5_000L
-        private const val BASIC_SYNC_FRESH_STATE_TIMEOUT_MS = 1_500L
-        private const val BASIC_SYNC_WAKE_RESTORE_CONFIRM_INTERVAL_MS = 250L
-        private const val BASIC_SYNC_WAKE_RESTORE_CONFIRM_TIMEOUT_MS = 5_000L
-        private const val BASIC_SYNC_ACTIVE_FINISH_TIMEOUT_MS = 120_000L
-        private const val BASIC_SYNC_ACTIVE_FINISH_POLL_MS = 500L
-        private const val BASIC_SYNC_IDLE_STABILITY_MS = 3_000L
         private const val DEVICE_CONTROL_RESTORE_INTERVAL_MS = 500L
         private const val DEVICE_CONTROL_RESTORE_MAX_ATTEMPTS = 6
         private const val TAILSCALE_VERIFY_INTERVAL_MS = 500L
@@ -114,8 +91,6 @@ class SleepManagerService : Service() {
         private const val TAILSCALE_WAKE_MAX_ATTEMPTS = 12
         private const val SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS = 8_000L
         private const val SYNCTHING_PRE_SLEEP_PROBE_TIMEOUT_MS = 1_500L
-        private const val OWNED_BASIC_SYNC_RESTORE_INTERVAL_MS = 250L
-        private const val OWNED_BASIC_SYNC_RESTORE_MAX_ATTEMPTS = 8
         private const val HELPER_RESTORE_RETRY_DELAY_MS = 2_000L
         private const val HELPER_RESTORE_MAX_ATTEMPTS = 3
         private const val CLOSED_LID_GUARD_DELAY_MS = 1500L
@@ -127,8 +102,6 @@ class SleepManagerService : Service() {
             "com.med.sleepmanager.action.DISABLE_AND_RESTORE"
         const val ACTION_SLEEP_DELAY_ELAPSED =
             "com.med.sleepmanager.action.SLEEP_DELAY_ELAPSED"
-        const val ACTION_PERIODIC_SYNC =
-            "com.med.sleepmanager.action.PERIODIC_SYNC"
         private const val SLEEP_DELAY_REQUEST_CODE = 5218
 
         @Volatile
@@ -148,19 +121,12 @@ class SleepManagerService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var receiverRegistered = false
     private var helperResultReceiverRegistered = false
-    private var keyMapperStateReceiverRegistered = false
-    private val keyMapperStateReceiver = KeyMapperStateReceiver()
 
     private val helperWakeResultState = HelperWakeResultState()
     private var syncthingSleepSummaryState =
         SyncthingSleepSummaryState.NOT_MANAGED
     private val sleepCycleRuntimeState = SleepCycleRuntimeState()
-    private val basicSyncPreSleepState = BasicSyncPreSleepState()
     private val syncthingPreSleepState = SyncthingPreSleepState()
-
-    private val activeBasicSyncFinishRunnable = Runnable {
-        pollActiveBasicSyncBeforeSleep()
-    }
 
     private val externalPowerDisconnectRecheckRunnable = Runnable {
         val stillConnected =
@@ -213,22 +179,9 @@ class SleepManagerService : Service() {
     private val tailscaleVerificationState =
         TailscaleVerificationRuntimeState()
     private var initialScreenStateApplied = false
-    private var syncMaintenanceRunner: SyncMaintenanceRunner? = null
-    private val wakeTransitionSyncState = WakeTransitionSyncState()
-    private val basicSyncRestoreRetryState =
-        BasicSyncRestoreRetryState()
     private val deviceControlRestoreRetryState =
         DeviceControlRestoreRetryState()
     private val disableRestoreState = DisableRestoreRuntimeState()
-
-    private var basicSyncWakeRestoreStartedAt = 0L
-    private val basicSyncWakeRestoreRunnable = Runnable {
-        verifyPendingBasicSyncRestore()
-    }
-
-    private val ownedBasicSyncRestoreRunnable = Runnable {
-        maybeRestoreOwnedBasicSyncState()
-    }
 
     private val ownedDeviceControlRestoreRunnable = Runnable {
         continueOwnedDeviceControlRestoreForDisable()
@@ -376,16 +329,6 @@ class SleepManagerService : Service() {
                 raOfflineProxyCoordinator = it
             }
 
-    private fun syncRunner(): SyncMaintenanceRunner =
-        syncMaintenanceRunner
-            ?: SyncMaintenanceRunner(this, handler).also {
-                syncMaintenanceRunner = it
-            }
-
-    private fun cancelSyncMaintenance(restoreSleepWifi: Boolean) {
-        syncMaintenanceRunner?.cancel(restoreSleepWifi)
-    }
-
     private fun captureAdvancedDiagnostics(
         phase: String,
         includeLatestProcessExit: Boolean = false,
@@ -407,82 +350,6 @@ class SleepManagerService : Service() {
         }.onFailure {
             Log.w(TAG, "Advanced diagnostics capture skipped", it)
         }
-    }
-
-    private fun refreshBasicSyncObserver() {
-        if (AppPreferences.manageBasicSync(this)) {
-            BasicSyncController.startStateObserver(this)
-        } else {
-            BasicSyncController.stopStateObserver()
-        }
-    }
-
-    private fun shouldRestoreOwnedBasicSyncState(): Boolean =
-        SyncStopOwnershipStore.hasBasicSyncOwnership(this) &&
-            (
-                !AppPreferences.isEnabled(this) ||
-                    !AppPreferences.manageBasicSync(this) ||
-                    !AppPreferences.syncThenStopOnSleepWake(this)
-            )
-
-    private fun maybeRestoreOwnedBasicSyncState() {
-        handler.removeCallbacks(ownedBasicSyncRestoreRunnable)
-
-        if (!shouldRestoreOwnedBasicSyncState()) {
-            basicSyncRestoreRetryState.reset()
-            return
-        }
-
-        basicSyncRestoreRetryState.markAttemptStarted()
-
-        // The integration may have just been disabled, so keep a temporary
-        // state observer alive long enough to verify that SleepManager still
-        // owns the stopped state before restoring anything.
-        BasicSyncController.startStateObserver(this)
-
-        val restoreResult =
-            SyncStopOwnershipStore.restoreBasicSyncIfOwned(this)
-        when (
-            basicSyncRestoreRetryState.onRestoreResult(
-                retryable =
-                    restoreResult == OwnedBasicSyncRestoreResult.PENDING ||
-                        restoreResult == OwnedBasicSyncRestoreResult.FAILED,
-                maxAttempts = OWNED_BASIC_SYNC_RESTORE_MAX_ATTEMPTS
-            )
-        ) {
-            BasicSyncRestoreRetryDecision.RETRY -> {
-                handler.postDelayed(
-                    ownedBasicSyncRestoreRunnable,
-                    OWNED_BASIC_SYNC_RESTORE_INTERVAL_MS
-                )
-                return
-            }
-
-            BasicSyncRestoreRetryDecision.EXHAUSTED -> {
-                Log.w(
-                    TAG,
-                    "BasicSync original state restore remains pending"
-                )
-                DiagnosticsStateStore.recordEvent(
-                    this,
-                    "BasicSync → original state restore retries exhausted"
-                )
-                if (disableRestoreState.isRequested) {
-                    DiagnosticsStateStore.recordEvent(
-                        this,
-                        "Disable → BasicSync original state restore pending"
-                    )
-                }
-            }
-
-            BasicSyncRestoreRetryDecision.COMPLETE -> Unit
-        }
-
-        if (!AppPreferences.manageBasicSync(this)) {
-            BasicSyncController.stopStateObserver()
-        }
-
-        finishDisableRestoreIfRequested()
     }
 
     private val clamshellLidState = ClamshellLidState()
@@ -702,7 +569,6 @@ class SleepManagerService : Service() {
                     )
 
                     if (!restoreSuccess) {
-                        wakeTransitionSyncState.clear()
                         Log.w(
                             TAG,
                             "Helper restore failed status=$helperStatus; preserving sleep transaction"
@@ -764,12 +630,11 @@ class SleepManagerService : Service() {
                             "Helper wake completed -> starting network-ready wait"
                         )
                         waitForNetworkAndRestorePendingConnectors()
-                        maybeStartWakeTransitionSync()
                     } else {
                         if (!disableRestoreState.isRequested) {
                             // The Helper result is authoritative for radio restoration.
                             // Log it immediately even while independent connector restores
-                            // (for example BasicSync or RAOfflineProxy) are still pending.
+                            // (for example RAOfflineProxy) are still pending.
                             DiagnosticsStateStore.recordEvent(
                                 this@SleepManagerService,
                                 buildWakeSummary(
@@ -787,7 +652,6 @@ class SleepManagerService : Service() {
 
                         SleepCycleStore.completeIfRestored(this@SleepManagerService)
                         finishDisableRestoreIfRequested()
-                        maybeStartWakeTransitionSync()
                     }
                 }
             }
@@ -807,8 +671,9 @@ class SleepManagerService : Service() {
         createNotificationChannel()
         startForegroundCompat()
         registerHelperResultReceiver()
-        registerKeyMapperStateReceiver()
-        refreshBasicSyncObserver()
+        // Records of integrations removed after 0.8.0.13 cannot be restored
+        // and must not hold the remaining participants' cycle open.
+        SleepCycleStore.dropRetiredConnectorChanges(this)
         runRecovery(RecoveryEvent.CREATE)
         if (!AppPreferences.isEnabled(this)) {
             // Restore-only mode: started to finish restoring after a disable.
@@ -852,9 +717,6 @@ class SleepManagerService : Service() {
                     .isPending(context, cycle)
             }
 
-            override fun restoreOwnedBasicSyncIfUnmanaged() =
-                maybeRestoreOwnedBasicSyncState()
-
             override fun restoreRaOfflineProxyIfUnmanaged() =
                 maybeRestoreDisabledRaOfflineProxyState()
 
@@ -891,8 +753,8 @@ class SleepManagerService : Service() {
             override fun reapplyHelperSleepWifi(event: RecoveryEvent) {
                 val context = this@SleepManagerService
                 if (event == RecoveryEvent.CREATE_ENABLED) {
-                    // After an interrupted maintenance window only a cycle that
-                    // manages Wi-Fi through an installed Helper is re-asserted.
+                    // Only a cycle that manages Wi-Fi through an installed
+                    // Helper is re-asserted on create.
                     if (
                         !SleepCycleStore.current(context).wifiManaged ||
                         !HelperController.isInstalled(context)
@@ -906,12 +768,10 @@ class SleepManagerService : Service() {
                 if (event == RecoveryEvent.CREATE_ENABLED) {
                     Log.i(
                         TAG,
-                        "Service recovery -> requested sleep Wi-Fi state after interrupted maintenance"
+                        "Service recovery -> re-asserted sleep Wi-Fi state"
                     )
                 }
             }
-
-            override fun restoreKeyMapper() = restorePendingKeyMapper()
 
             override fun replayScreenState() = applyCurrentScreenState()
         }
@@ -1115,11 +975,6 @@ class SleepManagerService : Service() {
             return START_NOT_STICKY
         }
 
-        if (intent?.action == ACTION_PERIODIC_SYNC) {
-            handlePeriodicSyncAlarm()
-            return START_STICKY
-        }
-
         if (intent?.action == ACTION_SLEEP_DELAY_ELAPSED) {
             cancelSleepDelay()
 
@@ -1151,9 +1006,6 @@ class SleepManagerService : Service() {
 
         if (!receiverRegistered) registerScreenReceiver()
         if (!helperResultReceiverRegistered) registerHelperResultReceiver()
-        if (!keyMapperStateReceiverRegistered) registerKeyMapperStateReceiver()
-        refreshBasicSyncObserver()
-        runRecovery(RecoveryEvent.START_ENABLED)
         refreshLidMonitor()
 
         if (!initialScreenStateApplied) {
@@ -1314,8 +1166,6 @@ class SleepManagerService : Service() {
             this,
             deferred = false
         )
-        wakeTransitionSyncState.clear()
-        SyncTransitionStore.clear(this)
         syncthingPreSleepState.invalidate()
         raOfflineProxyCoordinator?.cancelSleepGate(
             clearPersistedState = true
@@ -1324,15 +1174,12 @@ class SleepManagerService : Service() {
 
         cancelNetworkReadyWait()
 
-        SyncMaintenanceScheduler.cancel(this)
-        cancelSyncMaintenance(restoreSleepWifi = false)
         cancelSleepDelay()
         clearPendingSleepStopWait()
         sleepCycleRuntimeState.clearSkippedByConditions()
         releaseAllSleepTransitionWakeLocks()
 
         startOwnedDeviceControlRestoreForDisable()
-        maybeRestoreOwnedBasicSyncState()
         prepareTailscaleVerificationForWake()
         restoreImmediateParticipants(RestoreReason.DISABLE)
 
@@ -1406,7 +1253,6 @@ class SleepManagerService : Service() {
 
         if (
             disableRestoreState.isInitializing ||
-            basicSyncRestoreRetryState.isPending ||
             deviceControlRestoreRetryState.isPending
         ) {
             return
@@ -1434,7 +1280,6 @@ class SleepManagerService : Service() {
     }
 
     private fun onScreenOff() {
-        resetBasicSyncWakeRestoreConfirmation()
         closedLidState.clearSleepRequestPending()
 
         if (sleepCycleRuntimeState.consumeFalseWakeResleepPending()) {
@@ -1444,16 +1289,6 @@ class SleepManagerService : Service() {
                 "Screen OFF after suppressed closed-lid false wake -> preserving existing sleep transaction"
             )
             return
-        }
-
-        wakeTransitionSyncState.clear()
-
-        if (
-            SyncMaintenancePolicy.shouldCancelMaintenanceOnScreenOff(
-                syncMaintenanceRunner?.activeTrigger
-            )
-        ) {
-            cancelSyncMaintenance(restoreSleepWifi = false)
         }
 
         if (AppPreferences.advancedDiagnosticsEnabled(this)) {
@@ -1491,11 +1326,6 @@ class SleepManagerService : Service() {
                     this,
                     SyncthingConnector.id
                 )
-            val basicSyncStopPending =
-                SleepCycleStore.hasConnectorChange(
-                    this,
-                    BasicSyncConnector.id
-                )
             val tailscaleVerificationPending =
                 isTailscaleSleepVerificationPending()
 
@@ -1520,8 +1350,7 @@ class SleepManagerService : Service() {
                         wifiManaged = existingCycle.wifiManaged,
                         radioControlAvailable = radioSleepPending,
                         batterySaverWillEnable = batterySaverWillEnable,
-                        syncthingStopRequested = syncthingStopPending,
-                        basicSyncStopRequested = basicSyncStopPending
+                        syncthingStopRequested = syncthingStopPending
                     )
             val waitForTailscale =
                 SleepWakePolicy
@@ -1553,14 +1382,8 @@ class SleepManagerService : Service() {
                     radioSleepPending && existingCycle.bluetoothManaged
                 sleepStopWaitState.pendingSyncthing =
                     waitForManagedStops && syncthingStopPending
-                sleepStopWaitState.pendingBasicSync =
-                    waitForManagedStops && basicSyncStopPending
 
                 initializeSleepStopWait(elapsed)
-
-                if (sleepStopWaitState.pendingBasicSync) {
-                    BasicSyncController.requestStateBroadcast(this)
-                }
 
                 if (waitForTailscale) {
                     Log.i(
@@ -1609,13 +1432,10 @@ class SleepManagerService : Service() {
         sleepCycleRuntimeState.markActionsApplied()
 
         handler.removeCallbacks(sleepRadioRunnable)
-        cancelActiveBasicSyncWait()
         releaseSleepPipelineWakeLocks()
 
         val conditions = SleepConditionEvaluator.evaluate(this)
         if (!conditions.met) {
-            SyncMaintenanceScheduler.cancel(this)
-            SyncTransitionStore.clear(this)
             sleepCycleRuntimeState.markSkippedByConditions()
             val reason = conditions.failedReasons.joinToString(" · ")
             Log.i(TAG, "Sleep actions skipped -> $reason")
@@ -1627,267 +1447,18 @@ class SleepManagerService : Service() {
         }
 
         sleepCycleRuntimeState.clearSkippedByConditions()
-
-        val transitionSyncRequested = syncThenStopAvailable()
-        if (
-            !transitionSyncRequested &&
-            shouldProbeBasicSyncBeforeNormalSleep()
-        ) {
-            probeBasicSyncBeforeNormalSleep()
-            return
-        }
-
-        continueFreshSleepActions(transitionSyncRequested)
+        prepareSyncthingAndApplyFreshSleepActions()
     }
 
-    private fun shouldProbeBasicSyncBeforeNormalSleep(): Boolean =
-        AppPreferences.manageBasicSync(this) &&
-            BasicSyncController.isInstalled(this) &&
-            BasicSyncController.supportsSyncCounters(this)
-
-    private fun probeBasicSyncBeforeNormalSleep() {
-        BasicSyncController.startStateObserver(this)
-        val generation = ++basicSyncPreSleepState.freshProbeGeneration
-
-        acquireSleepTransitionWakeLock(
-            SleepTransitionHold.BASIC_SYNC_PROBE,
-            BASIC_SYNC_FRESH_STATE_TIMEOUT_MS +
-                SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
-        )
-
-        val scheduled = runCatching {
-            syncStopProbeExecutor.execute {
-                val state =
-                    runCatching {
-                        BasicSyncController.requestState(
-                            this,
-                            BASIC_SYNC_FRESH_STATE_TIMEOUT_MS
-                        )
-                    }.getOrElse { error ->
-                        Log.e(TAG, "BasicSync fresh state probe failed before sleep", error)
-                        null
-                    }
-
-                handler.post {
-                    if (generation != basicSyncPreSleepState.freshProbeGeneration) {
-                        return@post
-                    }
-
-                    if (
-                        !isEffectivelySleepingNow() ||
-                        !AppPreferences.isEnabled(this) ||
-                        !sleepCycleRuntimeState.actionsApplied
-                    ) {
-                        releaseSleepTransitionWakeLock(SleepTransitionHold.BASIC_SYNC_PROBE)
-                        return@post
-                    }
-
-                    if (
-                        basicSyncCompletionState(state) ==
-                        SyncCompletionState.SYNCING
-                    ) {
-                        startActiveBasicSyncWait()
-                    } else {
-                        releaseSleepTransitionWakeLock(SleepTransitionHold.BASIC_SYNC_PROBE)
-                        continueFreshSleepActions(
-                            transitionSyncRequested = false
-                        )
-                    }
-                }
-            }
-            true
-        }.getOrElse { error ->
-            Log.e(TAG, "Unable to schedule BasicSync fresh state probe", error)
-            false
-        }
-
-        if (!scheduled) {
-            releaseSleepTransitionWakeLock(SleepTransitionHold.BASIC_SYNC_PROBE)
-            continueFreshSleepActions(
-                transitionSyncRequested = false
-            )
-        }
-    }
-
-    private fun startActiveBasicSyncWait() {
-        basicSyncPreSleepState.beginActiveWait(SystemClock.elapsedRealtime())
-        acquireSleepTransitionWakeLock(
-            SleepTransitionHold.BASIC_SYNC_PROBE,
-            BASIC_SYNC_ACTIVE_FINISH_TIMEOUT_MS +
-                SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
-        )
-        BasicSyncController.requestStateBroadcast(this)
-        handler.post(activeBasicSyncFinishRunnable)
-        Log.i(
-            TAG,
-            "BasicSync is already syncing; waiting for it to finish before sleep actions"
-        )
-        DiagnosticsStateStore.recordEvent(
-            this,
-            "Sleep → waiting for active BasicSync sync to finish"
-        )
-    }
-
-    private fun pollActiveBasicSyncBeforeSleep() {
-        if (!basicSyncPreSleepState.waitingForActiveSync) return
-
-        if (
-            isRealWakeNow() ||
-            !AppPreferences.isEnabled(this)
-        ) {
-            cancelActiveBasicSyncWait()
-            return
-        }
-
-        val now = SystemClock.elapsedRealtime()
-        val elapsed = now - basicSyncPreSleepState.waitStartedAtElapsed
-        val completion =
-            basicSyncCompletionState(
-                BasicSyncController.lastObservedState()
-            )
-
-        when (completion) {
-            SyncCompletionState.SYNCING -> {
-                basicSyncPreSleepState.syncedSinceElapsed = 0L
-            }
-
-            SyncCompletionState.SYNCED -> {
-                if (basicSyncPreSleepState.syncedSinceElapsed == 0L) {
-                    basicSyncPreSleepState.syncedSinceElapsed = now
-                } else if (
-                    now - basicSyncPreSleepState.syncedSinceElapsed >=
-                    BASIC_SYNC_IDLE_STABILITY_MS
-                ) {
-                    cancelActiveBasicSyncWait()
-                    DiagnosticsStateStore.recordEvent(
-                        this,
-                        "Sleep → active BasicSync sync finished"
-                    )
-                    continueFreshSleepActions(
-                        transitionSyncRequested = false
-                    )
-                    return
-                }
-            }
-
-            SyncCompletionState.UNKNOWN -> {
-                basicSyncPreSleepState.syncedSinceElapsed = 0L
-            }
-        }
-
-        if (elapsed >= BASIC_SYNC_ACTIVE_FINISH_TIMEOUT_MS) {
-            cancelActiveBasicSyncWait()
-            Log.w(
-                TAG,
-                "Timed out waiting for active BasicSync sync; continuing with STOP"
-            )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Sleep → BasicSync active sync wait timed out"
-            )
-            continueFreshSleepActions(
-                transitionSyncRequested = false
-            )
-            return
-        }
-
-        BasicSyncController.requestStateBroadcast(this)
-        handler.postDelayed(
-            activeBasicSyncFinishRunnable,
-            BASIC_SYNC_ACTIVE_FINISH_POLL_MS
-        )
-    }
-
-    private fun cancelActiveBasicSyncWait() {
-        handler.removeCallbacks(activeBasicSyncFinishRunnable)
-        basicSyncPreSleepState.cancelActiveWait()
-    }
-
-    private fun continueFreshSleepActions(
-        transitionSyncRequested: Boolean
-    ) {
-        val transitionOwnershipReady =
-            !transitionSyncRequested ||
-                !AppPreferences.manageBasicSync(this) ||
-                SyncStopOwnershipStore.captureBasicSyncIfNeeded(this)
-        val transitionSyncAvailable =
-            transitionSyncRequested && transitionOwnershipReady
-
-        if (transitionSyncRequested && !transitionOwnershipReady) {
-            Log.w(
-                TAG,
-                "Sync then stop skipped for this sleep: BasicSync original state is not known yet"
-            )
-        }
-
-        if (!transitionSyncAvailable) {
-            SyncTransitionStore.clear(this)
-        }
-
-        if (transitionSyncAvailable) {
-            val started =
-                syncRunner().start(
-                    SyncMaintenanceTrigger.BEFORE_SLEEP
-                ) { snapshot ->
-                    DiagnosticsStateStore.recordEvent(
-                        this,
-                        "Pre-sleep sync → ${snapshot.outcome}"
-                    )
-
-                    val stillSleeping = isEffectivelySleepingNow()
-                    val shouldContinueSleep =
-                        SyncMaintenancePolicy
-                            .shouldContinueSleepAfterPreSleepMaintenance(
-                                stillSleeping = stillSleeping,
-                                managerEnabled = AppPreferences.isEnabled(this),
-                                actionsApplied =
-                                    sleepCycleRuntimeState.actionsApplied
-                            )
-
-                    if (shouldContinueSleep) {
-                        // A wake sync is earned only once pre-sleep maintenance
-                        // finished while this sleep transition is still valid.
-                        SyncTransitionStore.armWakeSync(this)
-                        prepareSyncthingAndApplyFreshSleepActions(
-                            keepBasicSyncStopped = true
-                        )
-                    } else {
-                        SyncTransitionStore.clear(this)
-                        Log.i(
-                            TAG,
-                            "Pre-sleep sync finished after wake; sleep actions not continued"
-                        )
-                    }
-                }
-
-            if (started) {
-                Log.i(TAG, "Pre-sleep sync maintenance started")
-                return
-            }
-        }
-
-        prepareSyncthingAndApplyFreshSleepActions(
-            keepBasicSyncStopped = transitionSyncAvailable
-        )
-    }
-
-    private fun prepareSyncthingAndApplyFreshSleepActions(
-        keepBasicSyncStopped: Boolean
-    ) {
+    private fun prepareSyncthingAndApplyFreshSleepActions() {
         if (!AppPreferences.manageSyncthing(this)) {
-            applyFreshSleepActions(
-                keepBasicSyncStopped = keepBasicSyncStopped,
-                syncthingPreSleepProbe = null
-            )
+            applyFreshSleepActions(syncthingPreSleepProbe = null)
             return
         }
 
         val target = SyncthingController.selectedTarget(this)
         if (target == null) {
-            applyFreshSleepActions(
-                keepBasicSyncStopped = keepBasicSyncStopped,
-                syncthingPreSleepProbe = null
-            )
+            applyFreshSleepActions(syncthingPreSleepProbe = null)
             return
         }
 
@@ -1933,10 +1504,7 @@ class SleepManagerService : Service() {
                         }
 
                         releaseSleepTransitionWakeLock(SleepTransitionHold.SYNCTHING_PROBE)
-                        applyFreshSleepActions(
-                            keepBasicSyncStopped = keepBasicSyncStopped,
-                            syncthingPreSleepProbe = probe
-                        )
+                        applyFreshSleepActions(syncthingPreSleepProbe = probe)
                     }
                 }
                 true
@@ -1948,7 +1516,6 @@ class SleepManagerService : Service() {
         if (!scheduled) {
             releaseSleepTransitionWakeLock(SleepTransitionHold.SYNCTHING_PROBE)
             applyFreshSleepActions(
-                keepBasicSyncStopped = keepBasicSyncStopped,
                 syncthingPreSleepProbe =
                     SyncthingConnector.PreSleepProbe(
                         packageName = packageName,
@@ -1959,7 +1526,6 @@ class SleepManagerService : Service() {
     }
 
     private fun applyFreshSleepActions(
-        keepBasicSyncStopped: Boolean,
         syncthingPreSleepProbe: SyncthingConnector.PreSleepProbe?
     ) {
         val requestedWifi = AppPreferences.manageWifi(this)
@@ -1972,18 +1538,6 @@ class SleepManagerService : Service() {
         val tailscale =
             AppPreferences.manageTailscale(this) &&
                 TailscaleConnector.isInstalled(this)
-        val jamesDsp =
-            AppPreferences.manageJamesDsp(this) &&
-                JamesDspConnector.isInstalled(this)
-        val keyMapper =
-            AppPreferences.manageKeyMapper(this) &&
-                KeyMapperController.isCompatible(this)
-        val basicSync =
-            AppPreferences.manageBasicSync(this) &&
-                BasicSyncConnector.isInstalled(this)
-        if (basicSync) {
-            BasicSyncController.startStateObserver(this)
-        }
         val radiosManaged = wifi || bluetooth
         val radioBackend =
             if (radiosManaged) RadioController.backend(this)
@@ -2005,13 +1559,11 @@ class SleepManagerService : Service() {
             TAG,
             "Screen OFF -> cycle=${cycle.cycleId} wifi=$wifi/$requestedWifi " +
                 "bluetooth=$bluetooth/$requestedBluetooth " +
-                "syncthing=$syncthing tailscale=$tailscale jamesDsp=$jamesDsp " +
-                "basicSync=$basicSync keepBasicSyncStopped=$keepBasicSyncStopped " +
+                "syncthing=$syncthing tailscale=$tailscale " +
                 "radioBackend=$radioBackend"
         )
 
-        // Syncthing always keeps its normal STOP/FOLLOW ownership. Advanced
-        // completion-aware maintenance is BasicSync-only.
+        // Syncthing keeps its normal STOP/FOLLOW ownership.
         val syncthingResult =
             if (syncthing) {
                 if (syncthingPreSleepProbe != null) {
@@ -2064,108 +1616,7 @@ class SleepManagerService : Service() {
             )
         }
 
-        if (keyMapper) {
-            when (KeyMapperController.pauseIfActive(this)) {
-                KeyMapperController.PauseOutcome.SENT -> {
-                    SleepCycleStore.recordConnectorChange(
-                        this,
-                        KeyMapperController.CONNECTOR_ID,
-                        KeyMapperController.TOKEN_RESUME
-                    )
-                    DiagnosticsStateStore.recordEvent(this, "Sleep → Key Mapper pause requested")
-                }
-                KeyMapperController.PauseOutcome.ALREADY_PAUSED ->
-                    DiagnosticsStateStore.recordEvent(this, "Sleep → Key Mapper already paused")
-                KeyMapperController.PauseOutcome.UNKNOWN ->
-                    DiagnosticsStateStore.recordEvent(this, "Sleep → Key Mapper state unknown; unchanged")
-                KeyMapperController.PauseOutcome.FAILED ->
-                    DiagnosticsStateStore.recordEvent(this, "Sleep → Key Mapper pause failed")
-            }
-        }
-
-        val jamesDspResult = if (jamesDsp) {
-            JamesDspConnector.sleep(this)
-        } else {
-            null
-        }
-
-        if (jamesDsp) {
-            DiagnosticsStateStore.recordEvent(
-                this,
-                when {
-                    jamesDspResult?.changed == true ->
-                        "Sleep → JamesDSP OFF sent · previous state unknown"
-                    jamesDspResult?.attempted == true ->
-                        "Sleep → JamesDSP OFF not confirmed"
-                    else ->
-                        "Sleep → JamesDSP unchanged · " +
-                            (jamesDspResult?.detail ?: "no action")
-                }
-            )
-        }
-
-        if (jamesDspResult?.changed == true) {
-            SleepCycleStore.recordConnectorChange(
-                this,
-                JamesDspConnector.id,
-                jamesDspResult.restoreToken
-            )
-        }
-
-        val basicSyncStopSent =
-            if (basicSync && keepBasicSyncStopped) {
-                BasicSyncController.sendStop(this)
-            } else {
-                false
-            }
-
-        val basicSyncResult =
-            if (basicSync && !keepBasicSyncStopped) {
-                BasicSyncConnector.sleep(this)
-            } else {
-                null
-            }
-
-        if (basicSyncResult?.changed == true) {
-            SleepCycleStore.recordConnectorChange(
-                this,
-                BasicSyncConnector.id,
-                basicSyncResult.restoreToken
-            )
-            val restoreTarget =
-                BasicSyncConnector.restoreTargetName(
-                    basicSyncResult.restoreToken
-                )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Sleep → BasicSync STOP sent · restore $restoreTarget"
-            )
-            Log.i(
-                TAG,
-                "BasicSync STOP sent; restore target=$restoreTarget"
-            )
-        } else if (basicSyncResult?.detail != null) {
-            Log.i(TAG, "BasicSync unchanged: ${basicSyncResult.detail}")
-        }
-
-        if (basicSync && keepBasicSyncStopped) {
-            SleepCycleStore.clearConnectorChange(
-                this,
-                BasicSyncConnector.id
-            )
-            Log.i(
-                TAG,
-                "BasicSync STOP sent=$basicSyncStopSent; advanced sync ownership retained"
-            )
-        }
-
         val syncthingStopRequested = syncthingResult?.changed == true
-        val basicSyncStopRequested =
-            if (keepBasicSyncStopped) {
-                basicSyncStopSent
-            } else {
-                basicSyncResult?.changed == true
-            }
         val tailscaleVerificationPending = isTailscaleSleepVerificationPending()
         val waitForManagedStops =
             SleepWakePolicy
@@ -2173,8 +1624,7 @@ class SleepManagerService : Service() {
                     wifiManaged = wifi,
                     radioControlAvailable = radioControlAvailable,
                     batterySaverWillEnable = batterySaverWillEnable,
-                    syncthingStopRequested = syncthingStopRequested,
-                    basicSyncStopRequested = basicSyncStopRequested
+                    syncthingStopRequested = syncthingStopRequested
                 )
         val waitForTailscale =
             SleepWakePolicy
@@ -2211,13 +1661,7 @@ class SleepManagerService : Service() {
             sleepStopWaitState.pendingBluetooth = bluetooth
             sleepStopWaitState.pendingSyncthing =
                 waitForManagedStops && syncthingStopRequested
-            sleepStopWaitState.pendingBasicSync =
-                waitForManagedStops && basicSyncStopRequested
             initializeSleepStopWait()
-
-            if (sleepStopWaitState.pendingBasicSync) {
-                BasicSyncController.requestStateBroadcast(this)
-            }
 
             if (waitForTailscale) {
                 Log.i(
@@ -2247,13 +1691,7 @@ class SleepManagerService : Service() {
         ) {
             SleepCycleStore.completeIfRestored(this)
         }
-
-        SyncMaintenanceScheduler.scheduleNext(this)
     }
-
-    private fun syncThenStopAvailable(): Boolean =
-        AppPreferences.syncThenStopOnSleepWake(this) &&
-            ManagedSyncProviders.completionReady(this)
 
     private fun batterySaverWillEnableForSleep(): Boolean {
         val manageEnabled = AppPreferences.manageBatterySaver(this)
@@ -2295,7 +1733,7 @@ class SleepManagerService : Service() {
         Log.i(
             TAG,
             "Waiting before disruptive sleep actions: Syncthing=${sleepStopWaitState.pendingSyncthing} " +
-                "BasicSync=${sleepStopWaitState.pendingBasicSync} timeout=${SYNC_STOP_TIMEOUT_MS}ms"
+                "timeout=${SYNC_STOP_TIMEOUT_MS}ms"
         )
     }
 
@@ -2321,28 +1759,6 @@ class SleepManagerService : Service() {
         }
         val elapsed = now - sleepStopWaitState.startedAtElapsed
         val timedOut = elapsed >= SYNC_STOP_TIMEOUT_MS
-
-        val basicSyncStopped =
-            when {
-                !sleepStopWaitState.pendingBasicSync -> true
-                BasicSyncController.supportsStateApi(this) ->
-                    BasicSyncController.isConfirmedStopped()
-                else ->
-                    // BasicSync versions without the state API cannot confirm
-                    // STOP. Preserve the old short grace rather than blocking
-                    // the sleep transition for the full timeout.
-                    elapsed >= SYNCTHING_STOP_GRACE_MS
-            }
-
-        if (
-            sleepStopWaitState.pendingBasicSync &&
-            !basicSyncStopped &&
-            !timedOut &&
-            now - sleepStopWaitState.lastBasicSyncStateRequestAtElapsed >= 1_000L
-        ) {
-            sleepStopWaitState.lastBasicSyncStateRequestAtElapsed = now
-            BasicSyncController.requestStateBroadcast(this)
-        }
 
         if (
             sleepStopWaitState.pendingSyncthing &&
@@ -2460,22 +1876,11 @@ class SleepManagerService : Service() {
 
         if (
             !timedOut &&
-            (!basicSyncStopped ||
-                (sleepStopWaitState.pendingSyncthing && !sleepStopWaitState.syncthingConfirmed))
+            sleepStopWaitState.pendingSyncthing &&
+            !sleepStopWaitState.syncthingConfirmed
         ) {
             scheduleSleepRadioStopCheck()
             return
-        }
-
-        if (sleepStopWaitState.pendingBasicSync && !basicSyncStopped) {
-            Log.w(
-                TAG,
-                "BasicSync STOP not confirmed before disruptive sleep actions timeout"
-            )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Sleep → BasicSync STOP not confirmed before disruptive sleep actions"
-            )
         }
 
         if (sleepStopWaitState.pendingSyncthing && !sleepStopWaitState.syncthingConfirmed) {
@@ -2890,55 +2295,6 @@ class SleepManagerService : Service() {
         return restored
     }
 
-    private fun temporarilyRestoreBatterySaverForMaintenance(): Boolean {
-        val owned = DeviceControlStore.batterySaver(this)
-        if (!owned.owned || owned.previous) return false
-
-        val current = DeviceControlController.batterySaverEnabled(this)
-        if (
-            !BatterySaverPolicy.shouldTemporarilyRestoreForMaintenance(
-                owned = true,
-                previous = false,
-                current = current
-            )
-        ) {
-            return false
-        }
-
-        val restored =
-            DeviceControlController.setBatterySaverEnabled(false)
-        if (restored) {
-            Log.i(TAG, "Battery Saver temporarily restored for periodic sync")
-        }
-        return restored
-    }
-
-    private fun reapplyBatterySaverAfterMaintenance() {
-        val owned = DeviceControlStore.batterySaver(this)
-        if (!owned.owned || owned.previous) return
-
-        val isRealWake = isRealWakeNow()
-        if (isRealWake) return
-
-        val current = DeviceControlController.batterySaverEnabled(this)
-        if (
-            !BatterySaverPolicy.shouldReapplyAfterMaintenance(
-                owned = true,
-                previous = false,
-                isRealWake = false,
-                current = current
-            )
-        ) {
-            return
-        }
-
-        if (DeviceControlController.setBatterySaverEnabled(true)) {
-            Log.i(TAG, "Battery Saver re-enabled after periodic sync")
-        } else {
-            Log.w(TAG, "Unable to re-enable Battery Saver after periodic sync")
-        }
-    }
-
     private fun shouldMonitorLid(): Boolean {
         val lidSupported = LidMonitor.isSupported()
         if (!lidSupported) return false
@@ -3280,32 +2636,8 @@ class SleepManagerService : Service() {
 
     private val immediateRestoreHost =
         object : ImmediateRestoreHost {
-            override fun restoreJamesDsp(reason: RestoreReason) =
-                restorePendingJamesDsp()
-
-            override fun restoreKeyMapper(reason: RestoreReason) =
-                restorePendingKeyMapper()
-
             override fun restoreRaOfflineProxy(reason: RestoreReason) =
                 restorePendingRaOfflineProxyImmediately()
-
-            override fun restoreBasicSync(reason: RestoreReason) {
-                if (
-                    reason == RestoreReason.WAKE &&
-                    wakeTransitionSyncState.isPending
-                ) {
-                    SleepCycleStore.clearConnectorChange(
-                        this@SleepManagerService,
-                        BasicSyncConnector.id
-                    )
-                    Log.i(
-                        TAG,
-                        "Wake sync mode active; BasicSync restore token cleared"
-                    )
-                } else {
-                    restorePendingBasicSync()
-                }
-            }
 
             override fun restoreDirectRadios(reason: RestoreReason) =
                 restorePendingDirectRadios(reason)
@@ -3338,199 +2670,6 @@ class SleepManagerService : Service() {
                 "Direct Wi-Fi / Bluetooth restore is still pending."
             )
         }
-    }
-
-    private fun restorePendingKeyMapper() {
-        val change =
-            SleepCycleStore.connectorChange(this, KeyMapperController.CONNECTOR_ID)
-                ?: return
-        val restored = KeyMapperController.resumeIfOwned(this, change.restoreToken)
-        if (restored) {
-            SleepCycleStore.clearConnectorChange(this, KeyMapperController.CONNECTOR_ID)
-            DiagnosticsStateStore.recordEvent(this, "Wake → Key Mapper state restored")
-        } else {
-            SleepCycleStore.markRestoreProblem(
-                this,
-                "Key Mapper resume is still pending."
-            )
-            DiagnosticsStateStore.recordEvent(this, "Wake → Key Mapper resume pending")
-        }
-    }
-
-    private fun restorePendingJamesDsp() {
-        val change =
-            SleepCycleStore.connectorChange(this, JamesDspConnector.id)
-                ?: return
-
-        val wakeResult =
-            JamesDspConnector.wake(this, change.restoreToken)
-
-        if (wakeResult.success) {
-            SleepCycleStore.clearConnectorChange(this, JamesDspConnector.id)
-            if (!disableRestoreState.isRequested) {
-                DiagnosticsStateStore.recordEvent(
-                    this,
-                    "Wake → JamesDSP restored"
-                )
-            }
-            Log.i(TAG, "JamesDSP power ON sent")
-        } else {
-            SleepCycleStore.markRestoreProblem(
-                this,
-                "JamesDSP restore is still pending: ${wakeResult.detail}."
-            )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                if (disableRestoreState.isRequested) {
-                    "Disable → JamesDSP restore pending"
-                } else {
-                    "Wake → JamesDSP restore pending"
-                }
-            )
-            Log.w(TAG, "JamesDSP restore failed; preserving transaction")
-        }
-    }
-
-    private fun resetBasicSyncWakeRestoreConfirmation() {
-        handler.removeCallbacks(basicSyncWakeRestoreRunnable)
-        basicSyncWakeRestoreStartedAt = 0L
-    }
-
-    private fun restorePendingBasicSync() {
-        val change =
-            SleepCycleStore.connectorChange(this, BasicSyncConnector.id)
-                ?: run {
-                    resetBasicSyncWakeRestoreConfirmation()
-                    return
-                }
-
-        val wakeResult =
-            BasicSyncConnector.wake(this, change.restoreToken)
-
-        if (!wakeResult.success) {
-            resetBasicSyncWakeRestoreConfirmation()
-            SleepCycleStore.markRestoreProblem(
-                this,
-                "BasicSync restore is still pending: ${wakeResult.detail}."
-            )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                if (disableRestoreState.isRequested) {
-                    "Disable → BasicSync restore pending"
-                } else {
-                    "Wake → BasicSync restore pending"
-                }
-            )
-            Log.w(TAG, "BasicSync restore failed; preserving transaction")
-            return
-        }
-
-        val restoreTarget =
-            BasicSyncConnector.restoreTargetName(change.restoreToken)
-
-        if (!BasicSyncController.supportsStateApi(this)) {
-            SleepCycleStore.clearConnectorChange(this, BasicSyncConnector.id)
-            if (!disableRestoreState.isRequested) {
-                DiagnosticsStateStore.recordEvent(
-                    this,
-                    "Wake → BasicSync restored · $restoreTarget"
-                )
-            }
-            Log.i(
-                TAG,
-                "BasicSync restore sent without state API confirmation: $restoreTarget"
-            )
-            return
-        }
-
-        BasicSyncController.startStateObserver(this)
-        resetBasicSyncWakeRestoreConfirmation()
-        basicSyncWakeRestoreStartedAt = System.currentTimeMillis()
-        BasicSyncController.requestStateBroadcast(this)
-        handler.postDelayed(
-            basicSyncWakeRestoreRunnable,
-            BASIC_SYNC_WAKE_RESTORE_CONFIRM_INTERVAL_MS
-        )
-        Log.i(
-            TAG,
-            "BasicSync restore sent: $restoreTarget; awaiting state confirmation"
-        )
-    }
-
-    private fun verifyPendingBasicSyncRestore() {
-        val change =
-            SleepCycleStore.connectorChange(this, BasicSyncConnector.id)
-                ?: run {
-                    resetBasicSyncWakeRestoreConfirmation()
-                    return
-                }
-
-        val restoreTarget =
-            BasicSyncConnector.restoreTargetName(change.restoreToken)
-        val state = BasicSyncController.lastObservedState()
-
-        if (
-            BasicSyncConnector.restoreConfirmed(
-                change.restoreToken,
-                state
-            )
-        ) {
-            SleepCycleStore.clearConnectorChange(this, BasicSyncConnector.id)
-            resetBasicSyncWakeRestoreConfirmation()
-
-            if (!disableRestoreState.isRequested) {
-                DiagnosticsStateStore.recordEvent(
-                    this,
-                    "Wake → BasicSync restored · $restoreTarget"
-                )
-            }
-            Log.i(
-                TAG,
-                "BasicSync restore confirmed: $restoreTarget " +
-                    "runState=${state?.runState}"
-            )
-            SleepCycleStore.completeIfRestored(this)
-            finishDisableRestoreIfRequested()
-            return
-        }
-
-        val startedAt =
-            basicSyncWakeRestoreStartedAt.takeIf { it > 0L }
-                ?: System.currentTimeMillis().also {
-                    basicSyncWakeRestoreStartedAt = it
-                }
-        val elapsed = System.currentTimeMillis() - startedAt
-
-        if (elapsed >= BASIC_SYNC_WAKE_RESTORE_CONFIRM_TIMEOUT_MS) {
-            resetBasicSyncWakeRestoreConfirmation()
-            SleepCycleStore.markRestoreProblem(
-                this,
-                "BasicSync restore is still pending: $restoreTarget was not confirmed."
-            )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                if (disableRestoreState.isRequested) {
-                    "Disable → BasicSync restore pending · $restoreTarget not confirmed"
-                } else {
-                    "Wake → BasicSync restore pending · $restoreTarget not confirmed"
-                }
-            )
-            Log.w(
-                TAG,
-                "BasicSync restore not confirmed; preserving transaction " +
-                    "target=$restoreTarget state=$state"
-            )
-            finishDisableRestoreIfRequested(
-                forceStop = disableRestoreState.isRequested
-            )
-            return
-        }
-
-        BasicSyncController.requestStateBroadcast(this)
-        handler.postDelayed(
-            basicSyncWakeRestoreRunnable,
-            BASIC_SYNC_WAKE_RESTORE_CONFIRM_INTERVAL_MS
-        )
     }
 
     private fun hasPendingNetworkConnectorRestore(): Boolean {
@@ -3619,103 +2758,6 @@ class SleepManagerService : Service() {
             }
         )
         finishDisableRestoreIfRequested(forceStop = disableRestoreState.isRequested)
-    }
-
-    private fun handlePeriodicSyncAlarm() {
-        val powerManager =
-            getSystemService(Context.POWER_SERVICE) as? PowerManager
-        val interactive = powerManager?.isInteractive == true
-        val closedLidWakeSuppressed = isClosedLidFalseWakeNow()
-
-        when (
-            SyncMaintenancePolicy.periodicAlarmDeviceDecision(
-                interactive = interactive,
-                closedLidWakeSuppressed = closedLidWakeSuppressed
-            )
-        ) {
-            PeriodicAlarmDeviceDecision.RETRY_AFTER_CLOSED_LID_FALSE_WAKE -> {
-                SyncMaintenanceScheduler.scheduleClosedLidFalseWakeRetry(this)
-                Log.i(
-                    TAG,
-                    "Periodic sync deferred: transient closed-lid false wake"
-                )
-                return
-            }
-
-            PeriodicAlarmDeviceDecision.CANCEL_AWAKE -> {
-                SyncMaintenanceScheduler.cancel(this)
-                Log.i(TAG, "Periodic sync ignored: device is genuinely awake")
-                return
-            }
-
-            PeriodicAlarmDeviceDecision.RUN -> Unit
-        }
-
-        if (!SyncMaintenanceScheduler.canArm(this)) {
-            SyncMaintenanceScheduler.cancel(this)
-            Log.i(TAG, "Periodic sync ignored: feature unavailable")
-            return
-        }
-
-        val conditions = SleepConditionEvaluator.evaluate(this)
-        if (!conditions.met) {
-            val reason = conditions.failedReasons.joinToString(" · ")
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Periodic sync skipped → $reason"
-            )
-            Log.i(
-                TAG,
-                "Periodic sync skipped by Advanced sleep conditions -> $reason"
-            )
-            SyncMaintenanceScheduler.scheduleNext(this)
-            return
-        }
-
-        if (syncMaintenanceRunner?.active == true) {
-            Log.i(TAG, "Periodic sync ignored: maintenance already active")
-            SyncMaintenanceScheduler.scheduleNext(this)
-            return
-        }
-
-        val batterySaverTemporarilyRestored =
-            temporarilyRestoreBatterySaverForMaintenance()
-
-        val started =
-            syncRunner().start(
-                SyncMaintenanceTrigger.PERIODIC_SLEEP
-            ) { snapshot ->
-                DiagnosticsStateStore.recordEvent(
-                    this,
-                    "Periodic sync → ${snapshot.outcome}"
-                )
-
-                if (batterySaverTemporarilyRestored) {
-                    reapplyBatterySaverAfterMaintenance()
-                }
-
-                val stillSleeping = isEffectivelySleepingNow()
-
-                when (
-                    SyncMaintenancePolicy.periodicCompletionFollowUp(
-                        stillSleeping = stillSleeping,
-                        periodicEnabled =
-                            AppPreferences.periodicSyncWhileSleeping(this)
-                    )
-                ) {
-                    PeriodicMaintenanceFollowUp.SCHEDULE_NEXT ->
-                        SyncMaintenanceScheduler.scheduleNext(this)
-                    PeriodicMaintenanceFollowUp.CANCEL ->
-                        SyncMaintenanceScheduler.cancel(this)
-                }
-            }
-
-        if (!started) {
-            if (batterySaverTemporarilyRestored) {
-                reapplyBatterySaverAfterMaintenance()
-            }
-            SyncMaintenanceScheduler.scheduleNext(this)
-        }
     }
 
     private fun scheduleSleepDelay(delayMs: Long) {
@@ -3858,7 +2900,6 @@ class SleepManagerService : Service() {
         captureAdvancedDiagnostics(DiagnosticsCycleStore.PHASE_REAL_WAKE)
         sleepCycleRuntimeState.clearFalseWakeResleepPending()
         cancelNetworkReadyWait()
-        cancelActiveBasicSyncWait()
         raOfflineProxyCoordinator?.cancelSleepGate(
             clearPersistedState = true
         )
@@ -3869,20 +2910,6 @@ class SleepManagerService : Service() {
             deferred = false
         )
         restoreOwnedBatterySaver("Wake")
-
-        SyncMaintenanceScheduler.cancel(this)
-        cancelSyncMaintenance(restoreSleepWifi = false)
-
-        val wakeSyncWasArmed =
-            SyncTransitionStore.isWakeSyncArmed(this)
-        wakeTransitionSyncState.arm(
-            wakeSyncWasArmed = wakeSyncWasArmed,
-            syncThenStopAvailable = syncThenStopAvailable()
-        )
-
-        if (wakeSyncWasArmed && !wakeTransitionSyncState.isPending) {
-            SyncTransitionStore.clear(this)
-        }
 
         val finishedSleepSession = BatterySleepStore.finishSession(this)
         DiagnosticsCycleStore.markWake(
@@ -3972,7 +2999,6 @@ class SleepManagerService : Service() {
 
             if (networkRestoreNeeded) {
                 waitForNetworkAndRestorePendingConnectors()
-                maybeStartWakeTransitionSync()
             } else {
                 if (
                     !helperRestoreNeeded &&
@@ -3992,7 +3018,6 @@ class SleepManagerService : Service() {
                 }
                 SleepCycleStore.completeIfRestored(this)
                 finishDisableRestoreIfRequested()
-                maybeStartWakeTransitionSync()
             }
         } else if (networkRestoreNeeded) {
             Log.i(TAG, "Connector restore waiting for Helper wake result")
@@ -4002,41 +3027,6 @@ class SleepManagerService : Service() {
         }
 
         sleepCycleRuntimeState.clearSkippedByConditions()
-    }
-
-    private fun maybeStartWakeTransitionSync() {
-        if (!wakeTransitionSyncState.isPending) return
-        if (!syncThenStopAvailable()) {
-            wakeTransitionSyncState.clear()
-            return
-        }
-
-        if (!isRealWakeNow()) {
-            return
-        }
-
-        if (syncMaintenanceRunner?.active == true) {
-            return
-        }
-
-        wakeTransitionSyncState.clear()
-
-        val started =
-            syncRunner().start(
-                SyncMaintenanceTrigger.AFTER_WAKE
-            ) { snapshot ->
-                SyncTransitionStore.clear(this)
-                DiagnosticsStateStore.recordEvent(
-                    this,
-                    "Wake sync → ${snapshot.outcome} · clients stopped"
-                )
-            }
-
-        if (started) {
-            Log.i(TAG, "Wake sync maintenance started")
-        } else {
-            SyncTransitionStore.clear(this)
-        }
     }
 
     private fun restorePendingSyncthingBeforeNetworkWait() {
@@ -4765,17 +3755,6 @@ class SleepManagerService : Service() {
         receiverRegistered = true
     }
 
-    private fun registerKeyMapperStateReceiver() {
-        if (keyMapperStateReceiverRegistered) return
-        ContextCompat.registerReceiver(
-            this,
-            keyMapperStateReceiver,
-            IntentFilter(KeyMapperController.ACTION_STATE_CHANGED),
-            ContextCompat.RECEIVER_EXPORTED
-        )
-        keyMapperStateReceiverRegistered = true
-    }
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
@@ -4880,7 +3859,6 @@ class SleepManagerService : Service() {
     }
 
     override fun onDestroy() {
-        wakeTransitionSyncState.clear()
         syncthingPreSleepState.invalidate()
 
         // Re-asserting the sleep radio state is only valid while enabled; a
@@ -4889,7 +3867,6 @@ class SleepManagerService : Service() {
             runRecovery(RecoveryEvent.DESTROY_ENABLED)
         }
 
-        cancelSyncMaintenance(restoreSleepWifi = false)
         cancelNetworkReadyWait()
         helperNetworkRestoreHandoffState.clear()
         disableRestoreState.clearRequest()
@@ -4900,18 +3877,14 @@ class SleepManagerService : Service() {
             sleepDelayState.clear()
         }
         clearPendingSleepStopWait()
-        cancelActiveBasicSyncWait()
         cancelTailscaleVerification()
         handler.removeCallbacks(closedLidGuardRunnable)
         handler.removeCallbacks(closedLidScreenOnRecheckRunnable)
         handler.removeCallbacks(dockDisconnectRunnable)
         handler.removeCallbacks(externalPowerDisconnectRecheckRunnable)
-        resetBasicSyncWakeRestoreConfirmation()
-        handler.removeCallbacks(ownedBasicSyncRestoreRunnable)
         handler.removeCallbacks(ownedDeviceControlRestoreRunnable)
         handler.removeCallbacks(helperRestoreRetryRunnable)
         helperRestoreRetryState.clear()
-        basicSyncRestoreRetryState.clearPending()
         deviceControlRestoreRetryState.clearPending()
         disableRestoreState.clearTransientFlags()
         releaseAllSleepTransitionWakeLocks()
@@ -4921,7 +3894,6 @@ class SleepManagerService : Service() {
             preservePersistedState = true
         )
         raOfflineProxyCoordinator = null
-        BasicSyncController.stopStateObserver()
         stopLidMonitor()
 
         if (receiverRegistered) {
@@ -4930,14 +3902,6 @@ class SleepManagerService : Service() {
             } catch (_: IllegalArgumentException) {
             }
             receiverRegistered = false
-        }
-
-        if (keyMapperStateReceiverRegistered) {
-            try {
-                unregisterReceiver(keyMapperStateReceiver)
-            } catch (_: IllegalArgumentException) {
-            }
-            keyMapperStateReceiverRegistered = false
         }
 
         if (helperResultReceiverRegistered) {

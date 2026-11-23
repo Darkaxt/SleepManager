@@ -7,15 +7,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.DiagnosticsCycleStore
 import com.med.sleepmanager.data.SleepCycleStore
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
-import com.med.sleepmanager.service.PeriodicSyncReceiver
 import com.med.sleepmanager.service.SleepManagerService
-import com.med.sleepmanager.sync.SyncStopOwnershipStore
-import com.med.sleepmanager.sync.SyncTransitionStore
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.Calendar
@@ -43,17 +38,6 @@ class LocalE2EControlTest {
 
         val context =
             InstrumentationRegistry.getInstrumentation().targetContext
-
-        when (mode) {
-            "fire_periodic_sync" -> {
-                PeriodicSyncReceiver().onReceive(
-                    context,
-                    Intent(context, PeriodicSyncReceiver::class.java)
-                        .setAction(PeriodicSyncReceiver.ACTION_PERIODIC_SYNC)
-                )
-                return
-            }
-        }
 
         resetScenarioState(context)
         configureCommon(context)
@@ -90,16 +74,6 @@ class LocalE2EControlTest {
                 )
                 configureSchedule(context, inside = true)
             }
-            "sync_then_stop" -> {
-                configureSyncProviders(context)
-                AppPreferences.setManageWifi(context, true)
-                AppPreferences.setSyncThenStopOnSleepWake(context, true)
-            }
-            "periodic" -> {
-                configureSyncProviders(context)
-                AppPreferences.setManageWifi(context, true)
-                AppPreferences.setPeriodicSyncWhileSleeping(context, true)
-            }
             else -> error("Unknown local E2E mode: $mode")
         }
 
@@ -127,15 +101,12 @@ class LocalE2EControlTest {
 
         SleepCycleStore.clear(context)
         DiagnosticsCycleStore.clear(context)
-        SyncTransitionStore.clear(context)
-        SyncStopOwnershipStore.clearBasicSync(context)
 
         context.getSharedPreferences("device_control_state", Context.MODE_PRIVATE)
             .edit()
             .clear()
             .commit()
 
-        BasicSyncController.clearObservedState()
         HelperController.forgetPendingState(context)
     }
 
@@ -149,11 +120,6 @@ class LocalE2EControlTest {
 
         AppPreferences.setManageSyncthing(context, false)
         AppPreferences.setManageTailscale(context, false)
-        AppPreferences.setManageJamesDsp(context, false)
-        AppPreferences.setManageBasicSync(context, false)
-
-        AppPreferences.setPeriodicSyncWhileSleeping(context, false)
-        AppPreferences.setSyncThenStopOnSleepWake(context, false)
 
         AppPreferences.setManageClosedLidProtection(context, false)
         AppPreferences.setDockDisconnectSleeps(context, false)
@@ -183,23 +149,6 @@ class LocalE2EControlTest {
         AppPreferences.setManageTailscale(
             context,
             TailscaleController.isInstalled(context)
-        )
-        AppPreferences.setManageJamesDsp(
-            context,
-            JamesDspController.isInstalled(context)
-        )
-        AppPreferences.setManageBasicSync(
-            context,
-            BasicSyncController.isInstalled(context)
-        )
-    }
-
-    private fun configureSyncProviders(context: Context) {
-        val syncthing = SyncthingController.selectedTarget(context)
-        AppPreferences.setManageSyncthing(context, syncthing != null)
-        AppPreferences.setManageBasicSync(
-            context,
-            BasicSyncController.isInstalled(context)
         )
     }
 

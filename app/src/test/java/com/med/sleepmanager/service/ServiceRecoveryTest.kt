@@ -5,17 +5,12 @@ import com.med.sleepmanager.data.RecoveryBehaviour.REAPPLY_WHILE_SLEEPING
 import com.med.sleepmanager.data.RecoveryBehaviour.REPLAY_SCREEN_STATE
 import com.med.sleepmanager.data.RecoveryBehaviour.RESTORE_ON_REAL_WAKE
 import com.med.sleepmanager.data.RecoveryBehaviour.RESTORE_OR_REAPPLY
-import com.med.sleepmanager.data.RecoveryBehaviour.RESTORE_WHEN_UNMANAGED
 import com.med.sleepmanager.data.RecoveryEvent
 import com.med.sleepmanager.data.RecoveryEvent.CREATE
 import com.med.sleepmanager.data.RecoveryEvent.CREATE_ENABLED
 import com.med.sleepmanager.data.RecoveryEvent.DESTROY_ENABLED
 import com.med.sleepmanager.data.RecoveryEvent.SCREEN_STATE_REPLAY
-import com.med.sleepmanager.data.RecoveryEvent.START_ENABLED
 import com.med.sleepmanager.data.RestoreParticipants
-import com.med.sleepmanager.integration.KeyMapperController
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
@@ -26,9 +21,10 @@ import org.junit.Test
 /**
  * Characterization of service process-death recovery. The expected effects
  * come from the hand-wired recovery of 0.8.0.12 (SleepManagerService.onCreate,
- * recoverOwnedDeviceControls, recoverInterruptedSleepWifiMaintenance,
- * onStartCommand and onDestroy); [previousHandWiredRecovery] restates that code
- * over the same inputs and every combination is compared against production.
+ * recoverOwnedDeviceControls, recoverInterruptedSleepWifiMaintenance and
+ * onDestroy), minus the BasicSync and Key Mapper steps of the integrations
+ * removed after 0.8.0.13; [previousHandWiredRecovery] restates that code over
+ * the same inputs and every combination is compared against production.
  */
 class ServiceRecoveryTest {
     private data class Scenario(
@@ -49,10 +45,6 @@ class ServiceRecoveryTest {
         override fun isRealWake() = scenario.realWake
         override fun isEffectivelySleeping() = scenario.sleeping
         override fun isPending(participantId: String) = participantId in scenario.pending
-
-        override fun restoreOwnedBasicSyncIfUnmanaged() {
-            effects += "${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged"
-        }
 
         override fun restoreRaOfflineProxyIfUnmanaged() {
             // restorePendingRaOfflineProxyImmediately: no disable is requested
@@ -81,10 +73,6 @@ class ServiceRecoveryTest {
             effects += "${RestoreParticipants.HELPER}:reapply@$event"
         }
 
-        override fun restoreKeyMapper() {
-            effects += "${KeyMapperController.CONNECTOR_ID}:restore"
-        }
-
         override fun replayScreenState() {
             effects += "replay-screen-state"
         }
@@ -104,8 +92,7 @@ class ServiceRecoveryTest {
         val helper = RestoreParticipants.HELPER in s.pending
         when (event) {
             RecoveryEvent.CREATE -> {
-                // maybeRestoreOwnedBasicSyncState(); maybeRestoreDisabledRaOfflineProxyState()
-                out += "${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged"
+                // maybeRestoreDisabledRaOfflineProxyState()
                 if (s.realWake) out += "${RaOfflineProxyConnector.id}:restore-if-unmanaged"
             }
 
@@ -121,12 +108,6 @@ class ServiceRecoveryTest {
                             out += "${RestoreParticipants.HELPER}:reapply@$event"
                     }
                 }
-            }
-
-            RecoveryEvent.START_ENABLED -> {
-                // maybeRestoreOwnedBasicSyncState(); if (isRealWakeNow()) restorePendingKeyMapper()
-                out += "${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged"
-                if (s.realWake) out += "${KeyMapperController.CONNECTOR_ID}:restore"
             }
 
             // applyCurrentScreenState() on the first enabled start.
@@ -193,14 +174,7 @@ class ServiceRecoveryTest {
             production(RecoveryEvent.CREATE_ENABLED, asleep)
         )
         // Nothing is restored while still asleep.
-        assertEquals(
-            listOf("${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged"),
-            production(RecoveryEvent.CREATE, asleep)
-        )
-        assertEquals(
-            listOf("${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged"),
-            production(RecoveryEvent.START_ENABLED, asleep)
-        )
+        assertEquals(emptyList<String>(), production(RecoveryEvent.CREATE, asleep))
         // onDestroy never resumes the RAOfflineProxy gate: Direct radio wins.
         assertEquals(
             listOf("${RestoreParticipants.DIRECT_RADIO}:reapply@${RecoveryEvent.DESTROY_ENABLED}"),
@@ -217,10 +191,7 @@ class ServiceRecoveryTest {
             helperWifiManagedAndInstalled = true
         )
         assertEquals(
-            listOf(
-                "${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged",
-                "${RaOfflineProxyConnector.id}:restore-if-unmanaged"
-            ),
+            listOf("${RaOfflineProxyConnector.id}:restore-if-unmanaged"),
             production(RecoveryEvent.CREATE, awake)
         )
         assertEquals(
@@ -229,13 +200,6 @@ class ServiceRecoveryTest {
                 "${RestoreParticipants.CHARGING_SEPARATION}:recover"
             ),
             production(RecoveryEvent.CREATE_ENABLED, awake)
-        )
-        assertEquals(
-            listOf(
-                "${RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP}:restore-if-unmanaged",
-                "${KeyMapperController.CONNECTOR_ID}:restore"
-            ),
-            production(RecoveryEvent.START_ENABLED, awake)
         )
         assertEquals(listOf("replay-screen-state"), production(RecoveryEvent.SCREEN_STATE_REPLAY, awake))
         assertEquals(emptyList<String>(), production(RecoveryEvent.DESTROY_ENABLED, awake))
@@ -267,7 +231,7 @@ class ServiceRecoveryTest {
      * Every participant's declared recovery, as the 0.8.0.12 service wired it:
      * CREATE = onCreate before the enabled check, CREATE_ENABLED =
      * recoverOwnedDeviceControls + recoverInterruptedSleepWifiMaintenance,
-     * START_ENABLED = onStartCommand, SCREEN_STATE_REPLAY =
+     * SCREEN_STATE_REPLAY =
      * applyCurrentScreenState (onScreenOn restores / onScreenOff resumes),
      * DESTROY_ENABLED = onDestroy's sleep re-assert.
      */
@@ -277,16 +241,10 @@ class ServiceRecoveryTest {
             CREATE_ENABLED to REAPPLY_WHILE_SLEEPING,
             DESTROY_ENABLED to REAPPLY_WHILE_SLEEPING
         ),
-        JamesDspConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
-        KeyMapperController.CONNECTOR_ID to mapOf(
-            START_ENABLED to RESTORE_ON_REAL_WAKE,
-            SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE
-        ),
         RaOfflineProxyConnector.id to mapOf(
             CREATE to RESTORE_ON_REAL_WAKE,
             SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE
         ),
-        BasicSyncConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
         SyncthingConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
         TailscaleConnector.id to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
         RestoreParticipants.SLEEP_CYCLE_RECORD to mapOf(SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE),
@@ -303,11 +261,7 @@ class ServiceRecoveryTest {
             CREATE_ENABLED to RESTORE_OR_REAPPLY,
             SCREEN_STATE_REPLAY to REPLAY_SCREEN_STATE
         ),
-        RestoreParticipants.CHARGING_SEPARATION to mapOf(CREATE_ENABLED to RESTORE_OR_REAPPLY),
-        RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP to mapOf(
-            CREATE to RESTORE_WHEN_UNMANAGED,
-            START_ENABLED to RESTORE_WHEN_UNMANAGED
-        )
+        RestoreParticipants.CHARGING_SEPARATION to mapOf(CREATE_ENABLED to RESTORE_OR_REAPPLY)
     )
 
     @Test
@@ -331,7 +285,6 @@ class ServiceRecoveryTest {
         assertEquals(
             mapOf(
                 CREATE to listOf(
-                    RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP,
                     RaOfflineProxyConnector.id
                 ),
                 // Device controls first, then the first-match sleep re-apply
@@ -342,10 +295,6 @@ class ServiceRecoveryTest {
                     RestoreParticipants.RA_OFFLINE_PROXY_SLEEP_GATE,
                     RestoreParticipants.DIRECT_RADIO,
                     RestoreParticipants.HELPER
-                ),
-                START_ENABLED to listOf(
-                    RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP,
-                    KeyMapperController.CONNECTOR_ID
                 ),
                 DESTROY_ENABLED to listOf(
                     RestoreParticipants.DIRECT_RADIO,
@@ -386,7 +335,7 @@ class ServiceRecoveryTest {
         ServiceRecoveryCoordinator(
             participants = RestoreParticipants.all,
             order = RestoreParticipants.recoveryOrder +
-                (START_ENABLED to listOf(RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP)),
+                (CREATE to emptyList()),
             actions = ServiceRecoveryCoordinator.actions(noopHost),
             host = noopHost
         )

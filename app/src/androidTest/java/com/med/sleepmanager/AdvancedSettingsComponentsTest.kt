@@ -32,8 +32,6 @@ class AdvancedSettingsComponentsTest {
 
     @Test
     fun everyAdvancedControl_invokesItsExpectedCallback() {
-        var periodic by mutableStateOf(false)
-        var syncThenStop by mutableStateOf(false)
         var batteryCondition by mutableStateOf(false)
         var batteryBelow by mutableStateOf(30)
         var notCharging by mutableStateOf(false)
@@ -48,11 +46,6 @@ class AdvancedSettingsComponentsTest {
                     modifier = Modifier.verticalScroll(rememberScrollState())
                 ) {
                     AdvancedSettingsPage(
-                        periodicSyncWhileSleeping = periodic,
-                        syncThenStopOnSleepWake = syncThenStop,
-                        syncConditionsAvailable = true,
-                        onPeriodicSyncWhileSleepingChange = { periodic = it },
-                        onSyncThenStopOnSleepWakeChange = { syncThenStop = it },
                         batteryConditionEnabled = batteryCondition,
                         batteryBelowPercent = batteryBelow,
                         notChargingOnly = notCharging,
@@ -77,16 +70,6 @@ class AdvancedSettingsComponentsTest {
                 }
             }
         }
-
-        composeRule.onNodeWithContentDescription(
-            "Periodic sync while sleeping toggle"
-        ).performScrollTo().performClick()
-        assertTrue(periodic)
-
-        composeRule.onNodeWithContentDescription(
-            "Sync then stop on sleep & wake toggle"
-        ).performScrollTo().performClick()
-        assertTrue(syncThenStop)
 
         composeRule.onNodeWithContentDescription("Battery level toggle")
             .performScrollTo().performClick()

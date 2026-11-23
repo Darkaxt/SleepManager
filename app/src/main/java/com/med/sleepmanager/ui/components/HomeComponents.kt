@@ -48,7 +48,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.R
 import com.med.sleepmanager.ui.AppSection
@@ -119,8 +118,6 @@ internal fun CompactSideRail(
 internal fun OnboardingCard(
     syncthingTarget: SyncthingController.Target?,
     tailscaleInstalled: Boolean,
-    jamesDspTarget: JamesDspController.Target?,
-    basicSyncInstalled: Boolean,
     raOfflineProxyInstalled: Boolean
 ) {
     val detectedApps = buildList {
@@ -129,12 +126,6 @@ internal fun OnboardingCard(
         }
         if (tailscaleInstalled) {
             add(stringResource(R.string.integration_tailscale))
-        }
-        if (jamesDspTarget != null) {
-            add(stringResource(R.string.integration_jamesdsp))
-        }
-        if (basicSyncInstalled) {
-            add(stringResource(R.string.integration_basicsync))
         }
         if (raOfflineProxyInstalled) {
             add(stringResource(R.string.integration_raofflineproxy))

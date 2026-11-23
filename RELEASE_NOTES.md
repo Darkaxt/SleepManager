@@ -1,6 +1,6 @@
-# SleepManager 0.8.0.13 / Helper 1.1.7.2
+# SleepManager 0.8.0.14 / Helper 1.1.7.2
 
-SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **Home screen smoother**, especially on high-refresh-rate Android handhelds.
+This Darkaxt fork release removes the **BasicSync, Key Mapper and JamesDSP integrations** and keeps the sleep/wake engine fixes from the 0.8.0.11–0.8.0.13 audit.
 
 > **Note**
 >
@@ -11,15 +11,19 @@ SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **H
 > [!WARNING]
 > **AYANEO / KONKR devices with DuraSpeed:** disable **DuraSpeed** in Android Settings. Battery usage set to Unrestricted does not override DuraSpeed's background restrictions.
 
+## Removed integrations (0.8.0.14)
+
+- **BasicSync, Key Mapper and JamesDSP are no longer managed.** Their settings, Home and Activity entries and sleep/wake actions are gone, together with the BasicSync-only **periodic sync while sleeping** and **sync then stop** maintenance.
+- **Updating is safe mid-cycle:** a pending restore recorded by 0.8.0.13 for one of these apps is ignored and cleared, so it can no longer hold a sleep cycle open; everything else is still restored normally. An app SleepManager had stopped or paused is not restarted.
+- **Unchanged:** Syncthing-Fork, Tailscale/TailDNS/TailD, RAOfflineProxy, Wi-Fi/Bluetooth, Battery Saver and charging separation.
+
 ## Audit completion (0.8.0.13)
 
 - **Recovery after Android restarts SleepManager now uses the same restore list** as wake, disable and "Forget". Each integration declares what happens when the service restarts while asleep, after wake or on shutdown; the order is checked when the service starts. Behaviour is unchanged and covered by new tests.
-- **What cannot be verified locally, and why:** JamesDSP offers no way to read its state back, and BasicSync and Key Mapper do not identify themselves as senders of their state messages. Closing these needs a change in those apps; the exact change is documented in the code.
 
 ## Audit follow-ups (0.8.0.12)
 
 - **Stricter BasicSync and Key Mapper state checks.** Malformed state messages are ignored, and on Android 14+ a message Android attributes to a different app is rejected. Nothing is accepted while the integration's app is not installed.
-- **Known limit:** BasicSync and Key Mapper do not sign their state messages, so an installed app could still imitate them. That app could already control BasicSync and Key Mapper directly; it can only skew SleepManager's own sleep and sync decisions.
 - **One shared restore list.** Wake, disable, "Forget" and the restore-completion check now use a single registry of everything SleepManager restores, so a restore can no longer be missed by one of those paths. Disable now restores in the same order as wake.
 - Syncthing is unchanged: stopping is already verified, and on wake Syncthing-Fork's own run conditions decide whether it runs, so there is no reliable success signal to check.
 
@@ -36,38 +40,23 @@ This fork release fixes problems found in a design audit of the sleep/wake engin
 
 ## Existing upstream0.8.0 features
 
-### Key Mapper 4.7+ Integration
-
-SleepManager can now manage **Key Mapper mappings** as part of a normal sleep/wake cycle.
-
-- **Pause on sleep:** when mappings are running, SleepManager requests a pause when its sleep actions begin.
-- **Resume on wake:** SleepManager requests a resume only when it was responsible for pausing those mappings.
-- **Respect manual pauses:** mappings already paused before sleep are left untouched, including after wake.
-- **Safe when the state is unknown:** SleepManager does not send a blind pause request before receiving Key Mapper's state.
-- **Optional and off by default:** enable Key Mapper in **App Integrations**. Key Mapper's accessibility service and saved mappings are not modified.
-
-Requires **Key Mapper 4.7.0 or newer**, which exposes the mapping-state API used by SleepManager.
-
 ### Smoother Home Screen
 
 Home screen updates now run in the background and refresh only what has changed. This makes scrolling smoother while keeping battery, integration and Activity information up to date.
 
 ## Compatibility
 
-- SleepManager **0.8.0.13 / versionCode 583**
+- SleepManager **0.8.0.14 / versionCode 584**
 - SleepManager Helper **1.1.7.2 / versionCode 1123** (unchanged)
 - Android **9 / API 28 or newer**
-- Key Mapper **4.7.0+** for the new integration
 - Existing SleepManager settings are retained when updating an official signed build
 - No root, Shizuku or ADB is required for normal use
 
 ## Installation and Updating
 
-Install **SleepManager-0.8.0.13.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+Install **SleepManager-0.8.0.14.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
 
 On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
-
-To use Key Mapper integration, install **Key Mapper 4.7.0+** and enable its integration in SleepManager after Key Mapper reports its mapping state.
 
 ## Maintained fork compatibility
 

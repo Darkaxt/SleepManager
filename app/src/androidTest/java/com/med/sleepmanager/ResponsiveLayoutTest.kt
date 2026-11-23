@@ -3,7 +3,6 @@ package com.med.sleepmanager
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -102,7 +101,7 @@ class ResponsiveLayoutTest {
     }
 
     @Test
-    fun advancedPage_separatesSyncAndSleepConditions() {
+    fun advancedPage_showsSleepConditionsWithoutSyncBehavior() {
         applyDisplay(
             widthPx = 1440,
             heightPx = 900,
@@ -113,19 +112,13 @@ class ResponsiveLayoutTest {
             .performClick()
         composeRule.waitForIdle()
 
+        // The removed sync behavior section must stay gone.
         composeRule.onNodeWithText("Advanced sync behavior")
-            .assertIsDisplayed()
+            .assertDoesNotExist()
         composeRule.onNodeWithText("Periodic sync while sleeping")
-            .assertIsDisplayed()
+            .assertDoesNotExist()
         composeRule.onNodeWithText("Sync then stop on sleep & wake")
-            .assertIsDisplayed()
-
-        composeRule.onNodeWithContentDescription(
-            "Periodic sync while sleeping toggle"
-        ).assertIsNotEnabled()
-        composeRule.onNodeWithContentDescription(
-            "Sync then stop on sleep & wake toggle"
-        ).assertIsNotEnabled()
+            .assertDoesNotExist()
 
         // The duplicate Advanced Custom Delay section is intentionally gone.
         composeRule.onNodeWithTag("main_list")
@@ -196,7 +189,6 @@ class ResponsiveLayoutTest {
 
         assertTextIsNotCrushed("integration_title_Syncthing‑Fork")
         assertTextIsNotCrushed("integration_title_Tailscale / TailDNS")
-        assertTextIsNotCrushed("integration_title_JamesDSP")
         assertTextIsNotCrushed("integration_title_RAOfflineProxy")
     }
 

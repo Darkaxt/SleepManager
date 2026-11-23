@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.ParcelFileDescriptor
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasTestTag
@@ -20,10 +19,8 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.med.sleepmanager.data.AppPreferences
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.RaOfflineProxyController
-import com.med.sleepmanager.integration.JamesDspController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
 import com.med.sleepmanager.protection.LidMonitor
@@ -203,14 +200,6 @@ class RegressionTest {
             available = TailscaleController.isInstalled(targetContext)
         )
         assertIntegrationToggleMatchesAvailability(
-            contentDescription = "JamesDSP toggle",
-            available = JamesDspController.isInstalled(targetContext)
-        )
-        assertIntegrationToggleMatchesAvailability(
-            contentDescription = "BasicSync toggle",
-            available = BasicSyncController.isInstalled(targetContext)
-        )
-        assertIntegrationToggleMatchesAvailability(
             contentDescription = "RAOfflineProxy toggle",
             available =
                 RaOfflineProxyController.isInstalled(targetContext) &&
@@ -245,13 +234,6 @@ class RegressionTest {
 
         openSection("Advanced settings", "Advanced")
         val list = composeRule.onNodeWithTag("main_list")
-
-        composeRule.onNodeWithContentDescription(
-            "Periodic sync while sleeping toggle"
-        ).assertIsNotEnabled()
-        composeRule.onNodeWithContentDescription(
-            "Sync then stop on sleep & wake toggle"
-        ).assertIsNotEnabled()
 
         // Custom Delay moved from Advanced to the Home Grace Period dialog.
         openSection("Home", "SleepManager")
@@ -549,11 +531,7 @@ class RegressionTest {
         AppPreferences.setManageBatterySaver(targetContext, false)
         AppPreferences.setManageSyncthing(targetContext, false)
         AppPreferences.setManageTailscale(targetContext, false)
-        AppPreferences.setManageJamesDsp(targetContext, false)
-        AppPreferences.setManageBasicSync(targetContext, false)
         AppPreferences.setManageRaOfflineProxy(targetContext, false)
-        AppPreferences.setPeriodicSyncWhileSleeping(targetContext, false)
-        AppPreferences.setSyncThenStopOnSleepWake(targetContext, false)
         AppPreferences.setManageClosedLidProtection(targetContext, false)
         AppPreferences.setDockDisconnectSleeps(targetContext, false)
         AppPreferences.setClosedLidPowerSleeps(targetContext, false)

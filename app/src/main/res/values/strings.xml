@@ -25,13 +25,6 @@
     <string name="install_helper">Install Helper</string>
     <string name="integration_syncthing_fork">Syncthing-Fork</string>
     <string name="integration_tailscale">Tailscale / TailDNS</string>
-    <string name="integration_jamesdsp">JamesDSP</string>
-    <string name="integration_keymapper">Key Mapper</string>
-    <string name="integration_keymapper_requires_47">Requires Key Mapper 4.7+</string>
-    <string name="integration_keymapper_active">Mappings active</string>
-    <string name="integration_keymapper_paused">Mappings paused</string>
-    <string name="integration_keymapper_unknown">State unknown · open Key Mapper to sync</string>
-    <string name="integration_basicsync">BasicSync</string>
     <string name="integration_raofflineproxy">RAOfflineProxy</string>
     <string name="raofflineproxy_api_unavailable">Automation API unavailable</string>
     <string name="raofflineproxy_permission_missing">Control permission missing · reinstall SleepManager after RAOfflineProxy</string>
@@ -81,13 +74,6 @@
     <string name="custom">Custom</string>
     <string name="grace_custom_selected_duration">Selected: %1$s</string>
 
-    <string name="advanced_sync_behavior">Advanced sync behavior</string>
-    <string name="advanced_sync_behavior_description">Control how supported sync apps run during sleep and wake transitions.</string>
-    <string name="periodic_sync_while_sleeping">Periodic sync while sleeping</string>
-    <string name="periodic_sync_while_sleeping_description">While the device stays asleep, sync managed clients every 24h, then stop them and restore the sleep state.</string>
-    <string name="advanced_sync_unavailable">Requires BasicSync 3.19+. Syncthing-Fork support is planned.</string>
-    <string name="sync_then_stop_sleep_wake">Sync then stop on sleep &amp; wake</string>
-    <string name="sync_then_stop_sleep_wake_description">Sync managed clients after wake and again before sleep. After each sync completes, stop them to reduce background battery use.</string>
 
     <string name="advanced_sleep_conditions">Advanced sleep conditions</string>
     <string name="advanced_sleep_conditions_description">Fine-tune when sleep actions are allowed and when they begin.</string>
@@ -282,7 +268,6 @@
     <string name="activity_timeline_description">A simple timeline of what SleepManager did. Copy log keeps the full technical details.</string>
     <string name="activity_timeline_sleep">Sleep</string>
     <string name="activity_timeline_wake">Wake</string>
-    <string name="activity_timeline_maintenance">Sleep maintenance</string>
     <string name="activity_timeline_protection">Protection</string>
     <string name="activity_timeline_recovery">Recovery</string>
     <string name="activity_timeline_system">System</string>
@@ -303,11 +288,8 @@
 
     <string name="behavior_wait">Wait %1$s</string>
     <string name="behavior_only_if_prefix">Only if</string>
-    <string name="behavior_sync_before_sleep">Sync supported clients before sleep, then stop them</string>
     <string name="behavior_pause_syncthing">Pause Syncthing‑Fork</string>
     <string name="behavior_disconnect_tailscale">Disconnect Tailscale</string>
-    <string name="behavior_power_off_jamesdsp">Power off JamesDSP</string>
-    <string name="behavior_stop_basicsync">Stop BasicSync when active</string>
     <string name="behavior_stop_raofflineproxy">Stop RAOfflineProxy after its cache queue is safe</string>
     <string name="behavior_enable_battery_saver">Enable Battery Saver</string>
     <string name="behavior_wifi_off">Wi‑Fi off</string>
@@ -318,18 +300,12 @@
     <string name="behavior_restore_battery_saver">Restore Battery Saver previous state</string>
     <string name="behavior_resume_syncthing">Resume Syncthing‑Fork</string>
     <string name="behavior_restore_tailscale">Restore Tailscale if SleepManager disconnected it</string>
-    <string name="behavior_restore_jamesdsp">Restore JamesDSP</string>
-    <string name="behavior_restore_basicsync">Restore BasicSync previous mode</string>
     <string name="behavior_restore_raofflineproxy">Restore RAOfflineProxy if SleepManager stopped it</string>
-    <string name="behavior_sync_after_wake">Sync supported clients after wake, then stop them</string>
     <string name="behavior_closed_lid_return_to_sleep">Return accidental closed-lid wake-ups to sleep</string>
     <string name="behavior_disable_charging_separation">Disable Charging Separation while lid is closed</string>
     <string name="behavior_sleep_on_display_disconnect">Sleep when external display disconnects with lid closed</string>
     <string name="behavior_power_button_sleep">Power button sleeps while lid is closed</string>
-    <string name="behavior_periodic_sync">Run supported sync clients every 24h, then stop them</string>
     <string name="behavior_syncthing">Syncthing</string>
-    <string name="behavior_sleep_wake_sync">Sleep/wake sync</string>
-    <string name="behavior_periodic_sync_short">Periodic sync</string>
     <string name="behavior_condition_singular">%1$d condition</string>
     <string name="behavior_condition_plural">%1$d conditions</string>
     <string name="behavior_clamshell">Clamshell</string>
@@ -338,7 +314,6 @@
     <string name="behavior_when_screen_off">When screen turns OFF</string>
     <string name="behavior_when_screen_on">When screen turns ON</string>
     <string name="behavior_nothing_to_restore">Nothing to restore</string>
-    <string name="behavior_while_sleeping">While sleeping</string>
     <string name="behavior_clamshell_group">Clamshell behavior</string>
     <string name="behavior_restore_only_changed">Only states changed by SleepManager are restored on wake.</string>
     <string name="behavior_false_wakes_note">False wakes while the lid is closed are returned to sleep without normal wake restoration.</string>
@@ -361,17 +336,8 @@
     <string name="not_detected">Not detected</string>
     <string name="running">Running</string>
     <string name="stopped">Stopped</string>
-    <string name="paused">Paused</string>
-    <string name="starting">Starting</string>
-    <string name="stopping">Stopping</string>
-    <string name="importing">Importing</string>
-    <string name="exporting">Exporting</string>
-    <string name="syncing">Syncing</string>
-    <string name="synced">Synced</string>
     <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
-    <string name="auto_mode">Auto mode</string>
-    <string name="manual_mode">Manual mode</string>
     <string name="change_target">Change target</string>
 
     <string name="test_sleep_wake_title">Test sleep / wake</string>
@@ -417,11 +383,6 @@
 
     <string name="home_syncthing_fork">Syncthing‑Fork</string>
     <string name="home_syncthing_broadcast_reminder">Enable “Service control by broadcast” in Syncthing.</string>
-    <string name="home_basicsync_legacy_status">Legacy: STOP → Auto mode</string>
-    <string name="home_basicsync_remote_control_modern">Enable “Allow remote control” in BasicSync.</string>
-    <string name="home_basicsync_remote_control_required">Allow remote control required</string>
-    <string name="home_basicsync_stopped">Open BasicSync to enable remote control</string>
-    <string name="home_basicsync_remote_control_legacy">Enable “Allow remote control” in BasicSync.</string>
 
     <string name="home_condition_battery_below">Battery below %1$d%%</string>
     <string name="home_condition_not_charging">Device is not charging</string>

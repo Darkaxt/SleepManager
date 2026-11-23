@@ -18,7 +18,7 @@ class ActivityTimelineBuilderTest {
                     ),
                     EventHistoryStore.Event(
                         timestamp = 300L,
-                        message = "Wake → BasicSync restored · RUNNING"
+                        message = "Wake → Tailscale restored"
                     ),
                     EventHistoryStore.Event(
                         timestamp = 200L,
@@ -35,7 +35,7 @@ class ActivityTimelineBuilderTest {
         assertEquals(ActivityTimelineKind.WAKE, groups[0].kind)
         assertEquals(
             listOf(
-                "BasicSync restored",
+                "Tailscale restored",
                 "Wi-Fi restored",
                 "Bluetooth restored"
             ),

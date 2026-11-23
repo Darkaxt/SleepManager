@@ -157,11 +157,6 @@ internal fun SleepGraceSelector(
 
 @Composable
 internal fun AdvancedSettingsPage(
-    periodicSyncWhileSleeping: Boolean,
-    syncThenStopOnSleepWake: Boolean,
-    syncConditionsAvailable: Boolean,
-    onPeriodicSyncWhileSleepingChange: (Boolean) -> Unit,
-    onSyncThenStopOnSleepWakeChange: (Boolean) -> Unit,
     batteryConditionEnabled: Boolean,
     batteryBelowPercent: Int,
     notChargingOnly: Boolean,
@@ -180,46 +175,6 @@ internal fun AdvancedSettingsPage(
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SectionTitle(
-            title = stringResource(R.string.advanced_sync_behavior),
-            subtitle = stringResource(R.string.advanced_sync_behavior_description)
-        )
-
-        SettingsCard {
-            AdvancedToggleRow(
-                title = stringResource(R.string.periodic_sync_while_sleeping),
-                subtitle = stringResource(
-                    if (syncConditionsAvailable) {
-                        R.string.periodic_sync_while_sleeping_description
-                    } else {
-                        R.string.advanced_sync_unavailable
-                    }
-                ),
-                checked = periodicSyncWhileSleeping,
-                enabled = syncConditionsAvailable,
-                onCheckedChange = onPeriodicSyncWhileSleepingChange
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-
-            AdvancedToggleRow(
-                title = stringResource(R.string.sync_then_stop_sleep_wake),
-                subtitle = stringResource(
-                    if (syncConditionsAvailable) {
-                        R.string.sync_then_stop_sleep_wake_description
-                    } else {
-                        R.string.advanced_sync_unavailable
-                    }
-                ),
-                checked = syncThenStopOnSleepWake,
-                enabled = syncConditionsAvailable,
-                onCheckedChange = onSyncThenStopOnSleepWakeChange
-            )
-        }
-
         SectionTitle(
             title = stringResource(R.string.conditions),
             subtitle = stringResource(R.string.conditions_description)

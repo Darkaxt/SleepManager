@@ -9,8 +9,7 @@ import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.integration.TailscaleTargetPolicy
 import com.med.sleepmanager.integration.TailscaleTransactionToken
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
+import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
 import com.med.sleepmanager.rules.SleepWakePolicy
@@ -80,18 +79,13 @@ class FalseWakeTransactionRegressionTest {
         )
         SleepCycleStore.recordConnectorChange(
             context,
-            BasicSyncConnector.id,
-            BasicSyncConnector.TOKEN_AUTO_MODE
+            RaOfflineProxyConnector.id,
+            RaOfflineProxyConnector.TOKEN_RESTART
         )
         SleepCycleStore.recordConnectorChange(
             context,
             TailscaleConnector.id,
             TailscaleTransactionToken.restore(TailscaleTargetPolicy.TAILDNS_PACKAGE)
-        )
-        SleepCycleStore.recordConnectorChange(
-            context,
-            JamesDspConnector.id,
-            "james.dsp"
         )
         DeviceControlStore.takeBatterySaverOwnership(
             context,
@@ -148,16 +142,12 @@ class FalseWakeTransactionRegressionTest {
             "confirmed:com.github.catfriend1.syncthingfork"
         )
         assertConnectorPending(
-            BasicSyncConnector.id,
-            BasicSyncConnector.TOKEN_AUTO_MODE
+            RaOfflineProxyConnector.id,
+            RaOfflineProxyConnector.TOKEN_RESTART
         )
         assertConnectorPending(
             TailscaleConnector.id,
             TailscaleTransactionToken.restore(TailscaleTargetPolicy.TAILDNS_PACKAGE)
-        )
-        assertConnectorPending(
-            JamesDspConnector.id,
-            "james.dsp"
         )
         assertTrue(DeviceControlStore.batterySaver(context).owned)
         assertFalse(DeviceControlStore.batterySaver(context).previous)
@@ -168,7 +158,7 @@ class FalseWakeTransactionRegressionTest {
             DiagnosticsCycleStore.diagnosticHistory(context, 1).single()
         assertEquals(initialCycle.cycleId, diagnosticCycle.transactionCycleId)
         assertEquals(1, diagnosticCycle.falseWakeCount)
-        assertEquals(4, diagnosticCycle.connectors.count { it.pending })
+        assertEquals(3, diagnosticCycle.connectors.count { it.pending })
 
         // Real wake: restoration is now allowed.
         val realWake =
@@ -197,12 +187,11 @@ class FalseWakeTransactionRegressionTest {
         assertTrue(SleepCycleStore.isActive(context))
 
         SleepCycleStore.clearConnectorChange(context, SyncthingConnector.id)
-        SleepCycleStore.clearConnectorChange(context, BasicSyncConnector.id)
         SleepCycleStore.clearConnectorChange(context, TailscaleConnector.id)
         assertFalse(SleepCycleStore.completeIfRestored(context))
         assertTrue(SleepCycleStore.isActive(context))
 
-        SleepCycleStore.clearConnectorChange(context, JamesDspConnector.id)
+        SleepCycleStore.clearConnectorChange(context, RaOfflineProxyConnector.id)
         DeviceControlStore.clearBatterySaverOwnership(context)
         DeviceControlStore.clearChargingSeparationOwnership(context)
 

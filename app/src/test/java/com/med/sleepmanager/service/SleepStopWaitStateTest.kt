@@ -10,7 +10,6 @@ class SleepStopWaitStateTest {
     fun begin_resetsTransientVerificationStateAndRecoversElapsedWait() {
         val state = SleepStopWaitState().apply {
             pendingSyncthing = true
-            lastBasicSyncStateRequestAtElapsed = 123L
             syncthingProbeInFlight = true
             syncthingConfirmed = true
         }
@@ -23,7 +22,6 @@ class SleepStopWaitStateTest {
 
         assertEquals(1L, state.generation)
         assertEquals(8_000L, state.startedAtElapsed)
-        assertEquals(0L, state.lastBasicSyncStateRequestAtElapsed)
         assertFalse(state.syncthingProbeInFlight)
         assertFalse(state.syncthingConfirmed)
     }
@@ -60,10 +58,8 @@ class SleepStopWaitStateTest {
             pendingWifi = true
             pendingBluetooth = true
             pendingSyncthing = true
-            pendingBasicSync = true
             pendingPostStopActions = true
             startedAtElapsed = 9_000L
-            lastBasicSyncStateRequestAtElapsed = 9_500L
             syncthingProbeInFlight = true
             syncthingConfirmed = true
             generation = 7L
@@ -75,10 +71,8 @@ class SleepStopWaitStateTest {
         assertFalse(state.pendingWifi)
         assertFalse(state.pendingBluetooth)
         assertFalse(state.pendingSyncthing)
-        assertFalse(state.pendingBasicSync)
         assertFalse(state.pendingPostStopActions)
         assertEquals(0L, state.startedAtElapsed)
-        assertEquals(0L, state.lastBasicSyncStateRequestAtElapsed)
         assertFalse(state.syncthingProbeInFlight)
         assertFalse(state.syncthingConfirmed)
     }
@@ -89,10 +83,8 @@ class SleepStopWaitStateTest {
             pendingWifi = true
             pendingBluetooth = true
             pendingSyncthing = true
-            pendingBasicSync = true
             pendingPostStopActions = true
             startedAtElapsed = 8_000L
-            lastBasicSyncStateRequestAtElapsed = 8_500L
             syncthingProbeInFlight = true
             syncthingConfirmed = true
             generation = 4L
@@ -103,10 +95,8 @@ class SleepStopWaitStateTest {
         assertFalse(state.pendingWifi)
         assertFalse(state.pendingBluetooth)
         assertFalse(state.pendingSyncthing)
-        assertFalse(state.pendingBasicSync)
         assertFalse(state.pendingPostStopActions)
         assertEquals(8_000L, state.startedAtElapsed)
-        assertEquals(8_500L, state.lastBasicSyncStateRequestAtElapsed)
         assertTrue(state.syncthingProbeInFlight)
         assertTrue(state.syncthingConfirmed)
         assertEquals(4L, state.generation)

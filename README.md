@@ -7,7 +7,7 @@ support alongside the official Tailscale client and publishes updates from the
 [Darkaxt repository](https://github.com/Darkaxt/SleepManager). Upstream project
 history and attribution remain with [Baggio94/SleepManager](https://github.com/Baggio94/SleepManager).
 
-It can temporarily turn off Wi-Fi, Bluetooth and supported background services when the screen turns off, then restore only what it changed when the device wakes. It also includes sleep battery statistics, sync automation and extra features for compatible Android clamshell devices.
+It can temporarily turn off Wi-Fi, Bluetooth and supported background services when the screen turns off, then restore only what it changed when the device wakes. It also includes sleep battery statistics and extra features for compatible Android clamshell devices.
 
 **No root, Shizuku or ADB is required for normal use.**
 
@@ -22,8 +22,7 @@ It can temporarily turn off Wi-Fi, Bluetooth and supported background services w
 
 - Turn **Wi-Fi** and **Bluetooth** off during sleep and restore them safely on wake.
 - Enable **Android Battery Saver** during sleep on supported devices and restore its previous state on wake.
-- Manage **Syncthing-Fork, BasicSync, RAOfflineProxy, Tailscale / TailDNS, JamesDSP and Key Mapper 4.7+** during sleep and wake.
-- Run optional syncs **before sleep, after wake or periodically while sleeping** with supported providers.
+- Manage **Syncthing-Fork, RAOfflineProxy and Tailscale / TailDNS** during sleep and wake.
 - Track sleep battery drain, measured mAh use, deep sleep, drain rate and standby estimates.
 - Protect compatible **clamshell handhelds** from closed-lid false wakes.
 - Add clamshell-specific **lid, dock, power-button and Charging Separation** behavior on supported devices.
@@ -102,19 +101,6 @@ In Syncthing-Fork, enable:
 
 Then enable **Syncthing-Fork** in SleepManager.
 
-### BasicSync
-
-SleepManager can stop BasicSync during sleep and restore its previous mode on wake.
-
-In BasicSync, enable:
-
-**Allow remote control**
-
-- **BasicSync 3.18+** supports state-aware sleep/wake control.
-- **BasicSync 3.19+** also supports completion-aware advanced sync features.
-
-See [Advanced Sync Behavior](#advanced-sync-behavior) for the additional sync modes.
-
 ### RAOfflineProxy
 
 SleepManager can automatically stop **RAOfflineProxy** during sleep and restore it on wake. If RAOfflineProxy is still caching, waiting for its next cache window or has pending RetroAchievements awards to process, SleepManager keeps the proxy and Wi-Fi available until it is safe to stop them.
@@ -134,37 +120,6 @@ Install and sign in to either the official **Tailscale Android app** or
 **TailDNS**, then enable **Tailscale / TailDNS** in SleepManager. If both are
 installed, SleepManager controls the client that owns the active Tailscale VPN
 and restores that same client after wake.
-
-### JamesDSP
-
-SleepManager can turn supported JamesDSP builds **OFF during sleep** and **ON again on wake**.
-
-Supported apps include **JamesDSP Manager** and **RootlessJamesDSP**.
-
-Unlike the other state-aware integrations, JamesDSP does not currently expose a reliable power-state query, so SleepManager uses explicit OFF/ON control when this integration is enabled.
-
-### Key Mapper
-
-With **Key Mapper 4.7.0 or newer**, SleepManager can pause active key mappings during sleep and resume them on wake.
-
-- Install or update Key Mapper, then enable **Key Mapper** under **App Integrations** in SleepManager. The integration is **off by default**.
-- SleepManager uses Key Mapper's mapping-state broadcasts to check whether mappings are **Running** or **Paused** before taking action.
-- If mappings were already paused manually, SleepManager leaves them paused, including after wake.
-- If the current mapping state has not yet been reported, SleepManager makes **no automatic pause request**. Open Key Mapper to let it announce its state before testing.
-- SleepManager pauses/resumes mappings through Key Mapper's supported interface. It does **not** disable Key Mapper's accessibility service, stop its process or remove mappings.
-
-Only Key Mapper **4.7.0+** exposes the state API needed for this integration. Older versions are not compatible.
-
-## Advanced Sync Behavior
-
-SleepManager can automate synchronization around sleep and wake transitions with supported completion-aware sync providers.
-
-- **Periodic Sync While Sleeping** — while the device remains asleep, SleepManager can run a sync every 24 hours, wait for it to complete, then stop the sync app and restore the previous sleep state.
-- **Sync Then Stop on Sleep & Wake** — runs a sync before sleep and again after wake. Once each sync completes, SleepManager stops the sync app to reduce unnecessary background activity. For example, when the device wakes, SleepManager starts the sync client, syncs your latest saves and states, waits for completion, then stops the client again to save battery while you play. When you're done playing and put the device back to sleep, SleepManager starts the client again, syncs the changes from your gaming session, waits for completion, stops the client, and then runs your configured sleep automation cycle.
-
-These features currently require **BasicSync 3.19+** with **Allow remote control** enabled.
-
-**Syncthing-Fork** continues to support normal STOP/FOLLOW sleep and wake control. Completion-aware Advanced Sync support for Syncthing-Fork is currently **pending / in progress**.
 
 ## Advanced Sleep Conditions
 
@@ -211,8 +166,6 @@ Use **Copy log** to generate a detailed diagnostic report that includes:
 - Active sleep/wake transaction and pending restore information
 - Multi-cycle sleep/wake history and false-wake information
 - System and memory snapshots captured for diagnostic cycles
-- BasicSync runtime state and sync counters when available
-- Key Mapper integration setting, observed mapping state and owned restoration status when available
 - RAOfflineProxy runtime, queue, pending-award and restore state when available
 - Recent SleepManager activity
 - Recent Android process-exit information on Android 11+ when available
@@ -255,7 +208,6 @@ On devices that need it, the **SleepManager Compatibility Helper** handles Wi-Fi
 - Recent compatible **AYN and Retroid** devices use direct Wi-Fi/Bluetooth control automatically and do **not** require the Helper
 - Other devices use the **SleepManager Compatibility Helper** for Wi-Fi and Bluetooth control
 - RAOfflineProxy **v2.0.0-alpha1 or newer** for SleepManager integration
-- Key Mapper **4.7.0 or newer** for optional state-aware mapping pause/resume
 - Main package: `com.med.sleepmanager`
 - Helper package: `com.med.sleepmanager.helper`
 - Clamshell-specific controls appear only when a compatible lid sensor and the required hardware support are detected
@@ -280,12 +232,6 @@ Make sure this option is enabled in Syncthing-Fork:
 
 Then confirm **Syncthing-Fork** is enabled in SleepManager.
 
-### BasicSync Does Not Respond
-
-Make sure **Allow remote control** is enabled in BasicSync.
-
-For state-aware sleep/wake control, use **BasicSync 3.18+**. Advanced completion-aware sync features require **BasicSync 3.19+**.
-
 ### RAOfflineProxy Does Not Start on Wake
 
 Confirm that RAOfflineProxy **v2.0.0-alpha1 or newer** is installed and that its Android battery usage is set to **Unrestricted** under **Settings → Apps → RAOfflineProxy → App battery usage**.
@@ -299,16 +245,6 @@ Use **Activity → Copy log** to check the proxy state, queue state, pending own
 Open the selected client and confirm that you are signed in and that it can connect normally.
 
 SleepManager reconnects Tailscale only when it performed the sleep disconnect.
-
-### JamesDSP Does Not Switch State
-
-Make sure a supported **JamesDSP Manager** or **RootlessJamesDSP** build is installed and that the JamesDSP integration is enabled in SleepManager.
-
-### Key Mapper Does Not Pause or Resume Mappings
-
-Confirm that **Key Mapper 4.7.0+** is installed, its accessibility service is enabled, and the **Key Mapper** switch is enabled under SleepManager's App Integrations.
-
-Open Key Mapper once if SleepManager shows the mapping state as **Unknown**. SleepManager deliberately avoids pausing mappings until Key Mapper has reported their state. Look for **Key Mapper pause requested** and **Key Mapper state restored** events in SleepManager's Activity log. These messages confirm the commands were requested; check Key Mapper's own **Running / Paused** status to verify that they took effect.
 
 ### Closed-Lid Protection Does Not Work
 

@@ -3,7 +3,6 @@ package com.med.sleepmanager.ui.state
 import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.device.DeviceControlController
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
 
@@ -20,15 +19,10 @@ internal data class SleepManagerUiState(
     val chargingSeparationWithLidEnabled: Boolean = false,
     val manageSyncthingEnabled: Boolean = false,
     val manageTailscaleEnabled: Boolean = false,
-    val manageJamesDspEnabled: Boolean = false,
-    val manageKeyMapperEnabled: Boolean = false,
-    val manageBasicSyncEnabled: Boolean = false,
     val manageRaOfflineProxyEnabled: Boolean = false,
     val closedLidProtectionEnabled: Boolean = false,
     val dockDisconnectSleeps: Boolean = false,
     val closedLidPowerSleeps: Boolean = false,
-    val periodicSyncWhileSleeping: Boolean = false,
-    val syncThenStopOnSleepWake: Boolean = false,
     val sleepGraceMs: Long = 0L,
     val customDelayEnabled: Boolean = false,
     val customDelayMs: Long = 60_000L,
@@ -44,8 +38,6 @@ internal data class SleepManagerUiState(
     val currentBluetoothState: Boolean? = null,
     val currentSyncthingState: SyncthingController.RuntimeState? = null,
     val currentTailscaleConnected: Boolean? = null,
-    val currentBasicSyncState: BasicSyncController.RemoteState? = null,
-    val basicSyncReadinessProbeComplete: Boolean = false,
     val currentRaOfflineProxyStatus: RaOfflineProxyStatus? = null,
     val raOfflineProxyStatusProbeComplete: Boolean = false,
     val currentBackgroundReliability: BackgroundReliability.Snapshot? = null,

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0.14 — 2026-11-23
+
+- Removed the BasicSync, Key Mapper and JamesDSP integrations, including BasicSync-only
+  periodic sync and sync-then-stop maintenance. Restore records left by 0.8.0.13 for these
+  connectors are ignored and dropped (`RestoreParticipants.RETIRED_CONNECTOR_IDS`).
+  Syncthing-Fork, Tailscale/TailDNS/TailD, RAOfflineProxy, radios, Battery Saver and
+  charging separation are unchanged.
+- Main 0.8.0.14/code 584; Helper unchanged 1.1.7.2/code 1123.
+
 ## 0.8.0.13 — 2026-11-23
 
 - Service recovery (onCreate, onStartCommand, screen-state replay, onDestroy) declared per

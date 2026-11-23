@@ -67,24 +67,16 @@ import com.med.sleepmanager.data.PendingRestoreState
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.device.RadioController
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyQueueState
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.integration.JamesDspController
-import com.med.sleepmanager.integration.KeyMapperController
-import com.med.sleepmanager.integration.KeyMapperMappingsState
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
 import com.med.sleepmanager.protection.LidMonitor
 import com.med.sleepmanager.protection.PmicPowerButtonMonitor
 import com.med.sleepmanager.R
 import com.med.sleepmanager.service.SleepManagerService
-import com.med.sleepmanager.sync.basicSyncCompletionState
-import com.med.sleepmanager.sync.ManagedSyncProviders
-import com.med.sleepmanager.sync.SyncMaintenanceScheduler
-import com.med.sleepmanager.sync.SyncCompletionState
 import com.med.sleepmanager.ui.AppSection
 import com.med.sleepmanager.ui.components.BehaviorCard
 import com.med.sleepmanager.ui.components.ClamshellOptionsCard
@@ -137,12 +129,7 @@ private class IntegrationUiRow(
         onChargingSeparationWithLidChange: (Boolean) -> Unit,
         onManageSyncthingChange: (Boolean) -> Unit,
         onManageTailscaleChange: (Boolean) -> Unit,
-        onManageJamesDspChange: (Boolean) -> Unit,
-        onManageKeyMapperChange: (Boolean) -> Unit,
-        onManageBasicSyncChange: (Boolean) -> Unit,
         onManageRaOfflineProxyChange: (Boolean) -> Unit,
-        onPeriodicSyncWhileSleepingChange: (Boolean) -> Unit,
-        onSyncThenStopOnSleepWakeChange: (Boolean) -> Unit,
         onSleepGraceChange: (Long) -> Unit,
         onCustomDelayEnabledChange: (Boolean) -> Unit,
         onCustomDelayChange: (Long) -> Unit,
@@ -175,8 +162,6 @@ private class IntegrationUiRow(
         onRequestExactAlarmAccessRequested: () -> Unit,
         onShowTimePickerRequested: (Int, (Int) -> Unit) -> Unit,
         onRestoreSyncthingRequested: () -> Unit,
-        onRestoreJamesDspRequested: () -> Unit,
-        onRestoreBasicSyncRequested: () -> Unit,
         onUseSystemColorsChanged: (Boolean) -> Unit
     ) {
         val refreshToken = uiState.activityRefreshToken
@@ -230,13 +215,8 @@ private class IntegrationUiRow(
             uiState.chargingSeparationWithLidEnabled
         val syncthingEnabled = uiState.manageSyncthingEnabled
         val tailscaleEnabled = uiState.manageTailscaleEnabled
-        val jamesDspEnabled = uiState.manageJamesDspEnabled
-        val keyMapperEnabled = uiState.manageKeyMapperEnabled
-        val basicSyncEnabled = uiState.manageBasicSyncEnabled
         val raOfflineProxyEnabled =
             uiState.manageRaOfflineProxyEnabled
-        val periodicSyncWhileSleeping = uiState.periodicSyncWhileSleeping
-        val syncThenStopOnSleepWake = uiState.syncThenStopOnSleepWake
         val closedLidProtectionEnabled = uiState.closedLidProtectionEnabled
         val dockDisconnectSleeps = uiState.dockDisconnectSleeps
         val closedLidPowerSleeps = uiState.closedLidPowerSleeps
@@ -315,39 +295,6 @@ private class IntegrationUiRow(
         val tailscaleVersion = remember(refreshToken, metadataRefreshToken) {
             TailscaleController.versionName(context)
         }
-        val jamesDspTarget = remember(refreshToken, metadataRefreshToken) {
-            JamesDspController.selectedTarget(context)
-        }
-        val keyMapperInstalled = remember(refreshToken, metadataRefreshToken) {
-            KeyMapperController.isInstalled(context)
-        }
-        val keyMapperVersion = remember(refreshToken, metadataRefreshToken) {
-            KeyMapperController.versionName(context)
-        }
-        val keyMapperCompatible = remember(refreshToken, metadataRefreshToken) {
-            KeyMapperController.isCompatible(context)
-        }
-        val keyMapperState = remember(refreshToken, metadataRefreshToken) {
-            KeyMapperController.currentState(context)
-        }
-        val basicSyncInstalled = remember(refreshToken, metadataRefreshToken) {
-            BasicSyncController.isInstalled(context)
-        }
-        val basicSyncVersion = remember(refreshToken, metadataRefreshToken) {
-            BasicSyncController.versionName(context)
-        }
-        val basicSyncStopped = remember(refreshToken, metadataRefreshToken) {
-            basicSyncInstalled && BasicSyncController.isStopped(context)
-        }
-        val basicSyncStateApi = remember(refreshToken, metadataRefreshToken) {
-            BasicSyncController.supportsStateApi(context)
-        }
-        val basicSyncReady =
-            basicSyncInstalled &&
-                !basicSyncStopped &&
-                basicSyncStateApi &&
-                uiState.basicSyncReadinessProbeComplete &&
-                uiState.currentBasicSyncState != null
         val raOfflineProxyInstalled = remember(refreshToken, metadataRefreshToken) {
             RaOfflineProxyController.isInstalled(context)
         }
@@ -689,8 +636,6 @@ private class IntegrationUiRow(
                         OnboardingCard(
                             syncthingTarget = selectedTarget,
                             tailscaleInstalled = tailscaleInstalled,
-                            jamesDspTarget = jamesDspTarget,
-                            basicSyncInstalled = basicSyncInstalled,
                             raOfflineProxyInstalled = raOfflineProxyInstalled
                         )
                     }
@@ -1158,165 +1103,6 @@ private class IntegrationUiRow(
                                     )
                                 },
                                 IntegrationUiRow(
-                                    installed = jamesDspTarget != null,
-                                    icon = R.drawable.ic_equalizer,
-                                    title = stringResource(R.string.integration_jamesdsp)
-                                ) {
-                                    CompactIntegrationRow(
-                                        icon = R.drawable.ic_equalizer,
-                                        title = stringResource(R.string.integration_jamesdsp),
-                                        version =
-                                            jamesDspTarget?.versionName
-                                                ?: stringResource(R.string.installed),
-                                        status = null,
-                                        checked = jamesDspEnabled,
-                                        enabled = true,
-                                        onCheckedChange = {
-                                            onManageJamesDspChange(it)
-
-                                            if (!it && managerEnabled) {
-                                                onRestoreJamesDspRequested()
-                                                SleepCycleStore.completeIfRestored(context)
-                                            }
-                                        },
-                                        onOpen = { JamesDspController.open(context) }
-                                    )
-                                },
-                                IntegrationUiRow(
-                                    installed = keyMapperInstalled,
-                                    icon = R.drawable.ic_key_mapper,
-                                    title = stringResource(R.string.integration_keymapper)
-                                ) {
-                                    CompactIntegrationRow(
-                                        icon = R.drawable.ic_key_mapper,
-                                        title = stringResource(R.string.integration_keymapper),
-                                        version = keyMapperVersion
-                                            ?: stringResource(R.string.installed),
-                                        status = if (!keyMapperCompatible) {
-                                            stringResource(R.string.integration_keymapper_requires_47)
-                                        } else {
-                                            when (keyMapperState) {
-                                                KeyMapperMappingsState.ACTIVE ->
-                                                    stringResource(R.string.integration_keymapper_active)
-                                                KeyMapperMappingsState.PAUSED ->
-                                                    stringResource(R.string.integration_keymapper_paused)
-                                                KeyMapperMappingsState.UNKNOWN ->
-                                                    stringResource(R.string.integration_keymapper_unknown)
-                                            }
-                                        },
-                                        checked = keyMapperEnabled && keyMapperCompatible,
-                                        enabled = keyMapperCompatible,
-                                        onCheckedChange = { onManageKeyMapperChange(it) },
-                                        onOpen = { KeyMapperController.open(context) },
-                                        statusActive = keyMapperCompatible &&
-                                            keyMapperState == KeyMapperMappingsState.ACTIVE
-                                    )
-                                },
-                                IntegrationUiRow(
-                                    installed = basicSyncInstalled,
-                                    icon = R.drawable.ic_sync,
-                                    title = stringResource(R.string.integration_basicsync)
-                                ) {
-                                    CompactIntegrationRow(
-                                        icon = R.drawable.ic_sync,
-                                        title = stringResource(R.string.integration_basicsync),
-                                        version =
-                                            basicSyncVersion
-                                                ?: stringResource(R.string.installed),
-                                        status =
-                                            if (basicSyncStopped) {
-                                                stringResource(
-                                                    R.string.home_basicsync_stopped
-                                                )
-                                            } else if (basicSyncStateApi) {
-                                                uiState.currentBasicSyncState?.let { state ->
-                                                    val mode =
-                                                        stringResource(
-                                                            when (state.mode) {
-                                                                BasicSyncController.Mode.AUTO_MODE ->
-                                                                    R.string.auto_mode
-                                                                BasicSyncController.Mode.MANUAL_MODE_STARTED ->
-                                                                    R.string.manual_mode
-                                                                BasicSyncController.Mode.MANUAL_MODE_STOPPED ->
-                                                                    R.string.manual_mode
-                                                            }
-                                                        )
-                                                    val runState =
-                                                        stringResource(
-                                                            when (state.runState) {
-                                                                BasicSyncController.RunState.RUNNING ->
-                                                                    R.string.running
-                                                                BasicSyncController.RunState.NOT_RUNNING ->
-                                                                    R.string.stopped
-                                                                BasicSyncController.RunState.PAUSED ->
-                                                                    R.string.paused
-                                                                BasicSyncController.RunState.STARTING ->
-                                                                    R.string.starting
-                                                                BasicSyncController.RunState.STOPPING ->
-                                                                    R.string.stopping
-                                                                BasicSyncController.RunState.IMPORTING ->
-                                                                    R.string.importing
-                                                                BasicSyncController.RunState.EXPORTING ->
-                                                                    R.string.exporting
-                                                            }
-                                                        )
-                                                    val syncState =
-                                                        if (
-                                                            BasicSyncController
-                                                                .supportsSyncCounters(context)
-                                                        ) {
-                                                            when (
-                                                                basicSyncCompletionState(state)
-                                                            ) {
-                                                                SyncCompletionState.SYNCING ->
-                                                                    stringResource(R.string.syncing)
-                                                                SyncCompletionState.SYNCED ->
-                                                                    stringResource(R.string.synced)
-                                                                SyncCompletionState.UNKNOWN ->
-                                                                    null
-                                                            }
-                                                        } else {
-                                                            null
-                                                        }
-                                                    listOfNotNull(
-                                                        mode,
-                                                        runState,
-                                                        syncState
-                                                    ).joinToString(" · ")
-                                                } ?: stringResource(
-                                                    if (
-                                                        uiState.basicSyncReadinessProbeComplete
-                                                    ) {
-                                                        R.string.home_basicsync_remote_control_required
-                                                    } else {
-                                                        R.string.checking
-                                                    }
-                                                )
-                                            } else {
-                                                stringResource(
-                                                    R.string.home_basicsync_legacy_status
-                                                )
-                                            },
-                                        checked = basicSyncEnabled,
-                                        enabled = basicSyncReady || basicSyncEnabled,
-                                        onCheckedChange = {
-                                            onManageBasicSyncChange(it)
-
-                                            if (!it && managerEnabled) {
-                                                onRestoreBasicSyncRequested()
-                                                SleepCycleStore.completeIfRestored(context)
-                                                SyncMaintenanceScheduler.cancel(context)
-                                                onServiceRefreshRequested()
-                                            }
-
-                                            if (it && managerEnabled) {
-                                                onServiceRefreshRequested()
-                                            }
-                                        },
-                                        onOpen = { BasicSyncController.open(context) }
-                                    )
-                                },
-                                IntegrationUiRow(
                                     installed = raOfflineProxyInstalled,
                                     icon = R.drawable.ic_raofflineproxy_mono,
                                     title = stringResource(
@@ -1463,8 +1249,6 @@ private class IntegrationUiRow(
                             batterySaverActionEnabled && batterySaverControlSupported,
                         syncthing = syncthingEnabled && selectedTarget != null,
                         tailscale = tailscaleEnabled && tailscaleInstalled,
-                        jamesDsp = jamesDspEnabled && jamesDspTarget != null,
-                        basicSync = basicSyncEnabled && basicSyncInstalled,
                         raOfflineProxy =
                             raOfflineProxyEnabled &&
                                 raOfflineProxyReady,
@@ -1486,9 +1270,7 @@ private class IntegrationUiRow(
                                     add(batterySaverOffCondition)
                             }
                             if (scheduleEnabled) add(scheduleCondition)
-                        },
-                        periodicSyncWhileSleeping = periodicSyncWhileSleeping,
-                        syncThenStopOnSleepWake = syncThenStopOnSleepWake
+                        }
                     )
                 }
 
@@ -1517,29 +1299,6 @@ private class IntegrationUiRow(
                     AppSection.ADVANCED -> {
                         item {
                             AdvancedSettingsPage(
-                                periodicSyncWhileSleeping = periodicSyncWhileSleeping,
-                                syncThenStopOnSleepWake = syncThenStopOnSleepWake,
-                                syncConditionsAvailable =
-                                    ManagedSyncProviders.completionReady(
-                                        context
-                                    ),
-                                onPeriodicSyncWhileSleepingChange = {
-                                    onPeriodicSyncWhileSleepingChange(it)
-                                    if (!it) {
-                                        SyncMaintenanceScheduler.cancel(
-                                            context
-                                        )
-                                    }
-                                },
-                                onSyncThenStopOnSleepWakeChange = {
-                                    onSyncThenStopOnSleepWakeChange(it)
-
-                                    if (managerEnabled) {
-                                        // Disabling this option must hand
-                                        // BasicSync back to its pre-feature state.
-                                        onServiceRefreshRequested()
-                                    }
-                                },
                                 batteryConditionEnabled = batteryConditionEnabled,
                                 batteryBelowPercent = batteryBelowPercent,
                                 notChargingOnly = notChargingOnly,

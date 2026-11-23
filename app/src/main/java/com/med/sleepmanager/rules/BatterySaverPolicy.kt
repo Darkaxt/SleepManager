@@ -101,24 +101,4 @@ object BatterySaverPolicy {
             else ->
                 BatterySaverPowerEventDecision.NOTHING
         }
-
-    fun shouldTemporarilyRestoreForMaintenance(
-        owned: Boolean,
-        previous: Boolean,
-        current: Boolean
-    ): Boolean =
-        owned &&
-            !previous &&
-            current
-
-    fun shouldReapplyAfterMaintenance(
-        owned: Boolean,
-        previous: Boolean,
-        isRealWake: Boolean,
-        current: Boolean
-    ): Boolean =
-        owned &&
-            !previous &&
-            !isRealWake &&
-            !current
 }

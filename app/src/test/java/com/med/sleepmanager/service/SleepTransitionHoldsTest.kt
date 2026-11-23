@@ -70,13 +70,13 @@ class SleepTransitionHoldsTest {
     @Test
     fun pipelineReleaseKeepsTailscaleVerification() {
         holds.acquire(SleepTransitionHold.SYNC_STOP_WAIT, 13_000L)
-        holds.acquire(SleepTransitionHold.BASIC_SYNC_PROBE, 10_000L)
+        holds.acquire(SleepTransitionHold.SYNCTHING_PROBE, 10_000L)
         holds.acquire(SleepTransitionHold.TAILSCALE_VERIFY, 5_000L)
 
         holds.release(SleepTransitionHold.PIPELINE)
 
         assertFalse(latest(SleepTransitionHold.SYNC_STOP_WAIT).held)
-        assertFalse(latest(SleepTransitionHold.BASIC_SYNC_PROBE).held)
+        assertFalse(latest(SleepTransitionHold.SYNCTHING_PROBE).held)
         assertTrue(latest(SleepTransitionHold.TAILSCALE_VERIFY).held)
     }
 

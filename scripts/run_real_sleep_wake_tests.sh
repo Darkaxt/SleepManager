@@ -22,15 +22,12 @@ SYNCTHING_PACKAGES=(
   "com.github.catfriend1.syncthingandroid.debug"
 )
 TAILSCALE_PACKAGE="com.tailscale.ipn"
-BASICSYNC_PACKAGE="com.chiller3.basicsync"
-JAMES_PACKAGES=("james.dsp" "me.timschneeberger.rootlessjamesdsp")
 
 PASS_COUNT=0
 WARN_COUNT=0
 BT_TESTABLE=0
 SYNCTHING_FORWARD_PORT=""
 SYNCTHING_PACKAGE=""
-JAMES_PACKAGE=""
 
 mkdir -p "$REPORT_DIR"
 
@@ -380,32 +377,6 @@ tailscale_connected() {
   adb_target shell ip addr show 2>/dev/null     | grep -Eiq '100\.(6[4-9]|[78][0-9]|9[0-9]|1[01][0-9]|12[0-7])\.|fd7a:115c:a1e0'
 }
 
-latest_basicsync_state() {
-  adb_target logcat -d 2>/dev/null     | grep 'STATE_CHANGED observed: mode='     | tail -n 1     | sed -E 's/.*mode=([^ ]+) runState=([^ ]+).*/\1 \2/'
-}
-
-wait_basicsync_stopped() {
-  wait_log 'STATE_CHANGED observed: mode=MANUAL_MODE_STOPPED runState=(NOT_RUNNING|PAUSED|STOPPING)' 15
-}
-
-wait_basicsync_mode() {
-  local mode="$1"
-  local timeout="${2:-20}"
-  wait_log "STATE_CHANGED observed: mode=$mode runState=" "$timeout"
-}
-
-basicsync_empty_configuration_observed() {
-  adb_target logcat -d 2>/dev/null \
-    | grep 'STATE_CHANGED observed: .*counters=SyncCounters' \
-    | tail -n 1 \
-    | grep -Eq 'foldersIdle=0, foldersScanning=0, foldersSyncing=0, foldersCleaning=0, foldersErrored=0, foldersStarting=0, devicesConnected=0, devicesSyncing=0, devicesPending=0'
-}
-
-wait_basicsync_counter_snapshot() {
-  local timeout="${1:-8}"
-  wait_log 'STATE_CHANGED observed: .*counters=SyncCounters' "$timeout"
-}
-
 setup_syncthing_forward() {
   [ -n "$SYNCTHING_PACKAGE" ] || return 1
   command -v curl >/dev/null 2>&1 || return 1
@@ -466,10 +437,6 @@ fire_custom_delay_now() {
   return "$status"
 }
 
-fire_periodic_sync_now() {
-  run_config fire_periodic_sync
-}
-
 section_rank() {
   case "$1" in
     core) printf '0' ;;
@@ -477,7 +444,6 @@ section_rank() {
     grace) printf '2' ;;
     custom) printf '3' ;;
     conditions) printf '4' ;;
-    sync) printf '5' ;;
     *) return 1 ;;
   esac
 }
@@ -599,7 +565,7 @@ if [[ "$SERIAL" != emulator-* ]]; then
 fi
 
 if ! section_rank "$START_AT" >/dev/null; then
-  fail "Unknown start section '$START_AT' (use: core, grace, custom, conditions, sync)"
+  fail "Unknown start section '$START_AT' (use: core, recovery, grace, custom, conditions)"
 fi
 
 install_bundle_apks
@@ -607,13 +573,6 @@ install_bundle_apks
 for packageName in "${SYNCTHING_PACKAGES[@]}"; do
   if package_installed "$packageName"; then
     SYNCTHING_PACKAGE="$packageName"
-    break
-  fi
-done
-
-for packageName in "${JAMES_PACKAGES[@]}"; do
-  if package_installed "$packageName"; then
-    JAMES_PACKAGE="$packageName"
     break
   fi
 done
@@ -638,16 +597,6 @@ else
 fi
 
 prepare_scenario core
-
-BASIC_INITIAL=""
-if package_installed "$BASICSYNC_PACKAGE"; then
-  for _ in $(seq 1 8); do
-    BASIC_INITIAL="$(latest_basicsync_state)"
-    [ -n "$BASIC_INITIAL" ] && break
-    sleep 1
-  done
-fi
-BASIC_INITIAL_MODE="${BASIC_INITIAL%% *}"
 
 SYNCTHING_INITIAL="unavailable"
 if [ -n "$SYNCTHING_PACKAGE" ] && setup_syncthing_forward; then
@@ -690,16 +639,6 @@ else
   warn "Syncthing-Fork health probe unavailable; command path only"
 fi
 
-if package_installed "$BASICSYNC_PACKAGE"; then
-  if wait_basicsync_stopped; then
-    pass "BasicSync → MANUAL_MODE_STOPPED during sleep"
-  else
-    fail "BasicSync did not confirm stopped state during core sleep"
-  fi
-else
-  warn "BasicSync not installed; real BasicSync transition skipped"
-fi
-
 if [ "$TAILSCALE_INITIAL" = "connected" ]; then
   local_deadline=$((SECONDS + 15))
   while (( SECONDS < local_deadline )) && tailscale_connected; do sleep 1; done
@@ -710,13 +649,6 @@ elif [ "$TAILSCALE_INITIAL" = "disconnected" ]; then
   pass "Tailscale initial disconnected state preserved"
 else
   warn "Tailscale not installed; real transition skipped"
-fi
-
-if [ -n "$JAMES_PACKAGE" ]; then
-  wait_log 'Sent JamesDSP power=OFF' 10     || fail "JamesDSP OFF control was not delivered"
-  pass "JamesDSP real OFF command delivered"
-else
-  warn "JamesDSP not installed; real control skipped"
 fi
 
 wake_screen
@@ -734,11 +666,6 @@ if [ "$SYNCTHING_INITIAL" = "running" ]; then
   pass "Syncthing-Fork stopped → running on wake"
 fi
 
-if package_installed "$BASICSYNC_PACKAGE" && [ -n "$BASIC_INITIAL_MODE" ]; then
-  wait_basicsync_mode "$BASIC_INITIAL_MODE" 20     || fail "BasicSync did not restore initial mode $BASIC_INITIAL_MODE"
-  pass "BasicSync initial mode restored ($BASIC_INITIAL_MODE)"
-fi
-
 if [ "$TAILSCALE_INITIAL" = "connected" ]; then
   local_deadline=$((SECONDS + 20))
   until tailscale_connected; do
@@ -748,11 +675,6 @@ if [ "$TAILSCALE_INITIAL" = "connected" ]; then
   pass "Tailscale reconnects on wake"
 elif [ "$TAILSCALE_INITIAL" = "disconnected" ]; then
   tailscale_connected && fail "Tailscale did not preserve initial disconnected state on wake"
-fi
-
-if [ -n "$JAMES_PACKAGE" ]; then
-  wait_log 'Sent JamesDSP power=ON' 12     || fail "JamesDSP ON control was not delivered on wake"
-  pass "JamesDSP real ON command delivered on wake"
 fi
 
 fi
@@ -948,58 +870,6 @@ if adb_target shell cmd power set-mode 1 >/dev/null 2>&1 && power_saver_is_on; t
   assert_blocked_sleep "Combined conditions with one failed condition"
 else
   warn "Combined condition E2E skipped because Battery Saver cannot be simulated"
-fi
-
-fi
-
-if should_run sync; then
-printf '\n%s\n' '--- Advanced sync modes with real BasicSync ---'
-if package_installed "$BASICSYNC_PACKAGE"; then
-  battery_unplug_level 50
-  ensure_wifi_on || fail "Unable to enable Wi-Fi for sync-then-stop"
-  prepare_scenario sync_then_stop
-  adb_target logcat -c
-  sleep_screen
-
-  if wait_basicsync_counter_snapshot 8 && basicsync_empty_configuration_observed; then
-    warn "BasicSync has no configured folders/devices; real completion-based sync tests are not meaningful on this emulator"
-    wake_screen
-    sleep 2
-  else
-    if wait_log 'Maintenance finished: trigger=BEFORE_SLEEP outcome=' 45; then
-      pass "Sync then stop: real BEFORE_SLEEP maintenance completes"
-      wait_wifi_state off 15       || fail "Sync then stop: Wi-Fi did not turn OFF after maintenance"
-
-      wake_screen
-      if wait_log 'Maintenance finished: trigger=AFTER_WAKE outcome=' 45; then
-        pass "Sync then stop: real AFTER_WAKE maintenance completes"
-      else
-        fail "Sync then stop: AFTER_WAKE maintenance did not complete within 45 s"
-      fi
-      wait_cycle_inactive 20 || fail "Sync then stop: wake restore remained pending"
-    else
-      fail "Sync then stop: BEFORE_SLEEP maintenance did not complete within 45 s"
-    fi
-
-    ensure_wifi_on || fail "Unable to enable Wi-Fi for periodic sync"
-    prepare_scenario periodic
-    adb_target logcat -c
-    sleep_screen
-    wait_cycle_active 12 || fail "Periodic sync: base sleep transaction did not start"
-    wait_wifi_state off 15 || fail "Periodic sync: Wi-Fi did not enter sleep state"
-
-    fire_periodic_sync_now || fail "Unable to trigger periodic sync immediately"
-    if wait_log 'Maintenance finished: trigger=PERIODIC_SLEEP outcome=' 45; then
-      pass "Periodic sync: real maintenance executes without waiting 24 h"
-      wait_wifi_state off 15       || fail "Periodic sync: temporary Wi-Fi was not returned OFF"
-      pass "Periodic sync: temporary Wi-Fi cleaned up"
-    else
-      fail "Periodic sync did not finish within 45 s"
-    fi
-    restore_after_allowed_cycle
-  fi
-else
-  warn "BasicSync not installed; Advanced real sync-mode tests skipped"
 fi
 
 fi

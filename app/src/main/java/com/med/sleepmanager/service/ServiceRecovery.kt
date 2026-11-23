@@ -4,7 +4,6 @@ import com.med.sleepmanager.data.RecoveryBehaviour
 import com.med.sleepmanager.data.RecoveryEvent
 import com.med.sleepmanager.data.RestoreParticipant
 import com.med.sleepmanager.data.RestoreParticipants
-import com.med.sleepmanager.integration.KeyMapperController
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
 
 /**
@@ -18,9 +17,6 @@ internal interface ServiceRecoveryHost {
     fun isEffectivelySleeping(): Boolean
     fun isPending(participantId: String): Boolean
 
-    /** Restores BasicSync stop ownership when the app or its integration is no longer managing it. */
-    fun restoreOwnedBasicSyncIfUnmanaged()
-
     /** Restores the RAOfflineProxy connector when its integration is no longer managed. */
     fun restoreRaOfflineProxyIfUnmanaged()
 
@@ -33,7 +29,6 @@ internal interface ServiceRecoveryHost {
     fun resumeRaOfflineProxySleepGate()
     fun reapplyDirectRadioSleepState(event: RecoveryEvent)
     fun reapplyHelperSleepWifi(event: RecoveryEvent)
-    fun restoreKeyMapper()
 
     /** Replays the current screen state through the regular screen-on / screen-off flows. */
     fun replayScreenState()
@@ -102,7 +97,6 @@ internal class ServiceRecoveryCoordinator(
             val behaviour = byId.getValue(id).recoveryAt(event)!!.behaviour
             val runIt =
                 when (behaviour) {
-                    RecoveryBehaviour.RESTORE_WHEN_UNMANAGED,
                     RecoveryBehaviour.RESTORE_OR_REAPPLY -> true
 
                     RecoveryBehaviour.RESTORE_ON_REAL_WAKE -> host.isRealWake()
@@ -124,8 +118,6 @@ internal class ServiceRecoveryCoordinator(
     companion object {
         fun actions(host: ServiceRecoveryHost): Map<RecoveryActionKey, () -> Unit> =
             mapOf(
-                RecoveryActionKey(RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP, RecoveryEvent.CREATE) to
-                    host::restoreOwnedBasicSyncIfUnmanaged,
                 RecoveryActionKey(RaOfflineProxyConnector.id, RecoveryEvent.CREATE) to
                     host::restoreRaOfflineProxyIfUnmanaged,
                 RecoveryActionKey(RestoreParticipants.BATTERY_SAVER, RecoveryEvent.CREATE_ENABLED) to
@@ -138,10 +130,6 @@ internal class ServiceRecoveryCoordinator(
                     { host.reapplyDirectRadioSleepState(RecoveryEvent.CREATE_ENABLED) },
                 RecoveryActionKey(RestoreParticipants.HELPER, RecoveryEvent.CREATE_ENABLED) to
                     { host.reapplyHelperSleepWifi(RecoveryEvent.CREATE_ENABLED) },
-                RecoveryActionKey(RestoreParticipants.BASIC_SYNC_STOP_OWNERSHIP, RecoveryEvent.START_ENABLED) to
-                    host::restoreOwnedBasicSyncIfUnmanaged,
-                RecoveryActionKey(KeyMapperController.CONNECTOR_ID, RecoveryEvent.START_ENABLED) to
-                    host::restoreKeyMapper,
                 RecoveryActionKey(RestoreParticipants.DIRECT_RADIO, RecoveryEvent.DESTROY_ENABLED) to
                     { host.reapplyDirectRadioSleepState(RecoveryEvent.DESTROY_ENABLED) },
                 RecoveryActionKey(RestoreParticipants.HELPER, RecoveryEvent.DESTROY_ENABLED) to

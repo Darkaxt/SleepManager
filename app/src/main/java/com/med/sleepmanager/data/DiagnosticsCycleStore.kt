@@ -57,8 +57,6 @@ object DiagnosticsCycleStore {
         val chargingSeparation: Boolean,
         val syncthing: Boolean,
         val tailscale: Boolean,
-        val jamesDsp: Boolean,
-        val basicSync: Boolean,
         val raOfflineProxy: Boolean,
         val closedLidProtection: Boolean
     )
@@ -709,8 +707,6 @@ object DiagnosticsCycleStore {
                 AppPreferences.manageChargingSeparationWithLid(context),
             syncthing = AppPreferences.manageSyncthing(context),
             tailscale = AppPreferences.manageTailscale(context),
-            jamesDsp = AppPreferences.manageJamesDsp(context),
-            basicSync = AppPreferences.manageBasicSync(context),
             raOfflineProxy =
                 AppPreferences.manageRaOfflineProxy(context),
             closedLidProtection =
@@ -797,8 +793,6 @@ object DiagnosticsCycleStore {
             .put("chargingSeparation", chargingSeparation)
             .put("syncthing", syncthing)
             .put("tailscale", tailscale)
-            .put("jamesDsp", jamesDsp)
-            .put("basicSync", basicSync)
             .put("raOfflineProxy", raOfflineProxy)
             .put("closedLidProtection", closedLidProtection)
 
@@ -896,8 +890,6 @@ object DiagnosticsCycleStore {
                         ?: false,
                 syncthing = settingsJson?.optBoolean("syncthing", false) ?: false,
                 tailscale = settingsJson?.optBoolean("tailscale", false) ?: false,
-                jamesDsp = settingsJson?.optBoolean("jamesDsp", false) ?: false,
-                basicSync = settingsJson?.optBoolean("basicSync", false) ?: false,
                 raOfflineProxy =
                     settingsJson?.optBoolean("raOfflineProxy", false)
                         ?: false,

@@ -13,19 +13,14 @@ import com.med.sleepmanager.data.DirectRadioStore
 import com.med.sleepmanager.data.EventHistoryStore
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.data.RaOfflineProxySleepStore
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.device.DeviceControlStore
 import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.integration.HelperController
-import com.med.sleepmanager.integration.JamesDspController
-import com.med.sleepmanager.integration.KeyMapperController
 import com.med.sleepmanager.integration.SyncthingController
 import com.med.sleepmanager.integration.TailscaleController
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
 import com.med.sleepmanager.integration.connector.RaOfflineProxyConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.connector.TailscaleConnector
 import com.med.sleepmanager.protection.LidMonitor
@@ -33,7 +28,6 @@ import com.med.sleepmanager.rules.BatteryCapacitySelection
 import com.med.sleepmanager.rules.BatteryCapacitySource
 import com.med.sleepmanager.rules.BatteryCurrentSource
 import com.med.sleepmanager.service.SleepManagerService
-import com.med.sleepmanager.sync.ManagedSyncProviders
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,15 +75,6 @@ object DiagnosticsBuilder {
         val tailscaleLabel =
             tailscalePackage?.let { TailscaleController.displayName(context, it) }
         val tailscaleVersion = TailscaleController.versionName(context)
-        val jamesDsp = JamesDspController.selectedTarget(context)
-        val jamesDspPending =
-            SleepCycleStore.connectorChange(context, JamesDspConnector.id)
-        val keyMapperPending =
-            SleepCycleStore.connectorChange(context, KeyMapperController.CONNECTOR_ID)
-        val basicSyncVersion = BasicSyncController.versionName(context)
-        val basicSyncState = BasicSyncController.lastObservedState()
-        val basicSyncPending =
-            SleepCycleStore.connectorChange(context, BasicSyncConnector.id)
         val raOfflineProxyVersion =
             RaOfflineProxyController.versionName(context)
         val raOfflineProxyStatus =
@@ -149,9 +134,6 @@ object DiagnosticsBuilder {
                 }
                 if (syncthingPending) add("Syncthing-Fork")
                 if (tailscalePending != null) add("Tailscale")
-                if (jamesDspPending != null) add("JamesDSP")
-                if (keyMapperPending != null) add("Key Mapper")
-                if (basicSyncPending != null) add("BasicSync")
                 if (raOfflineProxyPending != null) add("RAOfflineProxy")
                 if (batterySaverOwned.owned) add("Battery Saver")
                 if (chargingSeparationOwned.owned) add("Charging Separation")
@@ -469,20 +451,10 @@ object DiagnosticsBuilder {
             appendLine("- Charging Separation with lid closed: ${AppPreferences.manageChargingSeparationWithLid(context)}")
             appendLine("- Syncthing-Fork: ${AppPreferences.manageSyncthing(context)}")
             appendLine("- Tailscale: ${AppPreferences.manageTailscale(context)}")
-            appendLine("- JamesDSP: ${AppPreferences.manageJamesDsp(context)}")
-            appendLine("- Key Mapper: ${AppPreferences.manageKeyMapper(context)}")
-            appendLine("- BasicSync: ${AppPreferences.manageBasicSync(context)}")
             appendLine("- RAOfflineProxy: ${AppPreferences.manageRaOfflineProxy(context)}")
             appendLine("- Closed-lid protection: ${AppPreferences.manageClosedLidProtection(context)}")
             appendLine("- Sleep when external display disconnects: ${AppPreferences.dockDisconnectSleeps(context)}")
             appendLine("- Power button sleeps with lid closed: ${AppPreferences.closedLidPowerSleeps(context)}")
-            appendLine()
-            appendLine("Advanced sync conditions")
-            appendLine("- Periodic sync while sleeping: ${AppPreferences.periodicSyncWhileSleeping(context)}")
-            appendLine("- Sync then stop on sleep & wake: ${AppPreferences.syncThenStopOnSleepWake(context)}")
-            appendLine("- Completion-aware providers ready: ${ManagedSyncProviders.completionReady(context)}")
-            appendLine("- Periodic runtime active-capable: ${AppPreferences.periodicSyncWhileSleeping(context) && ManagedSyncProviders.completionReady(context)}")
-            appendLine("- Sleep/wake runtime active-capable: ${AppPreferences.syncThenStopOnSleepWake(context) && ManagedSyncProviders.completionReady(context)}")
             appendLine()
             appendLine("Advanced sleep conditions")
             appendLine("- Battery condition: ${AppPreferences.batteryConditionEnabled(context)}")
@@ -577,52 +549,6 @@ object DiagnosticsBuilder {
                         false -> "DISCONNECTED"
                         null -> "unknown"
                     }
-            )
-            appendLine(
-                "- JamesDSP: " +
-                    if (jamesDsp != null) {
-                        "installed" +
-                            (jamesDsp.versionName?.let { " • $it" } ?: "") +
-                            " • ${jamesDsp.packageName}"
-                    } else {
-                        "not installed"
-                    }
-            )
-            appendLine(
-                "- Key Mapper: " +
-                    (KeyMapperController.versionName(context)?.let { "installed • $it" }
-                        ?: "not installed") +
-                    " · state=${KeyMapperController.currentState(context)}" +
-                    " · compatible=${KeyMapperController.isCompatible(context)}"
-            )
-            appendLine(
-                "- BasicSync: " +
-                    if (basicSyncVersion != null) {
-                        "installed • $basicSyncVersion • ${BasicSyncController.PACKAGE}"
-                    } else {
-                        "not installed"
-                    }
-            )
-            appendLine("- BasicSync state API: ${if (BasicSyncController.supportsStateApi(context)) "supported (3.18+)" else "legacy / unavailable"}")
-            appendLine("- BasicSync sync counters: ${if (BasicSyncController.supportsSyncCounters(context)) "supported (3.19+)" else "unavailable"}")
-            appendLine(
-                "- BasicSync observed state: " +
-                    if (basicSyncState != null) {
-                        "${basicSyncState.mode} / ${basicSyncState.runState}"
-                    } else {
-                        "unknown"
-                    }
-            )
-            appendLine(
-                "- BasicSync blocked reasons: " +
-                    (basicSyncState?.blockedReasons
-                        ?.takeIf { it.isNotEmpty() }
-                        ?.joinToString()
-                        ?: "none")
-            )
-            appendLine(
-                "- BasicSync counters: " +
-                    (basicSyncState?.syncCounters?.toString() ?: "unavailable")
             )
             appendLine(
                 "- RAOfflineProxy: " +
@@ -737,18 +663,6 @@ object DiagnosticsBuilder {
                     (tailscalePending?.restoreToken ?: "none")
             )
             appendLine(
-                "- Key Mapper transaction: " +
-                    (keyMapperPending?.restoreToken ?: "none")
-            )
-            appendLine(
-                "- JamesDSP transaction: " +
-                    (jamesDspPending?.restoreToken ?: "none")
-            )
-            appendLine(
-                "- BasicSync transaction: " +
-                    (basicSyncPending?.restoreToken ?: "none")
-            )
-            appendLine(
                 "- RAOfflineProxy transaction: " +
                     (raOfflineProxyPending?.restoreToken ?: "none")
             )
@@ -826,8 +740,6 @@ object DiagnosticsBuilder {
                             "ChargingSeparation=${record.settings.chargingSeparation} · " +
                             "Syncthing=${record.settings.syncthing} · " +
                             "Tailscale=${record.settings.tailscale} · " +
-                            "JamesDSP=${record.settings.jamesDsp} · " +
-                            "BasicSync=${record.settings.basicSync} · " +
                             "ClosedLid=${record.settings.closedLidProtection}"
                     )
                     appendLine(

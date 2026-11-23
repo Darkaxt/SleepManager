@@ -193,59 +193,6 @@ class BatterySaverPolicyTest {
     }
 
     @Test
-    fun maintenanceTemporaryRestore_requiresOwnedSleepEnabledState() {
-        assertTrue(
-            BatterySaverPolicy.shouldTemporarilyRestoreForMaintenance(
-                owned = true,
-                previous = false,
-                current = true
-            )
-        )
-        assertFalse(
-            BatterySaverPolicy.shouldTemporarilyRestoreForMaintenance(
-                owned = true,
-                previous = true,
-                current = true
-            )
-        )
-        assertFalse(
-            BatterySaverPolicy.shouldTemporarilyRestoreForMaintenance(
-                owned = true,
-                previous = false,
-                current = false
-            )
-        )
-    }
-
-    @Test
-    fun maintenanceReapply_requiresSleepingOwnedStateStillOff() {
-        assertTrue(
-            BatterySaverPolicy.shouldReapplyAfterMaintenance(
-                owned = true,
-                previous = false,
-                isRealWake = false,
-                current = false
-            )
-        )
-        assertFalse(
-            BatterySaverPolicy.shouldReapplyAfterMaintenance(
-                owned = true,
-                previous = false,
-                isRealWake = true,
-                current = false
-            )
-        )
-        assertFalse(
-            BatterySaverPolicy.shouldReapplyAfterMaintenance(
-                owned = true,
-                previous = false,
-                isRealWake = false,
-                current = true
-            )
-        )
-    }
-
-    @Test
     fun recoveryDecision_restoresOnRealWakeBeforeSleepStateChecks() {
         assertEquals(
             BatterySaverRecoveryDecision.RESTORE_PREVIOUS,

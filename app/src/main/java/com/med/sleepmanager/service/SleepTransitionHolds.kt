@@ -7,7 +7,6 @@ package com.med.sleepmanager.service
  */
 internal enum class SleepTransitionHold {
     SLEEP_DELAY,
-    BASIC_SYNC_PROBE,
     SYNCTHING_PROBE,
     SYNC_STOP_WAIT,
     TAILSCALE_VERIFY;

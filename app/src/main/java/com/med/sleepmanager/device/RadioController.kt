@@ -214,21 +214,4 @@ object RadioController {
                 DeviceControlController.setBluetoothEnabledPrivileged(false)
         return wifiOk && bluetoothOk
     }
-
-    fun setTemporaryWifi(context: Context, enabled: Boolean): Boolean =
-        when (backend(context)) {
-            RadioBackend.PSERVER ->
-                DeviceControlController.setWifiEnabledPrivileged(enabled)
-            RadioBackend.HELPER ->
-                HelperController.setTemporaryWifi(context, enabled)
-            RadioBackend.NONE ->
-                false
-        }
-
-    fun directSleepWifiOwned(context: Context, cycleId: Long): Boolean {
-        val state = DirectRadioStore.current(context)
-        return state.active &&
-            state.cycleId == cycleId &&
-            state.wifiChanged
-    }
 }

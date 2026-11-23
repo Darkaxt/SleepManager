@@ -193,8 +193,6 @@ private fun activityTimelineTitle(
         when (kind) {
             ActivityTimelineKind.SLEEP -> R.string.activity_timeline_sleep
             ActivityTimelineKind.WAKE -> R.string.activity_timeline_wake
-            ActivityTimelineKind.MAINTENANCE ->
-                R.string.activity_timeline_maintenance
             ActivityTimelineKind.PROTECTION ->
                 R.string.activity_timeline_protection
             ActivityTimelineKind.RECOVERY ->

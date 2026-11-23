@@ -43,11 +43,8 @@ import com.med.sleepmanager.device.BackgroundReliability
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.device.RadioController
 import com.med.sleepmanager.diagnostics.DiagnosticsBuilder
-import com.med.sleepmanager.integration.BasicSyncController
 import com.med.sleepmanager.integration.RaOfflineProxyController
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
-import com.med.sleepmanager.integration.connector.BasicSyncConnector
-import com.med.sleepmanager.integration.connector.JamesDspConnector
 import com.med.sleepmanager.integration.connector.SyncthingConnector
 import com.med.sleepmanager.integration.HelperController
 import com.med.sleepmanager.integration.SyncthingController
@@ -126,24 +123,6 @@ class MainActivity : ComponentActivity() {
             uiViewModel.update { it.copy(manageTailscaleEnabled = value) }
         }
 
-    internal var manageJamesDspEnabledState: Boolean
-        get() = uiState.manageJamesDspEnabled
-        set(value) {
-            uiViewModel.update { it.copy(manageJamesDspEnabled = value) }
-        }
-
-    internal var manageKeyMapperEnabledState: Boolean
-        get() = uiState.manageKeyMapperEnabled
-        set(value) {
-            uiViewModel.update { it.copy(manageKeyMapperEnabled = value) }
-        }
-
-    internal var manageBasicSyncEnabledState: Boolean
-        get() = uiState.manageBasicSyncEnabled
-        set(value) {
-            uiViewModel.update { it.copy(manageBasicSyncEnabled = value) }
-        }
-
     internal var manageRaOfflineProxyEnabledState: Boolean
         get() = uiState.manageRaOfflineProxyEnabled
         set(value) {
@@ -168,18 +147,6 @@ class MainActivity : ComponentActivity() {
         get() = uiState.closedLidPowerSleeps
         set(value) {
             uiViewModel.update { it.copy(closedLidPowerSleeps = value) }
-        }
-
-    internal var periodicSyncWhileSleepingState: Boolean
-        get() = uiState.periodicSyncWhileSleeping
-        set(value) {
-            uiViewModel.update { it.copy(periodicSyncWhileSleeping = value) }
-        }
-
-    internal var syncThenStopOnSleepWakeState: Boolean
-        get() = uiState.syncThenStopOnSleepWake
-        set(value) {
-            uiViewModel.update { it.copy(syncThenStopOnSleepWake = value) }
         }
 
     internal var sleepGraceMsState: Long
@@ -272,20 +239,6 @@ class MainActivity : ComponentActivity() {
             uiViewModel.update { it.copy(currentTailscaleConnected = value) }
         }
 
-    internal var currentBasicSyncState: BasicSyncController.RemoteState?
-        get() = uiState.currentBasicSyncState
-        set(value) {
-            uiViewModel.update { it.copy(currentBasicSyncState = value) }
-        }
-
-    internal var basicSyncReadinessProbeComplete: Boolean
-        get() = uiState.basicSyncReadinessProbeComplete
-        set(value) {
-            uiViewModel.update {
-                it.copy(basicSyncReadinessProbeComplete = value)
-            }
-        }
-
     internal var currentRaOfflineProxyStatus: RaOfflineProxyStatus?
         get() = uiState.currentRaOfflineProxyStatus
         set(value) {
@@ -322,8 +275,6 @@ class MainActivity : ComponentActivity() {
 
     @Volatile
     private var syncthingStateProbeRunning = false
-    @Volatile
-    private var basicSyncReadinessProbeRunning = false
     @Volatile
     private var raOfflineProxyStateProbeRunning = false
     @Volatile
@@ -451,7 +402,6 @@ class MainActivity : ComponentActivity() {
                 refreshManagedDeviceActionSettingsState()
                 refreshManagedIntegrationSettingsState()
                 refreshManagedClamshellSettingsState()
-                refreshManagedSyncSettingsState()
                 refreshSleepDelaySettingsState()
                 refreshAdvancedBatteryConditionSettingsState()
                 refreshScheduleSettingsState()
@@ -467,45 +417,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refreshIntegrationRuntimeStates() {
-        if (
-            BasicSyncController.isInstalled(this) &&
-            BasicSyncController.supportsStateApi(this)
-        ) {
-            BasicSyncController.startStateObserver(this)
-            currentBasicSyncState =
-                BasicSyncController.lastObservedState()
-
-            if (
-                !basicSyncReadinessProbeComplete &&
-                !basicSyncReadinessProbeRunning
-            ) {
-                basicSyncReadinessProbeRunning = true
-                val appContext = applicationContext
-                Thread {
-                    val state =
-                        BasicSyncController.requestState(
-                            appContext,
-                            timeoutMs = 1_750L,
-                            attempts = 3,
-                            retryDelayMs = 250L
-                        )
-                    runOnUiThread {
-                        currentBasicSyncState = state
-                        basicSyncReadinessProbeComplete = true
-                        basicSyncReadinessProbeRunning = false
-                        activityRefreshToken++
-                    }
-                }.apply {
-                    name = "SleepManagerBasicSyncReadiness"
-                    isDaemon = true
-                    start()
-                }
-            }
-        } else {
-            currentBasicSyncState = null
-            basicSyncReadinessProbeComplete = true
-        }
-
         if (!RaOfflineProxyController.isInstalled(this)) {
             currentRaOfflineProxyStatus = null
             raOfflineProxyStatusProbeComplete = true
@@ -652,9 +563,6 @@ class MainActivity : ComponentActivity() {
     private fun refreshManagedIntegrationSettingsState() {
         manageSyncthingEnabledState = AppPreferences.manageSyncthing(this)
         manageTailscaleEnabledState = AppPreferences.manageTailscale(this)
-        manageJamesDspEnabledState = AppPreferences.manageJamesDsp(this)
-        manageKeyMapperEnabledState = AppPreferences.manageKeyMapper(this)
-        manageBasicSyncEnabledState = AppPreferences.manageBasicSync(this)
         manageRaOfflineProxyEnabledState =
             AppPreferences.manageRaOfflineProxy(this)
     }
@@ -664,13 +572,6 @@ class MainActivity : ComponentActivity() {
             AppPreferences.manageClosedLidProtection(this)
         dockDisconnectSleepsState = AppPreferences.dockDisconnectSleeps(this)
         closedLidPowerSleepsState = AppPreferences.closedLidPowerSleeps(this)
-    }
-
-    private fun refreshManagedSyncSettingsState() {
-        periodicSyncWhileSleepingState =
-            AppPreferences.periodicSyncWhileSleeping(this)
-        syncThenStopOnSleepWakeState =
-            AppPreferences.syncThenStopOnSleepWake(this)
     }
 
     private fun refreshSleepDelaySettingsState() {
@@ -709,7 +610,6 @@ class MainActivity : ComponentActivity() {
         refreshManagedDeviceActionSettingsState()
         refreshManagedIntegrationSettingsState()
         refreshManagedClamshellSettingsState()
-        refreshManagedSyncSettingsState()
         refreshSleepDelaySettingsState()
         refreshAdvancedBatteryConditionSettingsState()
         refreshScheduleSettingsState()
@@ -772,37 +672,6 @@ class MainActivity : ComponentActivity() {
                         AppPreferences.setManageTailscale(this@MainActivity, enabled)
                         manageTailscaleEnabledState = enabled
                     },
-                    onManageJamesDspChange = { enabled ->
-                        AppPreferences.setManageJamesDsp(this@MainActivity, enabled)
-                        manageJamesDspEnabledState = enabled
-                    },
-                    onManageKeyMapperChange = { enabled ->
-                        AppPreferences.setManageKeyMapper(this@MainActivity, enabled)
-                        manageKeyMapperEnabledState = enabled
-                        if (!enabled && managerEnabledState) {
-                            refreshRunningService()
-                        }
-                    },
-                    onManageBasicSyncChange = { enabled ->
-                        if (
-                            enabled &&
-                            BasicSyncController.lastObservedState() == null
-                        ) {
-                            Toast.makeText(
-                                this@MainActivity,
-                                getString(
-                                    R.string.home_basicsync_remote_control_required
-                                ),
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            AppPreferences.setManageBasicSync(
-                                this@MainActivity,
-                                enabled
-                            )
-                            manageBasicSyncEnabledState = enabled
-                        }
-                    },
                     onManageRaOfflineProxyChange = { enabled ->
                         AppPreferences.setManageRaOfflineProxy(
                             this@MainActivity,
@@ -812,20 +681,6 @@ class MainActivity : ComponentActivity() {
                         if (managerEnabledState) {
                             refreshRunningService()
                         }
-                    },
-                    onPeriodicSyncWhileSleepingChange = { enabled ->
-                        AppPreferences.setPeriodicSyncWhileSleeping(
-                            this@MainActivity,
-                            enabled
-                        )
-                        periodicSyncWhileSleepingState = enabled
-                    },
-                    onSyncThenStopOnSleepWakeChange = { enabled ->
-                        AppPreferences.setSyncThenStopOnSleepWake(
-                            this@MainActivity,
-                            enabled
-                        )
-                        syncThenStopOnSleepWakeState = enabled
                     },
                     onSleepGraceChange = { value ->
                         AppPreferences.setSleepGraceMs(this@MainActivity, value)
@@ -986,12 +841,6 @@ class MainActivity : ComponentActivity() {
                     onRestoreSyncthingRequested = {
                         restoreSyncthingTransactionNow()
                     },
-                    onRestoreJamesDspRequested = {
-                        restoreJamesDspTransactionNow()
-                    },
-                    onRestoreBasicSyncRequested = {
-                        restoreBasicSyncTransactionNow()
-                    },
                     onUseSystemColorsChanged = { value ->
                         AppPreferences.setUseSystemColors(
                             this@MainActivity,
@@ -1018,14 +867,6 @@ class MainActivity : ComponentActivity() {
         super.onResume()
 
         pendingExternalNavigation = false
-        // Re-check the explicit REQUEST_STATE/STATE_CHANGED contract after
-        // returning from BasicSync settings; this is the authoritative remote
-        // control readiness signal. Never render a stale state from before the
-        // user disabled BasicSync remote control.
-        BasicSyncController.clearObservedState()
-        currentBasicSyncState = null
-        basicSyncReadinessProbeComplete = false
-
         if (pendingPackageInstallerReturn) {
             val helperInstallAttempt = pendingHelperInstallerReturn
             pendingPackageInstallerReturn = false
@@ -1121,9 +962,6 @@ class MainActivity : ComponentActivity() {
         uiRefreshActive = false
         uiRefreshGeneration++
         statusRefreshHandler.removeCallbacks(statusRefreshRunnable)
-        if (!AppPreferences.manageBasicSync(this)) {
-            BasicSyncController.stopStateObserver()
-        }
         super.onPause()
     }
 
@@ -1422,34 +1260,6 @@ class MainActivity : ComponentActivity() {
             SleepCycleStore.clearConnectorChange(this, SyncthingConnector.id)
         } else {
             DiagnosticsStateStore.recordEvent(this, "Syncthing restore pending")
-        }
-    }
-
-    internal fun restoreJamesDspTransactionNow() {
-        val change =
-            SleepCycleStore.connectorChange(this, JamesDspConnector.id)
-                ?: return
-
-        val result = JamesDspConnector.wake(this, change.restoreToken)
-
-        if (result.success) {
-            SleepCycleStore.clearConnectorChange(this, JamesDspConnector.id)
-        } else {
-            DiagnosticsStateStore.recordEvent(this, "JamesDSP restore pending")
-        }
-    }
-
-    internal fun restoreBasicSyncTransactionNow() {
-        val change =
-            SleepCycleStore.connectorChange(this, BasicSyncConnector.id)
-                ?: return
-
-        val result = BasicSyncConnector.wake(this, change.restoreToken)
-
-        if (result.success) {
-            SleepCycleStore.clearConnectorChange(this, BasicSyncConnector.id)
-        } else {
-            DiagnosticsStateStore.recordEvent(this, "BasicSync restore pending")
         }
     }
 

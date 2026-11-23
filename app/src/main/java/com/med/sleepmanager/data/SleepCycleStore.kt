@@ -136,11 +136,50 @@ object SleepCycleStore {
         prefs(context).getBoolean(connectorChangedKey(connectorId), false)
 
     fun hasPendingConnectorChanges(context: Context): Boolean =
-        prefs(context).all.any { (key, value) ->
-            key.startsWith(CONNECTOR_PREFIX) &&
-                key.endsWith(CONNECTOR_CHANGED_SUFFIX) &&
-                value == true
+        pendingConnectorIds(prefs(context).all).isNotEmpty()
+
+    /**
+     * Connector ids with a recorded change in a persisted [entries] snapshot.
+     * Ids in [RestoreParticipants.RETIRED_CONNECTOR_IDS] are ignored: an
+     * upgrade from 0.8.0.13 can leave them behind, and nothing restores them
+     * any more, so they must not keep the cycle from completing.
+     */
+    internal fun pendingConnectorIds(entries: Map<String, *>): Set<String> =
+        entries.mapNotNullTo(linkedSetOf()) { (key, value) ->
+            if (
+                value == true &&
+                key.startsWith(CONNECTOR_PREFIX) &&
+                key.endsWith(CONNECTOR_CHANGED_SUFFIX)
+            ) {
+                key.removePrefix(CONNECTOR_PREFIX)
+                    .removeSuffix(CONNECTOR_CHANGED_SUFFIX)
+                    .takeUnless { it in RestoreParticipants.RETIRED_CONNECTOR_IDS }
+            } else {
+                null
+            }
         }
+
+    /** Persisted keys that belong to retired connectors (changed flag and token). */
+    internal fun retiredConnectorKeys(keys: Set<String>): Set<String> =
+        keys.filterTo(linkedSetOf()) { key ->
+            RestoreParticipants.RETIRED_CONNECTOR_IDS.any { id ->
+                key.startsWith("$CONNECTOR_PREFIX$id.")
+            }
+        }
+
+    /**
+     * Drops ownership records of retired connectors left by 0.8.0.13. Safe to
+     * call repeatedly; returns true if anything was removed.
+     */
+    fun dropRetiredConnectorChanges(context: Context): Boolean {
+        val stale = retiredConnectorKeys(prefs(context).all.keys)
+        if (stale.isEmpty()) return false
+        prefs(context).edit()
+            .apply { stale.forEach(::remove) }
+            .commit()
+        Log.i("SleepManager", "Dropped retired connector records: $stale")
+        return true
+    }
 
     fun markRestoreProblem(context: Context, message: String) {
         prefs(context).edit()
