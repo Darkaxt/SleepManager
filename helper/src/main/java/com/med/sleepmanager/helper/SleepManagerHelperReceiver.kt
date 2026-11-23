@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.provider.Settings
 import android.util.Log
@@ -19,6 +20,17 @@ open class SleepManagerHelperReceiver : BroadcastReceiver() {
         get() = HelperProtocol.ACTION_STATE
     protected open val resultAction: String
         get() = HelperProtocol.ACTION_RESULT
+
+    /**
+     * The legacy transport is guarded by a permission that only the main app
+     * defines. If another app defined it first (for example while SleepManager
+     * is not installed), that app could reach this receiver. Accept legacy
+     * commands only while the permission is defined by a package signed with
+     * this Helper's certificate. The V2 transport uses a Helper-owned signature
+     * permission and needs no such check.
+     */
+    protected open fun isTransportTrusted(context: Context): Boolean =
+        isLegacyPermissionOwnerTrusted(context)
 
     companion object {
         private const val TAG = "SleepManagerHelper"
@@ -35,6 +47,10 @@ open class SleepManagerHelperReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
+        if (!isTransportTrusted(context)) {
+            Log.w(TAG, "Ignoring legacy command: control permission owner is not trusted")
+            return
+        }
         when (intent?.action) {
             HelperProtocol.ACTION_SLEEP -> enterSleep(
                 context,
@@ -689,3 +705,13 @@ open class SleepManagerHelperReceiver : BroadcastReceiver() {
             false
         }
 }
+
+internal fun isLegacyPermissionOwnerTrusted(context: Context): Boolean =
+    runCatching {
+        val packageManager = context.packageManager
+        val owner =
+            packageManager.getPermissionInfo(HelperProtocol.PERMISSION, 0).packageName
+        owner == context.packageName ||
+            packageManager.checkSignatures(owner, context.packageName) ==
+            PackageManager.SIGNATURE_MATCH
+    }.getOrDefault(false)

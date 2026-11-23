@@ -5,7 +5,8 @@
 - Design-audit fixes: disabled-state restore retry with bounded backoff; verified-disconnect
   Tailscale owner attribution (Android redacts the VPN owner UID); installed-label client name;
   Forget clears all cycle-keyed restore stores; per-step sleep-transition wake locks; Helper
-  declares the signature-protected V1 control permission; untracked committed `.pyc` files.
+  accepts V1 commands only while a same-signer package owns the V1 control permission;
+  untracked committed `.pyc` files.
 - Main 0.8.0.11/code 581; Helper 1.1.7.2/code 1123, existing package IDs, settings,
   signature-protected pairing, permanent common certificate and fork update origin.
 

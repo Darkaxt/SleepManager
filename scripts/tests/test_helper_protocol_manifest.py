@@ -79,13 +79,25 @@ class HelperProtocolManifestTest(unittest.TestCase):
         self.assertIn(self.contract["HELPER_PACKAGE"], queried_packages)
 
 
-    def test_both_apps_define_v1_permission_with_signature_protection(self):
-        # The V1 Helper components are guarded by PERMISSION. If only the main
-        # app defined it, another app installed first could define it with a
-        # weaker protection level and reach the Helper without the main app.
-        for manifest in (self.app, self.helper):
-            levels = declared_protection_levels(manifest)
-            self.assertEqual(levels.get(self.contract["PERMISSION"]), "signature")
+    def test_v1_permission_is_main_owned_and_helper_checks_its_owner(self):
+        # Only the main app defines PERMISSION. If the Helper also defined it,
+        # whichever APK was installed first would own it, and uninstalling a
+        # Helper owner would remove the permission from the main app too
+        # (caught by the CI Helper 1.1.1 compatibility run). The Helper instead
+        # refuses legacy commands unless a same-signer package owns PERMISSION.
+        self.assertEqual(
+            declared_protection_levels(self.app).get(self.contract["PERMISSION"]),
+            "signature",
+        )
+        self.assertNotIn(
+            self.contract["PERMISSION"], declared_protection_levels(self.helper)
+        )
+        receiver = (
+            ROOT / "helper/src/main/java/com/med/sleepmanager/helper/"
+            "SleepManagerHelperReceiver.kt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("isLegacyPermissionOwnerTrusted", receiver)
+        self.assertIn("SIGNATURE_MATCH", receiver)
         self.assertEqual(
             declared_protection_levels(self.helper).get(
                 self.contract["PERMISSION_V2"]
@@ -114,7 +126,6 @@ class HelperProtocolManifestTest(unittest.TestCase):
             for node in self.helper.findall("uses-permission")
         }
         self.assertIn(self.contract["PERMISSION_V2"], declared_permissions)
-        self.assertIn(self.contract["PERMISSION"], declared_permissions)
         self.assertIn(self.contract["PERMISSION"], used_permissions)
         self.assertIn(self.contract["PERMISSION_V2"], used_permissions)
 

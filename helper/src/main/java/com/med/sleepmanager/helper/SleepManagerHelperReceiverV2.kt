@@ -1,5 +1,6 @@
 package com.med.sleepmanager.helper
 
+import android.content.Context
 import com.med.sleepmanager.protocol.HelperProtocol
 
 /**
@@ -18,4 +19,6 @@ class SleepManagerHelperReceiverV2 : SleepManagerHelperReceiver() {
 
     override val resultAction: String
         get() = HelperProtocol.ACTION_RESULT_V2
+
+    override fun isTransportTrusted(context: Context): Boolean = true
 }

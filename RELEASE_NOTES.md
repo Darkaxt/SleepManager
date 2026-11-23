@@ -20,7 +20,7 @@ This fork release fixes problems found in a design audit of the sleep/wake engin
 - **The Tailscale integration shows the installed app's real name** (for example TailD) instead of always saying "TailDNS".
 - **"Forget" on a pending restore now clears every related record**, so no stale Wi-Fi/Bluetooth or RAOfflineProxy restore is left behind.
 - **Separate wake locks per sleep step**, so one step finishing can no longer cut short another step's wake lock while the device is going to sleep.
-- **Helper 1.1.7.2 defines its legacy control permission itself** (signature-protected), so another app cannot claim it if the Helper is installed without SleepManager. Update the Helper together with the main app.
+- **Helper 1.1.7.2 ignores legacy commands unless SleepManager itself owns the legacy control permission** (checked by signing certificate), so another app cannot claim that permission and control Wi-Fi/Bluetooth if the Helper is installed without SleepManager. Update the Helper together with the main app.
 
 Known limits, not changed in this release: the BasicSync and Key Mapper state receivers still accept state broadcasts from any app; JamesDSP and Syncthing commands are not confirmed after sending; the sleep service remains one large class.
 
