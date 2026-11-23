@@ -1,4 +1,4 @@
-# SleepManager 0.8.0.10 / Helper 1.1.7.1
+# SleepManager 0.8.0.11 / Helper 1.1.7.2
 
 SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **Home screen smoother**, especially on high-refresh-rate Android handhelds.
 
@@ -6,16 +6,23 @@ SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **H
 >
 > **Recent compatible AYN and Retroid devices:** Wi-Fi and Bluetooth can be controlled directly, without the Compatibility Helper.
 >
-> **Other devices:** the optional **SleepManager Helper 1.1.7.1** remains available for Wi-Fi/Bluetooth control. If prompted, exempt the Helper from battery optimization and allow Wi-Fi control access in Android settings.
+> **Other devices:** the optional **SleepManager Helper 1.1.7.2** remains available for Wi-Fi/Bluetooth control. If prompted, exempt the Helper from battery optimization and allow Wi-Fi control access in Android settings.
 
 > [!WARNING]
 > **AYANEO / KONKR devices with DuraSpeed:** disable **DuraSpeed** in Android Settings. Battery usage set to Unrestricted does not override DuraSpeed's background restrictions.
 
-## Maintained history update
+## Reliability and safety fixes
 
-This fork update incorporates the exact upstream download-badge refresh. Main and
-Helper runtime behavior is unchanged; the upstream base remains0.8.0. Existing
-fork compatibility, settings, package IDs and paired signing identities remain.
+This fork release fixes problems found in a design audit of the sleep/wake engine.
+
+- **Restores keep retrying after you disable SleepManager.** If something it changed (radios, Battery Saver, charging separation, BasicSync) could not be put back at the moment you disabled it, SleepManager now retries in the background with a growing delay (1 minute up to 1 hour, for about a day, restarted on reboot). It never applies sleep actions while disabled.
+- **Tailscale and TailDNS/TailD installed together now work.** Android hides which app owns a VPN, so the previous detection never identified the active client when both were installed and did nothing. SleepManager now disconnects the installed clients in order and reconnects only the one whose disconnect actually brought the tunnel down.
+- **The Tailscale integration shows the installed app's real name** (for example TailD) instead of always saying "TailDNS".
+- **"Forget" on a pending restore now clears every related record**, so no stale Wi-Fi/Bluetooth or RAOfflineProxy restore is left behind.
+- **Separate wake locks per sleep step**, so one step finishing can no longer cut short another step's wake lock while the device is going to sleep.
+- **Helper 1.1.7.2 defines its legacy control permission itself** (signature-protected), so another app cannot claim it if the Helper is installed without SleepManager. Update the Helper together with the main app.
+
+Known limits, not changed in this release: the BasicSync and Key Mapper state receivers still accept state broadcasts from any app; JamesDSP and Syncthing commands are not confirmed after sending; the sleep service remains one large class.
 
 ## Existing upstream0.8.0 features
 
@@ -37,8 +44,8 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Compatibility
 
-- SleepManager **0.8.0.10 / versionCode 580**
-- SleepManager Helper **1.1.7.1 / versionCode 1122** (unchanged)
+- SleepManager **0.8.0.11 / versionCode 581**
+- SleepManager Helper **1.1.7.2 / versionCode 1123**
 - Android **9 / API 28 or newer**
 - Key Mapper **4.7.0+** for the new integration
 - Existing SleepManager settings are retained when updating an official signed build
@@ -46,7 +53,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Installation and Updating
 
-Install **SleepManager-0.8.0.10.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+Install **SleepManager-0.8.0.11.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
 
 On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
 

@@ -15,7 +15,8 @@ installed app label. Known limit: if the preferred client is not the owner but
 the real owner disconnects late (after the first window), ownership could be
 attributed to the later candidate; both windows use the unchanged
 verification policy. Unit tests cover candidate ordering and display names; no
-device verification is claimed.
+device verification is claimed. Released as Main 0.8.0.11/code 581 with
+Helper 1.1.7.2/code 1123.
 
 ## November 21 maintained upstream synchronization
 
