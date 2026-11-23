@@ -40,6 +40,27 @@ enum class RestoreRoute {
 }
 
 /**
+ * Service lifecycle points at which process-death recovery runs, in the order
+ * SleepManagerService reaches them.
+ */
+enum class RecoveryEvent {
+    /** onCreate, before the enabled check: also runs in restore-only (disabled) mode. */
+    CREATE,
+
+    /** onCreate while enabled, after screen and lid monitoring are registered. */
+    CREATE_ENABLED,
+
+    /** Every onStartCommand while enabled. */
+    START_ENABLED,
+
+    /** The first enabled onStartCommand: the current screen state is replayed once. */
+    SCREEN_STATE_REPLAY,
+
+    /** onDestroy while enabled; the active sleep transaction is preserved. */
+    DESTROY_ENABLED
+}
+
+/**
  * One piece of state SleepManager changes during sleep and must restore or
  * explicitly abandon. Every participant is registered once in
  * [RestoreParticipants]; pending checks, Forget and cycle completion are all

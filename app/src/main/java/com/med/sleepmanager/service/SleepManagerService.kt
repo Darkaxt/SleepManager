@@ -33,6 +33,8 @@ import com.med.sleepmanager.data.DiagnosticsCycleStore
 import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.DirectRadioStore
 import com.med.sleepmanager.data.PendingRestoreState
+import com.med.sleepmanager.data.RecoveryEvent
+import com.med.sleepmanager.data.RestoreParticipants
 import com.med.sleepmanager.data.RestoreTransaction
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.ClamshellStateStore
@@ -807,8 +809,7 @@ class SleepManagerService : Service() {
         registerHelperResultReceiver()
         registerKeyMapperStateReceiver()
         refreshBasicSyncObserver()
-        maybeRestoreOwnedBasicSyncState()
-        maybeRestoreDisabledRaOfflineProxyState()
+        runRecovery(RecoveryEvent.CREATE)
         if (!AppPreferences.isEnabled(this)) {
             // Restore-only mode: started to finish restoring after a disable.
             // Screen, lid and power monitoring and sleep-state recovery would
@@ -818,12 +819,94 @@ class SleepManagerService : Service() {
         }
         registerScreenReceiver()
         refreshLidMonitor()
-        recoverOwnedDeviceControls()
-        recoverInterruptedSleepWifiMaintenance()
+        runRecovery(RecoveryEvent.CREATE_ENABLED)
         Log.i(TAG, "Service started")
     }
 
-    private fun recoverOwnedDeviceControls() {
+    private fun runRecovery(event: RecoveryEvent) {
+        LegacyServiceRecovery.run(event, serviceRecoveryHost)
+    }
+
+    private val serviceRecoveryHost =
+        object : ServiceRecoveryHost {
+            override fun isRealWake(): Boolean = isRealWakeNow()
+
+            override fun isEffectivelySleeping(): Boolean =
+                isEffectivelySleepingNow()
+
+            override fun isPending(participantId: String): Boolean {
+                val context = this@SleepManagerService
+                val cycle = SleepCycleStore.current(context)
+                return RestoreParticipants.all
+                    .single { it.id == participantId }
+                    .isPending(context, cycle)
+            }
+
+            override fun restoreOwnedBasicSyncIfUnmanaged() =
+                maybeRestoreOwnedBasicSyncState()
+
+            override fun restoreRaOfflineProxyIfUnmanaged() =
+                maybeRestoreDisabledRaOfflineProxyState()
+
+            override fun recoverBatterySaver() = recoverOwnedBatterySaver()
+
+            override fun recoverChargingSeparation() =
+                recoverOwnedChargingSeparation()
+
+            override fun resumeRaOfflineProxySleepGate() {
+                Log.i(
+                    TAG,
+                    "Service recovery -> resuming RAOfflineProxy pre-sleep gate"
+                )
+                raOfflineProxyCoordinator()
+                    .resumeSleepGate(SleepCycleStore.current(this@SleepManagerService).cycleId)
+            }
+
+            override fun reapplyDirectRadioSleepState(event: RecoveryEvent) {
+                val context = this@SleepManagerService
+                val reapplied =
+                    RadioController.reapplyDirectSleepState(
+                        context,
+                        SleepCycleStore.current(context).cycleId
+                    )
+                if (event == RecoveryEvent.CREATE_ENABLED) {
+                    DiagnosticsStateStore.recordEvent(
+                        context,
+                        "Recovery → PServer sleep radio state " +
+                            if (reapplied) "re-applied" else "re-apply failed"
+                    )
+                }
+            }
+
+            override fun reapplyHelperSleepWifi(event: RecoveryEvent) {
+                val context = this@SleepManagerService
+                if (event == RecoveryEvent.CREATE_ENABLED) {
+                    // After an interrupted maintenance window only a cycle that
+                    // manages Wi-Fi through an installed Helper is re-asserted.
+                    if (
+                        !SleepCycleStore.current(context).wifiManaged ||
+                        !HelperController.isInstalled(context)
+                    ) {
+                        return
+                    }
+                }
+                // Safe and idempotent: Helper 1.1+ accepts this only when it still
+                // owns the Wi-Fi change from the active sleep cycle.
+                HelperController.setTemporaryWifi(context, enabled = false)
+                if (event == RecoveryEvent.CREATE_ENABLED) {
+                    Log.i(
+                        TAG,
+                        "Service recovery -> requested sleep Wi-Fi state after interrupted maintenance"
+                    )
+                }
+            }
+
+            override fun restoreKeyMapper() = restorePendingKeyMapper()
+
+            override fun replayScreenState() = applyCurrentScreenState()
+        }
+
+    private fun recoverOwnedBatterySaver() {
         val batterySaverOwned =
             DeviceControlStore.batterySaver(this)
 
@@ -912,7 +995,9 @@ class SleepManagerService : Service() {
                     DeviceControlController.externalPowerConnected(this)
             )
         }
+    }
 
+    private fun recoverOwnedChargingSeparation() {
         val chargingOwned =
             DeviceControlStore.chargingSeparation(this)
         if (chargingOwned.owned) {
@@ -963,57 +1048,6 @@ class SleepManagerService : Service() {
                     }
                 }
             }
-        }
-    }
-
-    private fun recoverInterruptedSleepWifiMaintenance() {
-        if (!isEffectivelySleepingNow()) return
-
-        val cycle = SleepCycleStore.current(this)
-        if (
-            cycle.active &&
-            RaOfflineProxySleepStore.isPendingForCycle(
-                this,
-                cycle.cycleId
-            )
-        ) {
-            Log.i(
-                TAG,
-                "Service recovery -> resuming RAOfflineProxy pre-sleep gate"
-            )
-            raOfflineProxyCoordinator().resumeSleepGate(cycle.cycleId)
-            return
-        }
-        if (
-            cycle.active &&
-            DirectRadioStore.isPendingForCycle(this, cycle.cycleId)
-        ) {
-            val reapplied =
-                RadioController.reapplyDirectSleepState(
-                    this,
-                    cycle.cycleId
-                )
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Recovery → PServer sleep radio state " +
-                    if (reapplied) "re-applied" else "re-apply failed"
-            )
-            return
-        }
-        if (
-            cycle.active &&
-            cycle.helperExpected &&
-            cycle.wifiManaged &&
-            !cycle.helperRestored &&
-            HelperController.isInstalled(this)
-        ) {
-            // Safe and idempotent: Helper 1.1+ accepts this only when it still
-            // owns the Wi-Fi change from the active sleep cycle.
-            HelperController.setTemporaryWifi(this, enabled = false)
-            Log.i(
-                TAG,
-                "Service recovery -> requested sleep Wi-Fi state after interrupted maintenance"
-            )
         }
     }
 
@@ -1109,13 +1143,12 @@ class SleepManagerService : Service() {
         if (!helperResultReceiverRegistered) registerHelperResultReceiver()
         if (!keyMapperStateReceiverRegistered) registerKeyMapperStateReceiver()
         refreshBasicSyncObserver()
-        maybeRestoreOwnedBasicSyncState()
-        if (isRealWakeNow()) restorePendingKeyMapper()
+        runRecovery(RecoveryEvent.START_ENABLED)
         refreshLidMonitor()
 
         if (!initialScreenStateApplied) {
             initialScreenStateApplied = true
-            applyCurrentScreenState()
+            runRecovery(RecoveryEvent.SCREEN_STATE_REPLAY)
         }
 
         return START_STICKY
@@ -4842,27 +4875,8 @@ class SleepManagerService : Service() {
 
         // Re-asserting the sleep radio state is only valid while enabled; a
         // disabled (restore-only) service must never re-apply sleep actions.
-        if (AppPreferences.isEnabled(this) && isEffectivelySleepingNow()) {
-            val cycle = SleepCycleStore.current(this)
-            when {
-                cycle.active &&
-                    DirectRadioStore.isPendingForCycle(
-                        this,
-                        cycle.cycleId
-                    ) ->
-                    RadioController.reapplyDirectSleepState(
-                        this,
-                        cycle.cycleId
-                    )
-
-                cycle.active &&
-                    cycle.helperExpected &&
-                    !cycle.helperRestored ->
-                    HelperController.setTemporaryWifi(
-                        this,
-                        enabled = false
-                    )
-            }
+        if (AppPreferences.isEnabled(this)) {
+            runRecovery(RecoveryEvent.DESTROY_ENABLED)
         }
 
         cancelSyncMaintenance(restoreSleepWifi = false)
