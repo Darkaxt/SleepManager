@@ -33,6 +33,7 @@ import com.med.sleepmanager.data.DiagnosticsCycleStore
 import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.DirectRadioStore
 import com.med.sleepmanager.data.PendingRestoreState
+import com.med.sleepmanager.data.RestoreTransaction
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.ClamshellStateStore
 import com.med.sleepmanager.data.SleepCycleStore
@@ -1258,6 +1259,11 @@ class SleepManagerService : Service() {
 
     private fun beginDisableAndRestore() {
         disableRestoreState.begin()
+        Log.i(
+            TAG,
+            "Disable restore starting; pending participants " +
+                RestoreTransaction.pendingParticipants(this)
+        )
         // Watchdog for this round: if the process dies before the round
         // finishes, the alarm restarts restore-only work.
         DisableRestoreRetryScheduler.scheduleIfPending(this, advance = false)
@@ -1285,31 +1291,9 @@ class SleepManagerService : Service() {
         startOwnedDeviceControlRestoreForDisable()
         maybeRestoreOwnedBasicSyncState()
         prepareTailscaleVerificationForWake()
-        restorePendingJamesDsp()
-        restorePendingKeyMapper()
-        restorePendingBasicSync()
-        restorePendingRaOfflineProxyImmediately()
+        restoreImmediateParticipants(RestoreReason.DISABLE)
 
         var cycle = SleepCycleStore.current(this)
-        if (
-            cycle.active &&
-            DirectRadioStore.isPendingForCycle(this, cycle.cycleId)
-        ) {
-            val restored =
-                RadioController.restoreDirect(this, cycle.cycleId)
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Disable → PServer radios " +
-                    if (restored) "restored" else "restore pending"
-            )
-            if (!restored) {
-                SleepCycleStore.markRestoreProblem(
-                    this,
-                    "Direct Wi-Fi / Bluetooth restore is still pending."
-                )
-            }
-            cycle = SleepCycleStore.current(this)
-        }
         if (
             cycle.active &&
             cycle.helperExpected &&
@@ -3240,6 +3224,79 @@ class SleepManagerService : Service() {
         tailscaleVerificationState.reset()
     }
 
+    /**
+     * The immediate restore step shared by a real wake and a disable. The
+     * participant list and order come from RestoreParticipants; adding an
+     * IMMEDIATE participant requires an action in immediateRestoreHost, which
+     * RestoreCoordinator enforces when it is created.
+     */
+    private fun restoreImmediateParticipants(reason: RestoreReason) {
+        val outcomes = restoreCoordinator.restoreImmediate(reason)
+        Log.i(TAG, "${reason.label} -> immediate restore outcomes $outcomes")
+    }
+
+    private val immediateRestoreHost =
+        object : ImmediateRestoreHost {
+            override fun restoreJamesDsp(reason: RestoreReason) =
+                restorePendingJamesDsp()
+
+            override fun restoreKeyMapper(reason: RestoreReason) =
+                restorePendingKeyMapper()
+
+            override fun restoreRaOfflineProxy(reason: RestoreReason) =
+                restorePendingRaOfflineProxyImmediately()
+
+            override fun restoreBasicSync(reason: RestoreReason) {
+                if (
+                    reason == RestoreReason.WAKE &&
+                    wakeTransitionSyncState.isPending
+                ) {
+                    SleepCycleStore.clearConnectorChange(
+                        this@SleepManagerService,
+                        BasicSyncConnector.id
+                    )
+                    Log.i(
+                        TAG,
+                        "Wake sync mode active; BasicSync restore token cleared"
+                    )
+                } else {
+                    restorePendingBasicSync()
+                }
+            }
+
+            override fun restoreDirectRadios(reason: RestoreReason) =
+                restorePendingDirectRadios(reason)
+        }
+
+    private val restoreCoordinator: RestoreCoordinator by lazy {
+        RestoreCoordinator.create(immediateRestoreHost) { participant ->
+            participant.isPending(this, SleepCycleStore.current(this))
+        }
+    }
+
+    private fun restorePendingDirectRadios(reason: RestoreReason) {
+        val cycle = SleepCycleStore.current(this)
+        if (
+            !cycle.active ||
+            !DirectRadioStore.isPendingForCycle(this, cycle.cycleId)
+        ) {
+            return
+        }
+        val restored =
+            RadioController.restoreDirect(this, cycle.cycleId)
+        DiagnosticsStateStore.recordEvent(
+            this,
+            "${reason.label} → PServer radios " +
+                if (restored) "restored" else "restore pending"
+        )
+        if (!restored) {
+            SleepCycleStore.markRestoreProblem(
+                this,
+                "Direct Wi-Fi / Bluetooth restore is still pending."
+            )
+        }
+    }
+
     private fun restorePendingKeyMapper() {
         val change =
             SleepCycleStore.connectorChange(this, KeyMapperController.CONNECTOR_ID)
@@ -3806,43 +3863,9 @@ class SleepManagerService : Service() {
             prepareTailscaleVerificationForWake()
         }
 
-        restorePendingJamesDsp()
-        restorePendingKeyMapper()
-        restorePendingRaOfflineProxyImmediately()
-
-        if (wakeTransitionSyncState.isPending) {
-            SleepCycleStore.clearConnectorChange(
-                this,
-                BasicSyncConnector.id
-            )
-            Log.i(
-                TAG,
-                "Wake sync mode active; BasicSync restore token cleared"
-            )
-        } else {
-            restorePendingBasicSync()
-        }
+        restoreImmediateParticipants(RestoreReason.WAKE)
 
         var cycle = SleepCycleStore.current(this)
-        if (
-            cycle.active &&
-            DirectRadioStore.isPendingForCycle(this, cycle.cycleId)
-        ) {
-            val restored =
-                RadioController.restoreDirect(this, cycle.cycleId)
-            DiagnosticsStateStore.recordEvent(
-                this,
-                "Wake → PServer radios " +
-                    if (restored) "restored" else "restore pending"
-            )
-            if (!restored) {
-                SleepCycleStore.markRestoreProblem(
-                    this,
-                    "Direct Wi-Fi / Bluetooth restore is still pending."
-                )
-            }
-            cycle = SleepCycleStore.current(this)
-        }
         if (
             cycle.active &&
             cycle.helperExpected &&
