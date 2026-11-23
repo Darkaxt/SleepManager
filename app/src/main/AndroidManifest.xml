@@ -124,7 +124,10 @@
             android:enabled="true"
             android:exported="false" />
 
-        <!-- Key Mapper 4.7+ publishes mappings state; never mutates it by itself. -->
+        <!-- Key Mapper 4.7+ publishes mappings state; never mutates it by itself.
+             Exported without a permission because Key Mapper broadcasts without one
+             and does not share its identity; the receiver validates the payload and
+             rejects senders Android attributes to another app (BroadcastSenderPolicy). -->
         <receiver
             android:name=".integration.KeyMapperStateReceiver"
             android:exported="true">

@@ -24,6 +24,9 @@ SleepManager sends explicit `ACTION_PAUSE_MAPPINGS` and `ACTION_RESUME_MAPPINGS`
 
 Mapping-state observations are valid only for the current Android boot. SleepManager records when it owns a pause request and preserves that restore ownership through service recovery. An outgoing request does not itself confirm successful delivery.
 
+## Sender verification
+Key Mapper sends the state broadcast without a permission and without sharing its identity, so Android cannot prove which app sent it. SleepManager therefore accepts only a well-formed boolean state while Key Mapper is installed, and ignores any state broadcast that Android attributes to a different app. Another installed app could still forge the state; it could equally send Key Mapper's public pause/resume requests directly, so this does not grant it new control over Key Mapper.
+
 ## Troubleshooting
 If the integration displays **State unknown**, open Key Mapper again to trigger a fresh mapping-state announcement. Verify the accessibility service is enabled and Key Mapper is version 4.7.0 or newer.
 

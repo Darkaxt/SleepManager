@@ -40,6 +40,22 @@ object BasicSyncController {
     private const val STATE_QUERY_TIMEOUT_MS = 7000L
     private const val MIN_STATE_API_VERSION_CODE = 0x03_12_00L
     private const val MIN_SYNC_COUNTER_API_VERSION_CODE = 0x03_13_00L
+    private const val MAX_BLOCKED_REASONS = 32
+    private const val MAX_BLOCKED_REASON_LENGTH = 64
+    private const val MAX_SYNC_COUNTER = 1_000_000
+
+    // Order matches the SyncCounters constructor call in parseStateValues.
+    private val COUNTER_KEYS = listOf(
+        EXTRA_FOLDERS_IDLE_COUNT,
+        EXTRA_FOLDERS_SCANNING_COUNT,
+        EXTRA_FOLDERS_SYNCING_COUNT,
+        EXTRA_FOLDERS_CLEANING_COUNT,
+        EXTRA_FOLDERS_ERRORED_COUNT,
+        EXTRA_FOLDERS_STARTING_COUNT,
+        EXTRA_DEVICES_CONNECTED_COUNT,
+        EXTRA_DEVICES_SYNCING_COUNT,
+        EXTRA_DEVICES_PENDING_COUNT
+    )
 
     @Volatile
     private var observedState: RemoteState? = null
@@ -99,7 +115,7 @@ object BasicSyncController {
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                parseState(intent)?.let { state ->
+                acceptedState(context, this, intent)?.let { state ->
                     observedState = state
                     Log.i(
                         TAG,
@@ -110,6 +126,9 @@ object BasicSyncController {
             }
         }
 
+        // Exported without a permission because BasicSync sends STATE_CHANGED
+        // as a plain implicit broadcast; acceptedState() applies the sender and
+        // payload checks that are possible (see BroadcastSenderPolicy).
         val filter = IntentFilter(ACTION_STATE_CHANGED)
         ContextCompat.registerReceiver(
             appContext,
@@ -137,53 +156,76 @@ object BasicSyncController {
 
     internal fun parseState(intent: Intent?): RemoteState? {
         if (intent?.action != ACTION_STATE_CHANGED) return null
+        val values =
+            runCatching {
+                val extras = intent.extras ?: return null
+                extras.keySet().associateWith { key ->
+                    @Suppress("DEPRECATION")
+                    extras.get(key)
+                }
+            }.getOrNull() ?: return null
+        return parseStateValues(intent.action, values)
+    }
+
+    /**
+     * Strict parser for the documented BasicSync 3.18+/3.19+ STATE_CHANGED
+     * payload. The broadcast is not authenticated (see [BroadcastSenderPolicy]),
+     * so malformed or implausible payloads are rejected whole instead of being
+     * partially accepted with default values.
+     */
+    internal fun parseStateValues(
+        action: String?,
+        values: Map<String, Any?>
+    ): RemoteState? {
+        if (action != ACTION_STATE_CHANGED) return null
 
         val mode =
-            intent.getStringExtra(EXTRA_MODE)
-                ?.let { raw ->
-                    runCatching { Mode.valueOf(raw) }.getOrNull()
-                }
+            (values[EXTRA_MODE] as? String)
+                ?.let { raw -> Mode.entries.firstOrNull { it.name == raw } }
                 ?: return null
 
         val runState =
-            intent.getStringExtra(EXTRA_RUN_STATE)
-                ?.let { raw ->
-                    runCatching { RunState.valueOf(raw) }.getOrNull()
-                }
+            (values[EXTRA_RUN_STATE] as? String)
+                ?.let { raw -> RunState.entries.firstOrNull { it.name == raw } }
                 ?: return null
 
-        val blockedReasons =
-            intent.getStringArrayExtra(EXTRA_BLOCKED_REASONS)
-                ?.toSet()
-                .orEmpty()
-
-        val counterKeys = listOf(
-            EXTRA_FOLDERS_IDLE_COUNT,
-            EXTRA_FOLDERS_SCANNING_COUNT,
-            EXTRA_FOLDERS_SYNCING_COUNT,
-            EXTRA_FOLDERS_CLEANING_COUNT,
-            EXTRA_FOLDERS_ERRORED_COUNT,
-            EXTRA_FOLDERS_STARTING_COUNT,
-            EXTRA_DEVICES_CONNECTED_COUNT,
-            EXTRA_DEVICES_SYNCING_COUNT,
-            EXTRA_DEVICES_PENDING_COUNT
-        )
+        val blockedReasons: Set<String> =
+            if (!values.containsKey(EXTRA_BLOCKED_REASONS)) {
+                emptySet()
+            } else {
+                val raw = values[EXTRA_BLOCKED_REASONS] as? Array<*> ?: return null
+                if (raw.size > MAX_BLOCKED_REASONS) return null
+                raw.map { reason ->
+                    (reason as? String)
+                        ?.takeIf { it.isNotBlank() && it.length <= MAX_BLOCKED_REASON_LENGTH }
+                        ?: return null
+                }.toSet()
+            }
 
         val syncCounters =
-            if (counterKeys.all(intent::hasExtra)) {
-                SyncCounters(
-                    foldersIdle = intent.getIntExtra(EXTRA_FOLDERS_IDLE_COUNT, 0),
-                    foldersScanning = intent.getIntExtra(EXTRA_FOLDERS_SCANNING_COUNT, 0),
-                    foldersSyncing = intent.getIntExtra(EXTRA_FOLDERS_SYNCING_COUNT, 0),
-                    foldersCleaning = intent.getIntExtra(EXTRA_FOLDERS_CLEANING_COUNT, 0),
-                    foldersErrored = intent.getIntExtra(EXTRA_FOLDERS_ERRORED_COUNT, 0),
-                    foldersStarting = intent.getIntExtra(EXTRA_FOLDERS_STARTING_COUNT, 0),
-                    devicesConnected = intent.getIntExtra(EXTRA_DEVICES_CONNECTED_COUNT, 0),
-                    devicesSyncing = intent.getIntExtra(EXTRA_DEVICES_SYNCING_COUNT, 0),
-                    devicesPending = intent.getIntExtra(EXTRA_DEVICES_PENDING_COUNT, 0)
-                )
-            } else {
-                null
+            when (COUNTER_KEYS.count(values::containsKey)) {
+                0 -> null
+                COUNTER_KEYS.size -> {
+                    val counts =
+                        COUNTER_KEYS.map { key ->
+                            (values[key] as? Int)
+                                ?.takeIf { it in 0..MAX_SYNC_COUNTER }
+                                ?: return null
+                        }
+                    SyncCounters(
+                        foldersIdle = counts[0],
+                        foldersScanning = counts[1],
+                        foldersSyncing = counts[2],
+                        foldersCleaning = counts[3],
+                        foldersErrored = counts[4],
+                        foldersStarting = counts[5],
+                        devicesConnected = counts[6],
+                        devicesSyncing = counts[7],
+                        devicesPending = counts[8]
+                    )
+                }
+                // BasicSync sends either no counters (3.18) or all of them (3.19+).
+                else -> return null
             }
 
         return RemoteState(
@@ -192,6 +234,25 @@ object BasicSyncController {
             blockedReasons = blockedReasons,
             syncCounters = syncCounters
         )
+    }
+
+    /**
+     * Accepts a STATE_CHANGED broadcast only when Android does not attribute it
+     * to another app and its payload is valid. Must be called from onReceive.
+     */
+    private fun acceptedState(
+        context: Context?,
+        receiver: BroadcastReceiver,
+        intent: Intent?
+    ): RemoteState? {
+        if (intent?.action != ACTION_STATE_CHANGED || context == null) return null
+        val verdict = BroadcastSenderGuard.evaluate(context, receiver, PACKAGE, TAG)
+        if (verdict == BroadcastSenderVerdict.REJECTED) return null
+        val state = parseState(intent)
+        if (state == null) {
+            Log.w(TAG, "Ignored malformed STATE_CHANGED payload")
+        }
+        return state
     }
 
     fun isInstalled(context: Context): Boolean =
@@ -284,7 +345,7 @@ object BasicSyncController {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (intent?.action != ACTION_STATE_CHANGED) return
 
-                val state = parseState(intent) ?: return
+                val state = acceptedState(context, this, intent) ?: return
                 observedState = state
                 Log.i(
                     TAG,
