@@ -1,6 +1,7 @@
 package com.med.sleepmanager.data
 
 import android.content.Context
+import android.util.Log
 
 object SleepCycleStore {
     private const val PREFS = "sleep_cycle_state"
@@ -95,6 +96,11 @@ object SleepCycleStore {
         connectorId: String,
         restoreToken: String?
     ) {
+        if (!RestoreParticipants.isRegisteredConnector(connectorId)) {
+            // Still recorded and still blocks completion; register it in
+            // RestoreParticipants so wake, disable and Forget handle it.
+            Log.w("SleepManager", "Connector change for unregistered restore participant: $connectorId")
+        }
         prefs(context).edit()
             .putBoolean(connectorChangedKey(connectorId), true)
             .apply {
@@ -155,12 +161,8 @@ object SleepCycleStore {
         val snapshot = current(context)
         if (!snapshot.active) return true
 
-        val helperDone = !snapshot.helperExpected || snapshot.helperRestored
-        val connectorsDone = !hasPendingConnectorChanges(context)
-        val directRadiosDone =
-            !DirectRadioStore.isPendingForCycle(context, snapshot.cycleId)
-
-        if (helperDone && connectorsDone && directRadiosDone) {
+        // Helper, every connector and direct radios: see RestoreParticipants.
+        if (RestoreTransaction.cycleRestored(context, snapshot)) {
             DiagnosticsCycleStore.markRestorationComplete(
                 context = context,
                 transactionCycleId = snapshot.cycleId

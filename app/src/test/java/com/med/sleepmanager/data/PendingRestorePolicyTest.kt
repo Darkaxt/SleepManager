@@ -5,37 +5,41 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PendingRestorePolicyTest {
-    private fun pending(
-        cycleActive: Boolean = false,
-        batterySaverOwned: Boolean = false,
-        chargingSeparationOwned: Boolean = false,
-        basicSyncOwned: Boolean = false
-    ) =
-        PendingRestorePolicy.isPending(
-            cycleActive = cycleActive,
-            batterySaverOwned = batterySaverOwned,
-            chargingSeparationOwned = chargingSeparationOwned,
-            basicSyncOwned = basicSyncOwned
-        )
-
     @Test
     fun nothingOwnedIsNotPending() {
-        assertFalse(pending())
+        assertFalse(PendingRestorePolicy.isPending(cycleActive = false, ownedStatePending = false))
     }
 
     @Test
     fun activeSleepCycleIsPending() {
-        assertTrue(pending(cycleActive = true))
+        assertTrue(PendingRestorePolicy.isPending(cycleActive = true, ownedStatePending = false))
     }
 
     @Test
-    fun ownedDeviceControlsArePending() {
-        assertTrue(pending(batterySaverOwned = true))
-        assertTrue(pending(chargingSeparationOwned = true))
+    fun ownedStateIsPendingWithoutCycle() {
+        assertTrue(PendingRestorePolicy.isPending(cycleActive = false, ownedStatePending = true))
     }
 
     @Test
-    fun ownedBasicSyncStateIsPending() {
-        assertTrue(pending(basicSyncOwned = true))
+    fun cycleCompletesOnlyWhenNothingBlocks() {
+        assertTrue(
+            PendingRestorePolicy.cycleRestored(
+                blockingParticipantPending = false,
+                anyConnectorChangeRecorded = false
+            )
+        )
+        assertFalse(
+            PendingRestorePolicy.cycleRestored(
+                blockingParticipantPending = true,
+                anyConnectorChangeRecorded = false
+            )
+        )
+        // An unregistered connector's recorded change must still block.
+        assertFalse(
+            PendingRestorePolicy.cycleRestored(
+                blockingParticipantPending = false,
+                anyConnectorChangeRecorded = true
+            )
+        )
     }
 }
