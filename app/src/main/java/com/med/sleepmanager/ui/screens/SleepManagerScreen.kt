@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.BatterySleepStore
+import com.med.sleepmanager.data.PendingRestoreState
 import com.med.sleepmanager.data.SleepCycleStore
 import com.med.sleepmanager.device.DeviceControlController
 import com.med.sleepmanager.device.RadioController
@@ -714,8 +715,7 @@ private class IntegrationUiRow(
                         PendingRestoreCard(
                             problem = problem,
                             onForget = {
-                                HelperController.forgetPendingState(context)
-                                SleepCycleStore.clear(context)
+                                PendingRestoreState.forgetSleepCycle(context)
                                 DiagnosticsStateStore.recordEvent(
                                     context,
                                     "Recovery → pending restore forgotten"

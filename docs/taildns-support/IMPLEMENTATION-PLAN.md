@@ -1,3 +1,22 @@
+## November 23 design-audit corrections
+
+Revision of TD-2/AC-3/TD-7 (see SPECIFICATION.md). The original Stage 1 owner
+matching read `NetworkCapabilities.ownerUid`, which Android only populates for
+the VPN owner, so SleepManager always saw no owner and, with both clients
+installed, never controlled either. Replaced by verified-disconnect attribution:
+`TailscaleTargetPolicy.disconnectCandidates`/`nextDisconnectCandidate`,
+`TailscaleConnector.sleep` targets the first candidate, and
+`SleepManagerService.tryNextTailscaleDisconnectCandidate` advances to the next
+installed client only when the existing 8 x 500 ms verification ends with the
+Tailscale VPN still up during a sleep transition. Wake verification now checks
+for any Tailscale VPN after CONNECT to the verified owner. The ownerUid code and
+the tests that fed impossible owner data were removed. Diagnostics show the
+installed app label. Known limit: if the preferred client is not the owner but
+the real owner disconnects late (after the first window), ownership could be
+attributed to the later candidate; both windows use the unchanged
+verification policy. Unit tests cover candidate ordering and display names; no
+device verification is claimed.
+
 ## November 21 maintained upstream synchronization
 
 Authoritative maintained-upstream-sync/TD-1 through TD-9 apply. Exact upstream

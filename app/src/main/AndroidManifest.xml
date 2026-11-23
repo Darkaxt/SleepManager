@@ -119,6 +119,11 @@
             android:enabled="true"
             android:exported="false" />
 
+        <receiver
+            android:name=".service.DisableRestoreRetryReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <!-- Key Mapper 4.7+ publishes mappings state; never mutates it by itself. -->
         <receiver
             android:name=".integration.KeyMapperStateReceiver"

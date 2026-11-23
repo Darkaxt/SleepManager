@@ -7,23 +7,35 @@ object TailscaleTargetPolicy {
     val supportedPackages: Set<String> =
         linkedSetOf(TAILDNS_PACKAGE, OFFICIAL_PACKAGE)
 
-    fun selectActivePackage(
+    /**
+     * Ordered clients that may own the active Tailscale VPN.
+     *
+     * Android redacts the VPN owner UID from NetworkCapabilities for every app
+     * except the VPN owner, so SleepManager cannot read which client owns the
+     * tunnel. Instead it tries the installed clients in preference order and
+     * attributes ownership to the client whose DISCONNECT actually removes the
+     * Tailscale VPN. With one installed client the list has one entry.
+     */
+    fun disconnectCandidates(
         installedPackages: Set<String>,
-        activeOwnerPackages: Set<String>,
         tailscaleVpnPresent: Boolean
+    ): List<String> {
+        if (!tailscaleVpnPresent) return emptyList()
+        return supportedPackages.filter { it in installedPackages }
+    }
+
+    /**
+     * The installed candidate tried after [attemptedPackage], or null when every
+     * candidate has been tried. Order matches [disconnectCandidates].
+     */
+    fun nextDisconnectCandidate(
+        installedPackages: Set<String>,
+        attemptedPackage: String
     ): String? {
-        if (!tailscaleVpnPresent) return null
-
-        val installedSupported = supportedPackages.filterTo(linkedSetOf()) {
-            it in installedPackages
-        }
-        val activeSupported = installedSupported.filter { it in activeOwnerPackages }
-
-        return when {
-            activeSupported.size == 1 -> activeSupported.single()
-            installedSupported.size == 1 -> installedSupported.single()
-            else -> null
-        }
+        val candidates = supportedPackages.filter { it in installedPackages }
+        val index = candidates.indexOf(attemptedPackage)
+        if (index < 0) return null
+        return candidates.getOrNull(index + 1)
     }
 
     fun selectPreferredInstalledPackage(installedPackages: Set<String>): String? =
@@ -38,7 +50,16 @@ object TailscaleTargetPolicy {
     fun connectAction(packageName: String): String =
         controlAction(packageName, "CONNECT_VPN")
 
-    fun displayName(packageName: String): String =
+    /**
+     * The installed app's own label, falling back to a static name. The
+     * io.github.darkaxt.taildns package is shipped by both TailDNS and TailD,
+     * so the static name is only used when PackageManager has no label.
+     */
+    fun displayName(packageName: String, installedLabel: String?): String =
+        installedLabel?.trim()?.takeIf { it.isNotEmpty() }
+            ?: fallbackDisplayName(packageName)
+
+    fun fallbackDisplayName(packageName: String): String =
         when (packageName) {
             OFFICIAL_PACKAGE -> "Tailscale"
             TAILDNS_PACKAGE -> "TailDNS"

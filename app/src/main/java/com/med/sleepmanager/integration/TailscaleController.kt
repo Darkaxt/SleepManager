@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.Build
 import android.util.Log
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -15,9 +14,21 @@ object TailscaleController {
     fun isInstalled(context: Context): Boolean =
         installedPackages(context).isNotEmpty()
 
+    /**
+     * Package used for non-transactional UI (version, Open). Sleep control
+     * never uses this: it uses [disconnectCandidates] and verified ownership.
+     */
     fun selectedPackage(context: Context): String? =
-        activePackage(context)
-            ?: TailscaleTargetPolicy.selectPreferredInstalledPackage(installedPackages(context))
+        TailscaleTargetPolicy.selectPreferredInstalledPackage(installedPackages(context))
+
+    fun displayName(context: Context, packageName: String): String {
+        val label =
+            runCatching {
+                val pm = context.packageManager
+                pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+            }.getOrNull()
+        return TailscaleTargetPolicy.displayName(packageName, label)
+    }
 
     fun versionName(context: Context): String? =
         selectedPackage(context)?.let { packageName ->
@@ -42,55 +53,21 @@ object TailscaleController {
     fun isConnected(context: Context): Boolean =
         isInstalled(context) && hasTailscaleVpn(context)
 
-    fun isConnected(context: Context, packageName: String): Boolean =
-        activePackage(context) == packageName
+    /**
+     * Installed clients that may own the currently active Tailscale VPN, in
+     * the order SleepManager tries them. Empty when no Tailscale VPN is up.
+     */
+    fun disconnectCandidates(context: Context): List<String> =
+        TailscaleTargetPolicy.disconnectCandidates(
+            installedPackages = installedPackages(context),
+            tailscaleVpnPresent = hasTailscaleVpn(context)
+        )
 
-    fun activePackage(context: Context): String? {
-        val installedPackages = installedPackages(context)
-        if (installedPackages.isEmpty()) return null
-
-        val connectivityManager =
-            context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-                ?: return null
-
-        return runCatching {
-            var tailscaleVpnPresent = false
-            val activeOwnerPackages = linkedSetOf<String>()
-
-            @Suppress("DEPRECATION")
-            connectivityManager.allNetworks.forEach { network ->
-                val capabilities =
-                    connectivityManager.getNetworkCapabilities(network)
-                        ?: return@forEach
-
-                if (!capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                    return@forEach
-                }
-
-                val linkProperties =
-                    connectivityManager.getLinkProperties(network)
-                        ?: return@forEach
-
-                val hasTailscaleAddress = linkProperties.linkAddresses.any { linkAddress ->
-                    isTailscaleAddress(linkAddress.address)
-                }
-                if (!hasTailscaleAddress) return@forEach
-
-                tailscaleVpnPresent = true
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    context.packageManager
-                        .getPackagesForUid(capabilities.ownerUid)
-                        ?.let(activeOwnerPackages::addAll)
-                }
-            }
-
-            TailscaleTargetPolicy.selectActivePackage(
-                installedPackages = installedPackages,
-                activeOwnerPackages = activeOwnerPackages,
-                tailscaleVpnPresent = tailscaleVpnPresent
-            )
-        }.getOrNull()
-    }
+    fun nextDisconnectCandidate(context: Context, attemptedPackage: String): String? =
+        TailscaleTargetPolicy.nextDisconnectCandidate(
+            installedPackages = installedPackages(context),
+            attemptedPackage = attemptedPackage
+        )
 
     private fun hasTailscaleVpn(context: Context): Boolean {
         val connectivityManager =

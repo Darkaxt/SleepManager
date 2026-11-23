@@ -34,7 +34,15 @@ restart crash loop.
   removing official-client support.
 - **TD-2 — Active-client ownership:** When a supported client owns the active
   Tailscale VPN, direct sleep control to that client. If no supported client is
-  active, do not claim or create a restore transaction.
+  active, do not claim or create a restore transaction. Android redacts the VPN
+  owner UID (`NetworkCapabilities.getOwnerUid`) for every app except the VPN
+  owner, so ownership is established by verified disconnection: with one
+  supported client installed it is the only candidate; with both installed,
+  DISCONNECT is sent to candidates in preference order (TailDNS package, then
+  official Tailscale), and ownership is attributed to the client whose
+  DISCONNECT removed the Tailscale VPN within the existing verification window.
+  A further candidate is tried only during a sleep transition, never after a
+  real wake or a disable request.
 - **TD-3 — Exact restore target:** Persist the package targeted by a successful
   disconnect request and reconnect only that same package on wake. Never switch
   between official Tailscale and TailDNS during one sleep transaction.
@@ -48,7 +56,9 @@ restart crash loop.
   the official Tailscale package.
 - **TD-7 — User-facing truthfulness:** The integration must visibly describe
   support for both Tailscale and TailDNS; diagnostics must identify the selected
-  package.
+  package. Client names come from the installed app's label (the
+  `io.github.darkaxt.taildns` package is shipped by both TailDNS and TailD);
+  static names are only a fallback.
 - **TD-8 — Fork signing identity:** Main and Helper APKs must use one permanent
   fork signing identity, pinned in source and configured in the fork's GitHub
   Actions secrets.
@@ -76,8 +86,10 @@ restart crash loop.
 - **AC-2:** With only TailDNS installed and active, SleepManager sends
   `io.github.darkaxt.taildns.DISCONNECT_VPN`, verifies disconnection, and later
   sends `io.github.darkaxt.taildns.CONNECT_VPN`.
-- **AC-3:** With both clients installed, the active VPN owner's package is used;
-  the other client receives no control broadcast.
+- **AC-3:** With both clients installed, the restore token and CONNECT go only
+  to the client whose DISCONNECT was verified to remove the Tailscale VPN. A
+  non-owner may receive a DISCONNECT while ownership is being established (it
+  has no VPN to drop), but never a CONNECT.
 - **AC-4:** When neither supported package owns an active Tailscale VPN, no
   disconnect ownership or restore token is recorded.
 - **AC-5:** Restore-token parsing rejects unknown packages and malformed tokens,

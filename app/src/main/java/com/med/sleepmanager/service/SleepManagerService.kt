@@ -32,6 +32,7 @@ import com.med.sleepmanager.data.AppPreferences
 import com.med.sleepmanager.data.DiagnosticsCycleStore
 import com.med.sleepmanager.data.DiagnosticsStateStore
 import com.med.sleepmanager.data.DirectRadioStore
+import com.med.sleepmanager.data.PendingRestoreState
 import com.med.sleepmanager.data.BatterySleepStore
 import com.med.sleepmanager.data.ClamshellStateStore
 import com.med.sleepmanager.data.SleepCycleStore
@@ -178,7 +179,26 @@ class SleepManagerService : Service() {
     private var raOfflineProxyCoordinator: RaOfflineProxyCoordinator? = null
     private var raOfflineProxyRestoreInFlight = false
     private val sleepDelayState = SleepDelayState()
-    private var sleepTransitionWakeLock: PowerManager.WakeLock? = null
+    private val sleepTransitionHolds =
+        SleepTransitionHolds { reason ->
+            val powerManager =
+                getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    ?: return@SleepTransitionHolds null
+            val wakeLock =
+                powerManager.newWakeLock(
+                    PowerManager.PARTIAL_WAKE_LOCK,
+                    "$packageName:sleep-transition:${reason.name.lowercase()}"
+                ).apply { setReferenceCounted(false) }
+            object : TimedHold {
+                override fun acquire(timeoutMs: Long) {
+                    wakeLock.acquire(timeoutMs)
+                }
+
+                override fun release() {
+                    if (wakeLock.isHeld) wakeLock.release()
+                }
+            }
+        }
     private var networkReadyGate: NetworkReadyGate? = null
     private val helperNetworkRestoreHandoffState =
         HelperNetworkRestoreHandoffState()
@@ -523,9 +543,16 @@ class SleepManagerService : Service() {
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
-                Intent.ACTION_SCREEN_OFF -> onScreenOff()
+                Intent.ACTION_SCREEN_OFF -> {
+                    // Never apply sleep actions while disabled; a running
+                    // disable restore keeps the receiver until it stops.
+                    if (AppPreferences.isEnabled(this@SleepManagerService)) {
+                        onScreenOff()
+                    }
+                }
                 Intent.ACTION_SCREEN_ON -> onScreenOn()
                 Intent.ACTION_POWER_CONNECTED -> {
+                    if (!AppPreferences.isEnabled(this@SleepManagerService)) return
                     handler.removeCallbacks(
                         externalPowerDisconnectRecheckRunnable
                     )
@@ -533,6 +560,7 @@ class SleepManagerService : Service() {
                     handleExternalPowerChanged(connected = true)
                 }
                 Intent.ACTION_POWER_DISCONNECTED -> {
+                    if (!AppPreferences.isEnabled(this@SleepManagerService)) return
                     handler.removeCallbacks(
                         externalPowerDisconnectRecheckRunnable
                     )
@@ -629,7 +657,7 @@ class SleepManagerService : Service() {
             when (phase) {
                 HelperController.PHASE_SLEEP -> {
                     if (helperStatus == HelperController.STATUS_CYCLE_MISMATCH) {
-                        releaseSleepTransitionWakeLock()
+                        releaseSleepPipelineWakeLocks()
                         Log.w(
                             TAG,
                             "Helper rejected sleep request because its active cycle differs"
@@ -644,7 +672,7 @@ class SleepManagerService : Service() {
                     if (SleepCycleStore.isActive(this@SleepManagerService)) {
                         SleepCycleStore.markHelperSleepRequested(this@SleepManagerService)
                     }
-                    releaseSleepTransitionWakeLock()
+                    releaseSleepPipelineWakeLocks()
                     DiagnosticsStateStore.recordEvent(
                         this@SleepManagerService,
                         buildSleepSummary(
@@ -775,12 +803,19 @@ class SleepManagerService : Service() {
         SleepManagerStatusProvider.notifyChanged(this)
         createNotificationChannel()
         startForegroundCompat()
-        registerScreenReceiver()
         registerHelperResultReceiver()
         registerKeyMapperStateReceiver()
         refreshBasicSyncObserver()
         maybeRestoreOwnedBasicSyncState()
         maybeRestoreDisabledRaOfflineProxyState()
+        if (!AppPreferences.isEnabled(this)) {
+            // Restore-only mode: started to finish restoring after a disable.
+            // Screen, lid and power monitoring and sleep-state recovery would
+            // re-apply sleep actions, so none of them run while disabled.
+            Log.i(TAG, "Service started in restore-only mode")
+            return
+        }
+        registerScreenReceiver()
         refreshLidMonitor()
         recoverOwnedDeviceControls()
         recoverInterruptedSleepWifiMaintenance()
@@ -1009,6 +1044,25 @@ class SleepManagerService : Service() {
         }
 
         if (intent?.action == ACTION_DISABLE_AND_RESTORE) {
+            if (disableRestoreState.isRequested) {
+                // A restore round is still running (e.g. a retry alarm fired
+                // during a network wait). It schedules the next round when it
+                // ends; keep a watchdog armed in case the process dies first.
+                Log.i(TAG, "Disable restore already in progress")
+                DisableRestoreRetryScheduler.scheduleIfPending(this, advance = false)
+                return START_NOT_STICKY
+            }
+            if (
+                intent?.getBooleanExtra(
+                    DisableRestoreRetryScheduler.EXTRA_AUTOMATIC_RETRY,
+                    false
+                ) == true
+            ) {
+                Log.i(TAG, "Disabled restore retry started")
+            } else {
+                // A user disable starts a fresh retry budget.
+                DisableRestoreRetryScheduler.resetAttempts(this)
+            }
             raOfflineProxyCoordinator?.cancelSleepGate(
                 clearPersistedState = true
             )
@@ -1037,9 +1091,18 @@ class SleepManagerService : Service() {
         }
 
         if (!AppPreferences.isEnabled(this)) {
-            stopSelf()
+            if (
+                !disableRestoreState.isRequested &&
+                PendingRestoreState.hasPendingRestore(this)
+            ) {
+                beginDisableAndRestore()
+            } else if (!disableRestoreState.isRequested) {
+                stopSelf()
+            }
             return START_NOT_STICKY
         }
+
+        DisableRestoreRetryScheduler.cancel(this)
 
         if (!receiverRegistered) registerScreenReceiver()
         if (!helperResultReceiverRegistered) registerHelperResultReceiver()
@@ -1195,6 +1258,9 @@ class SleepManagerService : Service() {
 
     private fun beginDisableAndRestore() {
         disableRestoreState.begin()
+        // Watchdog for this round: if the process dies before the round
+        // finishes, the alarm restarts restore-only work.
+        DisableRestoreRetryScheduler.scheduleIfPending(this, advance = false)
         DeviceControlStore.setBatterySaverDeferredForExternalPower(
             this,
             deferred = false
@@ -1214,7 +1280,7 @@ class SleepManagerService : Service() {
         cancelSleepDelay()
         clearPendingSleepStopWait()
         sleepCycleRuntimeState.clearSkippedByConditions()
-        releaseSleepTransitionWakeLock()
+        releaseAllSleepTransitionWakeLocks()
 
         startOwnedDeviceControlRestoreForDisable()
         maybeRestoreOwnedBasicSyncState()
@@ -1329,6 +1395,12 @@ class SleepManagerService : Service() {
 
         if (!shouldForceStop) {
             DiagnosticsStateStore.recordEvent(this, "SleepManager disabled")
+        }
+
+        // Pending restores keep being retried with backoff while disabled;
+        // the retry restarts this service in restore-only mode.
+        if (DisableRestoreRetryScheduler.scheduleIfPending(this, advance = true)) {
+            DiagnosticsStateStore.recordEvent(this, "Disable → restore retry scheduled")
         }
 
         stopSelf()
@@ -1511,7 +1583,7 @@ class SleepManagerService : Service() {
 
         handler.removeCallbacks(sleepRadioRunnable)
         cancelActiveBasicSyncWait()
-        releaseSleepTransitionWakeLock()
+        releaseSleepPipelineWakeLocks()
 
         val conditions = SleepConditionEvaluator.evaluate(this)
         if (!conditions.met) {
@@ -1551,6 +1623,7 @@ class SleepManagerService : Service() {
         val generation = ++basicSyncPreSleepState.freshProbeGeneration
 
         acquireSleepTransitionWakeLock(
+            SleepTransitionHold.BASIC_SYNC_PROBE,
             BASIC_SYNC_FRESH_STATE_TIMEOUT_MS +
                 SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
         )
@@ -1578,7 +1651,7 @@ class SleepManagerService : Service() {
                         !AppPreferences.isEnabled(this) ||
                         !sleepCycleRuntimeState.actionsApplied
                     ) {
-                        releaseSleepTransitionWakeLock()
+                        releaseSleepTransitionWakeLock(SleepTransitionHold.BASIC_SYNC_PROBE)
                         return@post
                     }
 
@@ -1588,7 +1661,7 @@ class SleepManagerService : Service() {
                     ) {
                         startActiveBasicSyncWait()
                     } else {
-                        releaseSleepTransitionWakeLock()
+                        releaseSleepTransitionWakeLock(SleepTransitionHold.BASIC_SYNC_PROBE)
                         continueFreshSleepActions(
                             transitionSyncRequested = false
                         )
@@ -1602,7 +1675,7 @@ class SleepManagerService : Service() {
         }
 
         if (!scheduled) {
-            releaseSleepTransitionWakeLock()
+            releaseSleepTransitionWakeLock(SleepTransitionHold.BASIC_SYNC_PROBE)
             continueFreshSleepActions(
                 transitionSyncRequested = false
             )
@@ -1612,6 +1685,7 @@ class SleepManagerService : Service() {
     private fun startActiveBasicSyncWait() {
         basicSyncPreSleepState.beginActiveWait(SystemClock.elapsedRealtime())
         acquireSleepTransitionWakeLock(
+            SleepTransitionHold.BASIC_SYNC_PROBE,
             BASIC_SYNC_ACTIVE_FINISH_TIMEOUT_MS +
                 SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
         )
@@ -1794,6 +1868,7 @@ class SleepManagerService : Service() {
         val packageName = target.packageName
 
         acquireSleepTransitionWakeLock(
+            SleepTransitionHold.SYNCTHING_PROBE,
             SYNCTHING_PRE_SLEEP_PROBE_TIMEOUT_MS +
                 SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
         )
@@ -1826,11 +1901,11 @@ class SleepManagerService : Service() {
                             !AppPreferences.isEnabled(this) ||
                             !sleepCycleRuntimeState.actionsApplied
                         ) {
-                            releaseSleepTransitionWakeLock()
+                            releaseSleepTransitionWakeLock(SleepTransitionHold.SYNCTHING_PROBE)
                             return@post
                         }
 
-                        releaseSleepTransitionWakeLock()
+                        releaseSleepTransitionWakeLock(SleepTransitionHold.SYNCTHING_PROBE)
                         applyFreshSleepActions(
                             keepBasicSyncStopped = keepBasicSyncStopped,
                             syncthingPreSleepProbe = probe
@@ -1844,7 +1919,7 @@ class SleepManagerService : Service() {
             }
 
         if (!scheduled) {
-            releaseSleepTransitionWakeLock()
+            releaseSleepTransitionWakeLock(SleepTransitionHold.SYNCTHING_PROBE)
             applyFreshSleepActions(
                 keepBasicSyncStopped = keepBasicSyncStopped,
                 syncthingPreSleepProbe =
@@ -2185,6 +2260,7 @@ class SleepManagerService : Service() {
         )
 
         acquireSleepTransitionWakeLock(
+            SleepTransitionHold.SYNC_STOP_WAIT,
             SYNC_STOP_TIMEOUT_MS +
                 SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
         )
@@ -2208,7 +2284,7 @@ class SleepManagerService : Service() {
 
     private fun continueSleepRadioAfterSyncStop() {
         if (!sleepStopWaitState.pendingPostStopActions) {
-            releaseSleepTransitionWakeLock()
+            releaseSleepTransitionWakeLock(SleepTransitionHold.SYNC_STOP_WAIT)
             return
         }
 
@@ -2491,7 +2567,7 @@ class SleepManagerService : Service() {
 
         val cycle = SleepCycleStore.current(this)
         if (!(wifi || bluetooth) || !cycle.active) {
-            releaseSleepTransitionWakeLock()
+            releaseSleepPipelineWakeLocks()
             DiagnosticsStateStore.recordEvent(
                 this,
                 buildSleepSummary(
@@ -2514,7 +2590,7 @@ class SleepManagerService : Service() {
                         bluetooth = bluetooth,
                         cycleId = cycle.cycleId
                     )
-                releaseSleepTransitionWakeLock()
+                releaseSleepPipelineWakeLocks()
                 DiagnosticsStateStore.recordEvent(
                     this,
                     buildSleepSummary(
@@ -2545,7 +2621,7 @@ class SleepManagerService : Service() {
                             "Compatibility Helper could not receive the sleep radio request."
                         )
                     }
-                    releaseSleepTransitionWakeLock()
+                    releaseSleepPipelineWakeLocks()
                 }
             }
 
@@ -2553,7 +2629,7 @@ class SleepManagerService : Service() {
                 if (cycle.helperExpected) {
                     SleepCycleStore.markHelperRestored(this)
                 }
-                releaseSleepTransitionWakeLock()
+                releaseSleepPipelineWakeLocks()
                 DiagnosticsStateStore.recordEvent(
                     this,
                     "Sleep → radio control unavailable; Wi-Fi / Bluetooth left unchanged"
@@ -3031,6 +3107,7 @@ class SleepManagerService : Service() {
         }
 
         acquireSleepTransitionWakeLock(
+            SleepTransitionHold.TAILSCALE_VERIFY,
             TAILSCALE_VERIFY_INTERVAL_MS *
                 (TAILSCALE_VERIFY_MAX_ATTEMPTS + 2)
         )
@@ -3043,12 +3120,12 @@ class SleepManagerService : Service() {
     private fun verifyTailscaleSleepDisconnect() {
         val change =
             SleepCycleStore.connectorChange(this, TailscaleConnector.id)
-                ?: return releaseSleepTransitionWakeLock()
+                ?: return releaseSleepTransitionWakeLock(SleepTransitionHold.TAILSCALE_VERIFY)
 
         val targetPackage =
             TailscaleTransactionToken.disconnectTarget(change.restoreToken)
         if (targetPackage == null) {
-            releaseSleepTransitionWakeLock()
+            releaseSleepTransitionWakeLock(SleepTransitionHold.TAILSCALE_VERIFY)
             return
         }
 
@@ -3077,6 +3154,8 @@ class SleepManagerService : Service() {
             return
         }
 
+        if (tryNextTailscaleDisconnectCandidate(targetPackage)) return
+
         SleepCycleStore.clearConnectorChange(this, TailscaleConnector.id)
         Log.i(
             TAG,
@@ -3089,10 +3168,44 @@ class SleepManagerService : Service() {
         continueAfterTailscaleSleepVerification()
     }
 
+    /**
+     * The Tailscale VPN owner cannot be read on Android, so a DISCONNECT that
+     * did not remove the VPN means [attemptedPackage] was not the owner. During
+     * a sleep transition, try the next installed client. Ownership (and the
+     * later CONNECT) is attributed only to the client whose DISCONNECT is
+     * verified. On wake or disable no further client is disconnected.
+     */
+    private fun tryNextTailscaleDisconnectCandidate(attemptedPackage: String): Boolean {
+        if (
+            tailscaleVerificationState.needsWakeRestore ||
+            disableRestoreState.isRequested ||
+            isRealWakeNow()
+        ) {
+            return false
+        }
+
+        val nextPackage =
+            TailscaleController.nextDisconnectCandidate(this, attemptedPackage)
+                ?: return false
+        if (!TailscaleController.sendDisconnect(this, nextPackage)) return false
+
+        SleepCycleStore.recordConnectorChange(
+            this,
+            TailscaleConnector.id,
+            TailscaleTransactionToken.disconnectVerification(nextPackage)
+        )
+        Log.i(
+            TAG,
+            "Tailscale VPN still up after DISCONNECT to $attemptedPackage; trying $nextPackage"
+        )
+        scheduleTailscaleSleepVerification(resetAttempts = true)
+        return true
+    }
+
     private fun continueAfterTailscaleSleepVerification() {
         handler.removeCallbacks(tailscaleSleepVerifyRunnable)
         tailscaleVerificationState.resetSleepAttempts()
-        releaseSleepTransitionWakeLock()
+        releaseSleepTransitionWakeLock(SleepTransitionHold.TAILSCALE_VERIFY)
 
         val realWake = isRealWakeNow()
         val needsWakeRestore =
@@ -3352,7 +3465,9 @@ class SleepManagerService : Service() {
             return
         }
 
-        if (TailscaleController.isConnected(this, targetPackage)) {
+        // Only the verified owner received CONNECT, so any Tailscale VPN
+        // coming back up is that client's reconnect.
+        if (TailscaleController.isConnected(this)) {
             SleepCycleStore.clearConnectorChange(this, TailscaleConnector.id)
             Log.i(TAG, "Tailscale reconnect verified")
 
@@ -3509,6 +3624,7 @@ class SleepManagerService : Service() {
 
         if (delayMs <= 10_000L) {
             acquireSleepTransitionWakeLock(
+                SleepTransitionHold.SLEEP_DELAY,
                 delayMs + SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
             )
             handler.postDelayed(sleepGraceRunnable, delayMs)
@@ -3552,7 +3668,7 @@ class SleepManagerService : Service() {
         alarmManager?.cancel(sleepDelayPendingIntent())
         alarmManager?.cancel(legacySleepDelayPendingIntent())
         sleepDelayState.clear()
-        releaseSleepTransitionWakeLock()
+        releaseSleepTransitionWakeLock(SleepTransitionHold.SLEEP_DELAY)
     }
 
     private fun sleepDelayPendingIntent(): PendingIntent =
@@ -3574,31 +3690,25 @@ class SleepManagerService : Service() {
         )
 
     private fun acquireSleepTransitionWakeLock(
+        reason: SleepTransitionHold,
         timeoutMs: Long = SLEEP_TRANSITION_WAKELOCK_TIMEOUT_MS
     ) {
-        releaseSleepTransitionWakeLock()
-
-        val powerManager =
-            getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
-
-        sleepTransitionWakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "$packageName:sleep-transition"
-        ).apply {
-            setReferenceCounted(false)
-            acquire(timeoutMs)
+        if (sleepTransitionHolds.acquire(reason, timeoutMs)) {
+            Log.i(TAG, "Sleep transition wakelock acquired: $reason")
         }
-
-        Log.i(TAG, "Sleep transition wakelock acquired")
     }
 
-    private fun releaseSleepTransitionWakeLock() {
-        val wakeLock = sleepTransitionWakeLock ?: return
+    private fun releaseSleepTransitionWakeLock(reason: SleepTransitionHold) {
+        sleepTransitionHolds.release(reason)
+    }
 
-        if (wakeLock.isHeld) {
-            runCatching { wakeLock.release() }
-        }
-        sleepTransitionWakeLock = null
+    /** Ends every hold of the sleep pipeline except Tailscale verification. */
+    private fun releaseSleepPipelineWakeLocks() {
+        sleepTransitionHolds.release(SleepTransitionHold.PIPELINE)
+    }
+
+    private fun releaseAllSleepTransitionWakeLocks() {
+        sleepTransitionHolds.releaseAll()
     }
 
     private fun onScreenOn() {
@@ -3688,7 +3798,7 @@ class SleepManagerService : Service() {
 
         clearPendingSleepStopWait()
         syncthingPreSleepState.invalidate()
-        releaseSleepTransitionWakeLock()
+        releaseAllSleepTransitionWakeLocks()
 
         sleepCycleRuntimeState.clearActionsApplied()
 
@@ -3928,7 +4038,9 @@ class SleepManagerService : Service() {
         ) { result ->
             networkReadyGate = null
 
-            val realWake = isRealWakeNow()
+            // A disable restores regardless of screen state; a restore-only
+            // retry is usually started by an alarm while the screen is off.
+            val realWake = isRealWakeNow() || disableRestoreState.isRequested
 
             if (!realWake) {
                 Log.i(
@@ -4705,7 +4817,9 @@ class SleepManagerService : Service() {
         wakeTransitionSyncState.clear()
         syncthingPreSleepState.invalidate()
 
-        if (isEffectivelySleepingNow()) {
+        // Re-asserting the sleep radio state is only valid while enabled; a
+        // disabled (restore-only) service must never re-apply sleep actions.
+        if (AppPreferences.isEnabled(this) && isEffectivelySleepingNow()) {
             val cycle = SleepCycleStore.current(this)
             when {
                 cycle.active &&
@@ -4753,7 +4867,7 @@ class SleepManagerService : Service() {
         basicSyncRestoreRetryState.clearPending()
         deviceControlRestoreRetryState.clearPending()
         disableRestoreState.clearTransientFlags()
-        releaseSleepTransitionWakeLock()
+        releaseAllSleepTransitionWakeLocks()
         syncStopProbeExecutor.shutdownNow()
         diagnosticsExecutor.shutdownNow()
         raOfflineProxyCoordinator?.shutdown(

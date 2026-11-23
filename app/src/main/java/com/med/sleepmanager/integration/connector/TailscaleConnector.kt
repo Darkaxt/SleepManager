@@ -37,7 +37,11 @@ object TailscaleConnector : AppConnector {
             )
         }
 
-        val targetPackage = TailscaleController.activePackage(context)
+        // The VPN owner cannot be read directly. Start with the first candidate;
+        // SleepManagerService advances to the next one only when this
+        // DISCONNECT did not remove the Tailscale VPN.
+        val targetPackage =
+            TailscaleController.disconnectCandidates(context).firstOrNull()
         if (targetPackage == null) {
             return ConnectorSleepResult(
                 attempted = false,

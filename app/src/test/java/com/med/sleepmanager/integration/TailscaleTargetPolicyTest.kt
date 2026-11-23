@@ -2,75 +2,91 @@ package com.med.sleepmanager.integration
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TailscaleTargetPolicyTest {
+    private val bothInstalled =
+        setOf(
+            TailscaleTargetPolicy.OFFICIAL_PACKAGE,
+            TailscaleTargetPolicy.TAILDNS_PACKAGE
+        )
+
     @Test
-    fun activeOfficialClientWinsWhenBothClientsAreInstalled() {
+    fun soleInstalledClientIsTheOnlyDisconnectCandidate() {
+        assertEquals(
+            listOf(TailscaleTargetPolicy.OFFICIAL_PACKAGE),
+            TailscaleTargetPolicy.disconnectCandidates(
+                installedPackages = setOf(TailscaleTargetPolicy.OFFICIAL_PACKAGE),
+                tailscaleVpnPresent = true
+            )
+        )
+        assertEquals(
+            listOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
+            TailscaleTargetPolicy.disconnectCandidates(
+                installedPackages = setOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
+                tailscaleVpnPresent = true
+            )
+        )
+    }
+
+    @Test
+    fun bothInstalledClientsAreTriedInPreferenceOrder() {
+        assertEquals(
+            listOf(
+                TailscaleTargetPolicy.TAILDNS_PACKAGE,
+                TailscaleTargetPolicy.OFFICIAL_PACKAGE
+            ),
+            TailscaleTargetPolicy.disconnectCandidates(
+                installedPackages = bothInstalled,
+                tailscaleVpnPresent = true
+            )
+        )
+    }
+
+    @Test
+    fun noTailscaleVpnMeansNoDisconnectCandidate() {
+        assertTrue(
+            TailscaleTargetPolicy.disconnectCandidates(
+                installedPackages = bothInstalled,
+                tailscaleVpnPresent = false
+            ).isEmpty()
+        )
+    }
+
+    @Test
+    fun nextCandidateFollowsAnUnverifiedDisconnect() {
         assertEquals(
             TailscaleTargetPolicy.OFFICIAL_PACKAGE,
-            TailscaleTargetPolicy.selectActivePackage(
-                installedPackages =
-                    setOf(
-                        TailscaleTargetPolicy.OFFICIAL_PACKAGE,
-                        TailscaleTargetPolicy.TAILDNS_PACKAGE
-                    ),
-                activeOwnerPackages = setOf(TailscaleTargetPolicy.OFFICIAL_PACKAGE),
-                tailscaleVpnPresent = true
+            TailscaleTargetPolicy.nextDisconnectCandidate(
+                installedPackages = bothInstalled,
+                attemptedPackage = TailscaleTargetPolicy.TAILDNS_PACKAGE
             )
         )
     }
 
     @Test
-    fun activeTailDnsClientWinsWhenBothClientsAreInstalled() {
-        assertEquals(
-            TailscaleTargetPolicy.TAILDNS_PACKAGE,
-            TailscaleTargetPolicy.selectActivePackage(
-                installedPackages =
-                    setOf(
-                        TailscaleTargetPolicy.OFFICIAL_PACKAGE,
-                        TailscaleTargetPolicy.TAILDNS_PACKAGE
-                    ),
-                activeOwnerPackages = setOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
-                tailscaleVpnPresent = true
-            )
-        )
-    }
-
-    @Test
-    fun soleInstalledClientIsSafeFallbackWhenVpnOwnerIsUnavailable() {
-        assertEquals(
-            TailscaleTargetPolicy.TAILDNS_PACKAGE,
-            TailscaleTargetPolicy.selectActivePackage(
-                installedPackages = setOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
-                activeOwnerPackages = emptySet(),
-                tailscaleVpnPresent = true
-            )
-        )
-    }
-
-    @Test
-    fun ambiguousInstalledClientsWithoutOwnerAreNotControlled() {
+    fun noNextCandidateAfterTheLastOrOnlyClient() {
         assertNull(
-            TailscaleTargetPolicy.selectActivePackage(
-                installedPackages =
-                    setOf(
-                        TailscaleTargetPolicy.OFFICIAL_PACKAGE,
-                        TailscaleTargetPolicy.TAILDNS_PACKAGE
-                    ),
-                activeOwnerPackages = emptySet(),
-                tailscaleVpnPresent = true
+            TailscaleTargetPolicy.nextDisconnectCandidate(
+                installedPackages = bothInstalled,
+                attemptedPackage = TailscaleTargetPolicy.OFFICIAL_PACKAGE
+            )
+        )
+        assertNull(
+            TailscaleTargetPolicy.nextDisconnectCandidate(
+                installedPackages = setOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
+                attemptedPackage = TailscaleTargetPolicy.TAILDNS_PACKAGE
             )
         )
     }
 
     @Test
-    fun noTailscaleVpnMeansNoActiveTarget() {
+    fun uninstalledAttemptedPackageHasNoNextCandidate() {
         assertNull(
-            TailscaleTargetPolicy.selectActivePackage(
-                installedPackages = setOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
-                activeOwnerPackages = setOf(TailscaleTargetPolicy.TAILDNS_PACKAGE),
-                tailscaleVpnPresent = false
+            TailscaleTargetPolicy.nextDisconnectCandidate(
+                installedPackages = setOf(TailscaleTargetPolicy.OFFICIAL_PACKAGE),
+                attemptedPackage = TailscaleTargetPolicy.TAILDNS_PACKAGE
             )
         )
     }
@@ -101,14 +117,22 @@ class TailscaleTargetPolicyTest {
     }
 
     @Test
-    fun supportedPackagesHaveTruthfulDisplayNames() {
+    fun installedLabelIsShownForSharedTailDnsPackage() {
+        assertEquals(
+            "TailD",
+            TailscaleTargetPolicy.displayName(TailscaleTargetPolicy.TAILDNS_PACKAGE, "TailD")
+        )
+    }
+
+    @Test
+    fun staticNamesAreFallbackWhenNoLabelIsAvailable() {
         assertEquals(
             "Tailscale",
-            TailscaleTargetPolicy.displayName(TailscaleTargetPolicy.OFFICIAL_PACKAGE)
+            TailscaleTargetPolicy.displayName(TailscaleTargetPolicy.OFFICIAL_PACKAGE, null)
         )
         assertEquals(
             "TailDNS",
-            TailscaleTargetPolicy.displayName(TailscaleTargetPolicy.TAILDNS_PACKAGE)
+            TailscaleTargetPolicy.displayName(TailscaleTargetPolicy.TAILDNS_PACKAGE, "  ")
         )
     }
 }
