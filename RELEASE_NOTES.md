@@ -1,4 +1,4 @@
-# SleepManager 0.8.0.12 / Helper 1.1.7.2
+# SleepManager 0.8.0.13 / Helper 1.1.7.2
 
 SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **Home screen smoother**, especially on high-refresh-rate Android handhelds.
 
@@ -10,6 +10,11 @@ SleepManager 0.8.0 adds **state-aware Key Mapper integration** and makes the **H
 
 > [!WARNING]
 > **AYANEO / KONKR devices with DuraSpeed:** disable **DuraSpeed** in Android Settings. Battery usage set to Unrestricted does not override DuraSpeed's background restrictions.
+
+## Audit completion (0.8.0.13)
+
+- **Recovery after Android restarts SleepManager now uses the same restore list** as wake, disable and "Forget". Each integration declares what happens when the service restarts while asleep, after wake or on shutdown; the order is checked when the service starts. Behaviour is unchanged and covered by new tests.
+- **What cannot be verified locally, and why:** JamesDSP offers no way to read its state back, and BasicSync and Key Mapper do not identify themselves as senders of their state messages. Closing these needs a change in those apps; the exact change is documented in the code.
 
 ## Audit follow-ups (0.8.0.12)
 
@@ -28,8 +33,6 @@ This fork release fixes problems found in a design audit of the sleep/wake engin
 - **"Forget" on a pending restore now clears every related record**, so no stale Wi-Fi/Bluetooth or RAOfflineProxy restore is left behind.
 - **Separate wake locks per sleep step**, so one step finishing can no longer cut short another step's wake lock while the device is going to sleep.
 - **Helper 1.1.7.2 ignores legacy commands unless SleepManager itself owns the legacy control permission** (checked by signing certificate), so another app cannot claim that permission and control Wi-Fi/Bluetooth if the Helper is installed without SleepManager. Update the Helper together with the main app.
-
-Known limits, not changed in this release: JamesDSP commands are not confirmed after sending; the onCreate/onDestroy recovery paths are not yet routed through the shared restore list.
 
 ## Existing upstream0.8.0 features
 
@@ -51,7 +54,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Compatibility
 
-- SleepManager **0.8.0.12 / versionCode 582**
+- SleepManager **0.8.0.13 / versionCode 583**
 - SleepManager Helper **1.1.7.2 / versionCode 1123** (unchanged)
 - Android **9 / API 28 or newer**
 - Key Mapper **4.7.0+** for the new integration
@@ -60,7 +63,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Installation and Updating
 
-Install **SleepManager-0.8.0.12.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+Install **SleepManager-0.8.0.13.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
 
 On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
 

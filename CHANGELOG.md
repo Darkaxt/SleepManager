@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0.13 — 2026-11-23
+
+- Service recovery (onCreate, onStartCommand, screen-state replay, onDestroy) declared per
+  participant in `RestoreParticipants` and run by `ServiceRecoveryCoordinator`; behaviour
+  pinned by characterization tests. JamesDSP/BasicSync/Key Mapper verification limits
+  documented with the required upstream changes.
+- Main 0.8.0.13/code 583; Helper unchanged 1.1.7.2/code 1123.
+
 ## 0.8.0.12 — 2026-11-23
 
 - Audit follow-ups: strict BasicSync/Key Mapper state validation with API 34+ sender
