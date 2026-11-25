@@ -66,12 +66,27 @@ jobs:
           path = Path(".github/badges/apk-downloads.json")
           path.parent.mkdir(parents=True, exist_ok=True)
           path.write_text(json.dumps(badge, indent=2) + "\n", encoding="utf-8")
+
+          # A new badge URL on each update avoids stale README images in GitHub Camo.
+          readme_path = Path("README.md")
+          readme = readme_path.read_text(encoding="utf-8")
+          marker = "apk-downloads.json&amp;style=for-the-badge&amp;label=DOWNLOADS&amp;labelColor=1A1B20&amp;cacheSeconds=300&amp;v="
+          if readme.count(marker) != 1:
+              raise RuntimeError("Expected exactly one DOWNLOADS badge URL in README.md")
+          prefix, suffix = readme.split(marker)
+          old_version, quote, tail = suffix.partition('"')
+          if not quote or not old_version or "&" in old_version:
+              raise RuntimeError("Unexpected DOWNLOADS badge cache key in README.md")
+          new_readme = prefix + marker + str(total) + quote + tail
+          if new_readme != readme:
+              readme_path.write_text(new_readme, encoding="utf-8")
+
           print(f"Main app APK downloads: {total}")
           PY
 
       - name: Commit badge updates when counts change
         run: |
-          git add .github/badges/apk-downloads.json
+          git add .github/badges/apk-downloads.json README.md
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
