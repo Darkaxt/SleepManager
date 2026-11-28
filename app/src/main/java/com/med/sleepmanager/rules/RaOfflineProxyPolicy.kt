@@ -22,7 +22,10 @@ enum class RaOfflineProxyRestoreDecision {
 
 object RaOfflineProxyPolicy {
     const val MIN_SUPPORTED_API_VERSION = 1
-    const val MAX_SUPPORTED_API_VERSION = 2
+    const val MAX_SUPPORTED_API_VERSION = 3
+
+    fun isSupportedApiVersion(version: Int?): Boolean =
+        version != null && version in MIN_SUPPORTED_API_VERSION..MAX_SUPPORTED_API_VERSION
 
     fun preSleepDecision(
         status: RaOfflineProxyStatus?
@@ -31,7 +34,7 @@ object RaOfflineProxyPolicy {
             return RaOfflineProxyPreSleepDecision.WAIT_FOR_SAFE_STATUS
         }
 
-        if (status.version !in MIN_SUPPORTED_API_VERSION..MAX_SUPPORTED_API_VERSION) {
+        if (!isSupportedApiVersion(status.version)) {
             return RaOfflineProxyPreSleepDecision.UNSUPPORTED_API
         }
 

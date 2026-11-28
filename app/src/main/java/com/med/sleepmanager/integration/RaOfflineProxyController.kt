@@ -14,6 +14,7 @@ import java.net.Socket
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyCommandResult
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatus
 import com.med.sleepmanager.integration.raofflineproxy.RaOfflineProxyStatusParser
+import com.med.sleepmanager.rules.RaOfflineProxyPolicy
 
 /**
  * Thin Android adapter around RAOfflineProxy's documented Automation API.
@@ -29,11 +30,11 @@ object RaOfflineProxyController {
     const val AUTHORITY = "com.raofflineproxy.config"
     const val CONTROL_PERMISSION =
         "com.raofflineproxy.permission.CONTROL_PROXY"
-    const val SUPPORTED_API_VERSION = 1
-    const val MAX_SUPPORTED_API_VERSION = 2
+    const val SUPPORTED_API_VERSION = RaOfflineProxyPolicy.MIN_SUPPORTED_API_VERSION
+    const val MAX_SUPPORTED_API_VERSION = RaOfflineProxyPolicy.MAX_SUPPORTED_API_VERSION
 
     fun isSupportedApiVersion(version: Int?): Boolean =
-        version != null && version in SUPPORTED_API_VERSION..MAX_SUPPORTED_API_VERSION
+        RaOfflineProxyPolicy.isSupportedApiVersion(version)
 
     private const val METHOD_STATUS = "status"
     private const val METHOD_START = "start"

@@ -7,7 +7,7 @@ import com.med.sleepmanager.rules.RaOfflineProxyPolicy
 import com.med.sleepmanager.rules.RaOfflineProxyPreSleepDecision
 
 /**
- * Ownership-safe connector for RAOfflineProxy Automation API v1.
+ * Ownership-safe connector for RAOfflineProxy Automation API v1–v3.
  *
  * sleep()/wake() perform ContentProvider calls and must be invoked off the
  * main thread by SleepManager's service orchestration.

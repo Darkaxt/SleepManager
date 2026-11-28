@@ -1,3 +1,14 @@
+## November 28 upstream 0.8.1 synchronization
+
+Exact upstream cc83e5f9fd69681bd18a9b48e4558f114d899921 (0.8.1, RAOfflineProxy
+Automation API v3 plus a badge refresh) is merged into fork 51f12c5 with history
+intact. Upstream touches only the RAOfflineProxy controller, connector, status
+parser and policy, none of which the fork removed or refactored, so they merge
+unchanged; Tailscale/TailDNS ownership, the restore registry and the Helper are
+untouched. Conflicts were limited to release metadata. Main 0.8.1.1/code 585,
+unchanged Helper 1.1.7.2/code 1123, fork signing pin retained. Unit tests run;
+no device verification is claimed.
+
 ## November 23 design-audit corrections
 
 Revision of TD-2/AC-3/TD-7 (see SPECIFICATION.md). The original Stage 1 owner

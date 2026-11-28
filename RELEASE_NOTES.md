@@ -1,6 +1,6 @@
-# SleepManager 0.8.0.14 / Helper 1.1.7.2
+# SleepManager 0.8.1.1 / Helper 1.1.7.2
 
-This Darkaxt fork release removes the **BasicSync, Key Mapper and JamesDSP integrations** and keeps the sleep/wake engine fixes from the 0.8.0.11–0.8.0.13 audit.
+This Darkaxt fork release merges upstream **SleepManager 0.8.1** (RAOfflineProxy Automation API v3 support) on top of the fork's integration removals and sleep/wake engine fixes.
 
 > **Note**
 >
@@ -10,6 +10,12 @@ This Darkaxt fork release removes the **BasicSync, Key Mapper and JamesDSP integ
 
 > [!WARNING]
 > **AYANEO / KONKR devices with DuraSpeed:** disable **DuraSpeed** in Android Settings. Battery usage set to Unrestricted does not override DuraSpeed's background restrictions.
+
+## RAOfflineProxy Automation API v3 (upstream 0.8.1)
+
+- Restored compatibility with RAOfflineProxy 3.1.0-alpha1, which reports Automation API v3.
+- Retained compatibility with API v1 and v2.
+- Existing cache-queue and pending RetroAchievements award protection, sleep/wake ordering and restore ownership remain unchanged.
 
 ## Removed integrations (0.8.0.14)
 
@@ -46,7 +52,7 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Compatibility
 
-- SleepManager **0.8.0.14 / versionCode 584**
+- SleepManager **0.8.1.1 / versionCode 585**
 - SleepManager Helper **1.1.7.2 / versionCode 1123** (unchanged)
 - Android **9 / API 28 or newer**
 - Existing SleepManager settings are retained when updating an official signed build
@@ -54,13 +60,13 @@ Home screen updates now run in the background and refresh only what has changed.
 
 ## Installation and Updating
 
-Install **SleepManager-0.8.0.14.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release.
+Install **SleepManager-0.8.1.1.apk** over your existing Darkaxt fork version, or use **About → Updates** to install the new stable release. No Helper update is required if you already have 1.1.7.2.
 
 On a first install, open SleepManager, select the actions and integrations you want, enable SleepManager, then tap **Finish setup**. Install the optional Helper only when your device requires it.
 
 ## Maintained fork compatibility
 
-This release merges exact upstream 74d3bf5b91828adcb7fb3fab6de3e88698957ef6.
+This release merges exact upstream cc83e5f9fd69681bd18a9b48e4558f114d899921 (0.8.1).
 Official Tailscale and TailDNS retain package-aware active-VPN selection and exact
 disconnect/restore ownership. Both APKs use the existing permanent fork certificate
 and signature-protected Helper contract. Updates come only from Darkaxt/SleepManager;

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1.1 — 2026-11-28
+
+- Merge upstream 0.8.1 (`cc83e5f9fd69`) with history intact: RAOfflineProxy Automation
+  API v3 support (RAOfflineProxy 3.1.0-alpha1) while retaining API v1/v2; unknown future
+  versions remain rejected. Fork removals, restore registry and Helper changes retained.
+- Main 0.8.1.1/code 585; Helper unchanged 1.1.7.2/code 1123; fork signing identity unchanged.
+
 ## 0.8.0.14 — 2026-11-23
 
 - Removed the BasicSync, Key Mapper and JamesDSP integrations, including BasicSync-only
@@ -105,6 +112,18 @@
 - Preserve official Tailscale/TailDNS active-VPN ownership, exact restore tokens,
   retained settings, Darkaxt-only updates and the permanent common signing pin.
 - Main 0.8.0.1/code571; unchanged Helper1.1.7.1/code1122. No device actions.
+## 0.8.1 — 2026-11-27
+
+### RAOfflineProxy compatibility
+- Added support for Automation API v3, including RAOfflineProxy 3.1.0-alpha1, while retaining API v1/v2 compatibility.
+- The additional `host` status field does not change sleep/wake control, queue protection or pending-award handling.
+- Unified the supported API version check used by the UI and sleep policy; unknown future versions remain rejected.
+- Added regression tests for API v3 status parsing, queue protection, stop ownership and wake restoration.
+
+### Compatibility
+- Upstream main app: **0.8.1 / versionCode 571**; upstream Helper **1.1.7 / versionCode 1121**.
+
+---
 
 ## 0.8.0 — 2026-11-10
 

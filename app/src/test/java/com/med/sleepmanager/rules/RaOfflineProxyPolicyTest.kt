@@ -75,23 +75,77 @@ class RaOfflineProxyPolicyTest {
     }
 
     @Test
-    fun apiV2IsSupported() {
-        assertEquals(
-            RaOfflineProxyPreSleepDecision.STOP_NOW,
-            RaOfflineProxyPolicy.preSleepDecision(
-                status(version = 2)
+    fun knownApiVersionsAreSupported() {
+        for (version in 1..3) {
+            assertTrue(RaOfflineProxyPolicy.isSupportedApiVersion(version))
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.STOP_NOW,
+                RaOfflineProxyPolicy.preSleepDecision(status(version = version))
             )
-        )
+        }
     }
 
     @Test
     fun unsupportedApiIsRejected() {
+        for (version in listOf(-1, 0, 4, 99)) {
+            assertFalse(RaOfflineProxyPolicy.isSupportedApiVersion(version))
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.UNSUPPORTED_API,
+                RaOfflineProxyPolicy.preSleepDecision(status(version = version))
+            )
+        }
+        assertFalse(RaOfflineProxyPolicy.isSupportedApiVersion(null))
+    }
+
+    @Test
+    fun apiV3RetainsQueueAndPendingAwardProtection() {
+        for (queue in listOf(RaOfflineProxyQueueState.CACHING, RaOfflineProxyQueueState.WAITING)) {
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.WAIT_FOR_QUEUE,
+                RaOfflineProxyPolicy.preSleepDecision(status(version = 3, queue = queue))
+            )
+        }
+        for (pending in listOf(RaOfflineProxyPendingAwardState.WAITING, RaOfflineProxyPendingAwardState.SYNCING)) {
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.WAIT_FOR_QUEUE,
+                RaOfflineProxyPolicy.preSleepDecision(
+                    status(version = 3, online = true, pendingAwardState = pending)
+                )
+            )
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.STOP_NOW,
+                RaOfflineProxyPolicy.preSleepDecision(
+                    status(version = 3, online = false, pendingAwardState = pending)
+                )
+            )
+        }
+        for (pending in listOf(RaOfflineProxyPendingAwardState.IDLE, RaOfflineProxyPendingAwardState.BLOCKED)) {
+            assertEquals(
+                RaOfflineProxyPreSleepDecision.STOP_NOW,
+                RaOfflineProxyPolicy.preSleepDecision(
+                    status(version = 3, online = true, pendingAwardState = pending)
+                )
+            )
+        }
         assertEquals(
-            RaOfflineProxyPreSleepDecision.UNSUPPORTED_API,
+            RaOfflineProxyPreSleepDecision.WAIT_FOR_SAFE_STATUS,
             RaOfflineProxyPolicy.preSleepDecision(
-                status(version = 3)
+                status(version = 3, pendingAwardState = RaOfflineProxyPendingAwardState.UNKNOWN)
             )
         )
+        val initial = status(version = 3)
+        val stopping = status(version = 3, running = true, shouldBeRunning = false)
+        val stopped = status(version = 3, running = false, shouldBeRunning = false)
+        assertTrue(
+            RaOfflineProxyPolicy.shouldTakeStopOwnership(
+                initial,
+                RaOfflineProxyCommandResult(RaOfflineProxyCommandResult.RESULT_OK, stopping)
+            )
+        )
+        assertFalse(RaOfflineProxyPolicy.canReleaseManagedWifi(stopping))
+        assertTrue(RaOfflineProxyPolicy.canReleaseManagedWifi(stopped))
+        assertFalse(RaOfflineProxyPolicy.restoreConfirmed(status(version = 3, running = false)))
+        assertTrue(RaOfflineProxyPolicy.restoreConfirmed(initial))
     }
 
     @Test

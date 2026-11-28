@@ -4,13 +4,15 @@ import org.json.JSONObject
 
 /**
  * Pure status payload parser kept separate from the Android ContentProvider
- * adapter so API v1/v2 compatibility can be unit-tested on the JVM.
+ * adapter so API v1/v2/v3 compatibility can be unit-tested on the JVM.
  */
 object RaOfflineProxyStatusParser {
     fun parse(raw: String?): RaOfflineProxyStatus? {
         if (raw.isNullOrBlank()) return null
 
         return runCatching {
+            // API v3 adds host for emulator discovery. SleepManager does not
+            // use that field: endpoint checks still query the local proxy port.
             val json = JSONObject(raw)
             val queue = json.optJSONObject("queue") ?: JSONObject()
             val nextWindowAt =
